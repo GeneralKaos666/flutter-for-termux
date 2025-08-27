@@ -80,10 +80,16 @@ new file mode 100644
 index 0000000..8208b13
 --- /dev/null
 +++ b/engine/src/build/config/termux/BUILD.gn
-@@ -0,0 +1,174 @@
+@@ -0,0 +1,181 @@
 +import("//build/config/termux/termux.gni")
 +import("//build/config/sysroot.gni")
 +import("//build/config/profiler.gni")
++
++declare_args() {
++  angle_build_all = false
++  angle_enable_commit_id = false
++  angle_has_astc_encoder = false
++}
 +
 +config("compiler") {
 +  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {
@@ -235,6 +241,7 @@ index 0000000..8208b13
 +    ldflags = [
 +      "-Bdynamic",
 +      "-Wl,-z,nocopyreloc",
++      "-llog",
 +    ]
 +  } else {
 +    configs = ["//build/config/gcc:executable_ldconfig"]
@@ -267,6 +274,7 @@ index 0000000..0d97976
 +  is_termux = false
 +  is_termux_host = false
 +}
++
 diff --git a/engine/src/build/toolchain/termux/BUILD.gn b/engine/src/build/toolchain/termux/BUILD.gn
 new file mode 100644
 index 0000000..564c582
