@@ -1,6 +1,6 @@
 # Flutter-Termux 
-![GitHub Release](https://img.shields.io/github/v/release/mumumusuc/termux-flutter)
-![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/mumumusuc/termux-flutter/latest/total)
+![GitHub Release](https://img.shields.io/github/v/release/yamsergey/yamsergey.termux.flutter)
+![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/yamsergey/yamsergey.termux.flutter/latest/total)
 
 Run Flutter on Termux !
 
