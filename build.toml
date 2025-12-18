@@ -1,5 +1,5 @@
 [flutter]
-tag = '3.36.0'
+tag = '3.36'
 repo = 'https://github.com/flutter/flutter'
 path = './flutter'
 
