@@ -48,6 +48,7 @@ pkgs = [
   'libglvnd',
   'libglvnd-dev',
   'libgraphite',
+  'libjpeg-turbo',
   'liblzma',
   'libpixman',
   'libpng',
