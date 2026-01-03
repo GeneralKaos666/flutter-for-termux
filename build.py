@@ -203,23 +203,26 @@ class Build:
         self.clone()
         self.sync()
 
-        # Fix compiler flag issue
-        import subprocess
-        subprocess.run([
-            'find', str(self.root / 'engine/src'), 
-            '-type', 'f', 
-            '-name', '*. gn*',
-            '-exec', 'sed', '-i',
-            's/-Wno-nontrivial-memcall/-Wno-nontrivial-memaccess/g', 
-            '{}', '+'
-        ], check=True)
+        for arch in self.arch: 
+        self.sysroot(arch=arch)
+        for mode in self.mode:
+            self.configure(arch=arch, mode=mode)
+            
+            # Fix compiler flag issue in generated build files
+            import subprocess
+            build_dir = utils.target_output(self.root, arch, mode)
+            subprocess.run([
+                'find', build_dir,
+                '-type', 'f',
+                '-name', '*.ninja',
+                '-exec', 'sed', '-i',
+                's/-Wno-nontrivial-memcall/-Wno-nontrivial-memaccess/g',
+                '{}', '+'
+            ], check=True)
+            
+            self.build(arch=arch, mode=mode)
+        self.debuild(arch=arch, output=self.output(arch))
 
-        for arch in self.arch:
-            self.sysroot(arch=arch)
-            for mode in self.mode:
-                self.configure(arch=arch, mode=mode)
-                self.build(arch=arch, mode=mode)
-            self.debuild(arch=arch, output=self.output(arch))
 
 
 if __name__ == '__main__':
