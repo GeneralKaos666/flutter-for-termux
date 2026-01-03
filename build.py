@@ -203,16 +203,16 @@ class Build:
         self.clone()
         self.sync()
 
-    # Fix compiler flag issue
-    import subprocess
-    subprocess.run([
-        'find', str(self.root / 'engine/src'), 
-        '-type', 'f', 
-        '-name', '*. gn*',
-        '-exec', 'sed', '-i', 
-        's/-Wno-nontrivial-memcall/-Wno-nontrivial-memaccess/g', 
-        '{}', '+'
-    ], check=True)
+        # Fix compiler flag issue
+        import subprocess
+        subprocess.run([
+            'find', str(self.root / 'engine/src'), 
+            '-type', 'f', 
+            '-name', '*. gn*',
+            '-exec', 'sed', '-i',
+            's/-Wno-nontrivial-memcall/-Wno-nontrivial-memaccess/g', 
+            '{}', '+'
+        ], check=True)
 
         for arch in self.arch:
             self.sysroot(arch=arch)
