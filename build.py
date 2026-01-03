@@ -204,7 +204,7 @@ class Build:
         self.sync()
 
         for arch in self.arch: 
-        self.sysroot(arch=arch)
+            self.sysroot(arch=arch)
         for mode in self.mode:
             self.configure(arch=arch, mode=mode)
             
