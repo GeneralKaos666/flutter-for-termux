@@ -163,7 +163,6 @@ class Build:
             '--gn-args', f'is_termux_host={utils.__TERMUX__}',
             '--gn-args', f'termux_api_level={api}',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
-            '--gn-args', 'extra_cflags=["-Wno-error=unknown-warning-option"]',
         ]
         subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
 
@@ -203,6 +202,17 @@ class Build:
         self.config()
         self.clone()
         self.sync()
+
+    # Fix compiler flag issue
+    import subprocess
+    subprocess.run([
+        'find', str(self.root / 'engine/src'), 
+        '-type', 'f', 
+        '-name', '*. gn*',
+        '-exec', 'sed', '-i', 
+        's/-Wno-nontrivial-memcall/-Wno-nontrivial-memaccess/g', 
+        '{}', '+'
+    ], check=True)
 
         for arch in self.arch:
             self.sysroot(arch=arch)
