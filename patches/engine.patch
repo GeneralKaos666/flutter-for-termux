@@ -447,9 +447,9 @@ index 28a19c75d1b..7b8e5e66e9f 100644
 +    }
      sources += [ "tester_context_vk_factory.cc" ]
    }
-diff --git a/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn b/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn
---- a/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn
-+++ b/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn
+diff --git a/engine/src/flutter/build/secondary/third_party/ninja/BUILD.gn b/engine/src/flutter/build/secondary/third_party/ninja/BUILD.gn
+--- a/engine/src/flutter/build/secondary/third_party/ninja/BUILD.gn
++++ b/engine/src/flutter/build/secondary/third_party/ninja/BUILD.gn
 @@ -11,6 +11,7 @@ config("inja_public_config") {
     if (is_clang) {
       cflags_cc = [
