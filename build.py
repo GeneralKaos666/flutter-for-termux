@@ -118,8 +118,9 @@ class Build:
         subprocess.run(cmd, cwd=src, check=True, stdout=True, stderr=True)
 
     def patch(self, *, file, path):
-        repo = git.Repo(path)
-        repo.git.apply([file])
+    # Use git apply with 3-way fallback to survive small upstream shifts.
+    cmd = ["git", "apply", "--3way", "--whitespace=nowarn", str(file)]
+    subprocess.run(cmd, cwd=str(path), check=True)
 
     def configure(
         self,
