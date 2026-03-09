@@ -134,6 +134,9 @@ class Build:
         root = root or self.root
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
+        # Stub headers for platform-internal Android headers not shipped with
+        # the public NDK (e.g. vk_android_native_buffer.h used by SwiftShader).
+        stubs = os.path.abspath(Path(__file__).parent / 'stubs')
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -164,7 +167,12 @@ class Build:
             '--gn-args', f'is_termux_host={utils.__TERMUX__}',
             '--gn-args', f'termux_api_level={api}',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
-			'--gn-args', f'extra_cflags_cc=["-I{toolchain}/../../../sources/third_party/vulkan/include"]',
+            # Provide stub headers for Android platform-internal APIs that are
+            # not part of the public NDK (e.g. vk_android_native_buffer.h).
+            # Also suppress -Wnewline-eof which fires on third-party headers
+            # (SwiftShader) that legitimately lack a trailing newline.
+            '--gn-args',
+            f'extra_cflags_cc=["-I{toolchain}/../../../sources/third_party/vulkan/include", "-I{stubs}", "-Wno-newline-eof"]',
         ]
         subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
 
