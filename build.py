@@ -56,7 +56,13 @@ class Build:
         # TODO: detect host
         self.host = 'linux-x86_64'
         self.repo = repo or 'https://github.com/flutter/flutter'
-        self.arch = arch or 'arm64'
+        if not arch:
+            arch = ['arm64']
+        elif isinstance(arch, str):
+            arch = [arch]
+        if any(utils.termux_arch(it) != 'aarch64' for it in arch):
+            raise ValueError('only arm64/aarch64 Termux builds are supported')
+        self.arch = arch
         self.mode = mode or 'debug'
         self.sysroot = Sysroot(path=path/syspath, **sysroot)
         self.root = path/root
@@ -162,6 +168,7 @@ class Build:
             '--gn-args', 'is_termux=true',
             '--gn-args', f'is_termux_host={utils.__TERMUX__}',
             '--gn-args', f'termux_api_level={api}',
+            '--gn-args', f'termux_enabled_archs=["{arch}"]',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
 			'--gn-args', f'extra_cflags_cc=["-I{toolchain}/../../../sources/third_party/vulkan/include"]',
         ]
