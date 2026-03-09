@@ -144,14 +144,18 @@ index 50f1b60eab1..cd1d7bcca5f 100644
      default_warning_flags += [
        # Unqualified std::move is pretty common.
        "-Wno-unqualified-std-cast-call",
-@@ -867,7 +868,7 @@ config("no_chromium_code") {
+@@ -867,10 +868,10 @@ config("no_chromium_code") {
      cflags += [ "-Wno-deprecated-non-prototype" ]
    }
 
-   if (is_clang) {
+-  if (is_clang) {
++  if (is_clang && !is_termux) {
      cflags += [
        "-Wno-newline-eof",
        "-Wno-typedef-redefinition",
+     ]
+     cflags_cc += [ "-Wno-newline-eof" ]
+   }
 @@ -902,7 +903,7 @@ config("enable_exceptions") {
    if (is_win) {
      cflags_cc = [ "/EHsc" ]
@@ -188,7 +192,7 @@ new file mode 100644
 index 0000000..8208b13
 --- /dev/null
 +++ b/engine/src/build/config/termux/BUILD.gn
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,184 @@
 +import("//build/config/termux/termux.gni")
 +import("//build/config/sysroot.gni")
 +import("//build/config/profiler.gni")
@@ -369,7 +373,7 @@ index 0000000..8208b13
 +    ldflags += [ "--sysroot=" + target_sysroot ]
 +  }
 +  if (defined(custom_sysroot) && custom_sysroot != "") {
-+    cflags += [ "-idirafter$custom_sysroot/usr/include" ]
++    cflags += [ "-idirafter" + custom_sysroot + "/usr/include" ]
 +    lib_dirs += [ "$custom_sysroot/usr/lib" ]
 +  }
 +}
@@ -378,9 +382,12 @@ new file mode 100644
 index 0000000..0d97976
 --- /dev/null
 +++ b/engine/src/build/config/termux/termux.gni
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,10 @@
 +declare_args() {
 +  termux_api_level = 26
++  extra_cflags = []
++  extra_cflags_cc = []
++  extra_ldflags = []
 +
 +  is_termux = false
 +  is_termux_host = false
