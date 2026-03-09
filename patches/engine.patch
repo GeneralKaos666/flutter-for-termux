@@ -148,8 +148,7 @@ index 50f1b60eab1..cd1d7bcca5f 100644
      cflags += [ "-Wno-deprecated-non-prototype" ]
    }
 
--  if (is_clang) {
-+  if (is_clang && !is_termux) {
+   if (is_clang) {
      cflags += [
        "-Wno-newline-eof",
        "-Wno-typedef-redefinition",
@@ -318,6 +317,9 @@ index 0000000..8208b13
 +      ldflags += [ "--target=x86_64-linux-androideabi${termux_api_level}" ]
 +    }
 +    asmflags = cflags
++    cflags += extra_cflags
++    cflags_cc += extra_cflags_cc
++    ldflags += extra_ldflags
 +  } else {
 +    configs = ["//build/config/compiler:compiler"]
 +  }
