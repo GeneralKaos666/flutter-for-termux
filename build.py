@@ -151,6 +151,7 @@ class Build:
             '--no-build-embedder-examples',
             '--no-prebuilt-dart-sdk',
             '--target-toolchain', toolchain,
+            '--target-triple', utils.termux_target_triple(arch),
             '--runtime-mode', mode,
             '--no-build-glfw-shell',
             '--gn-args', 'symbol_level=0',

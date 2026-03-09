@@ -23,6 +23,20 @@ def termux_arch(arch: str):
     raise ValueError(f'unknown arch: "{arch}"')
 
 
+def termux_target_triple(arch: str):
+    arch = termux_arch(arch)
+    if arch == 'arm':
+        return 'arm-linux-androideabi'
+    if arch == 'aarch64':
+        return 'aarch64-linux-android'
+    if arch == 'i686':
+        return 'i686-linux-androideabi'
+    if arch == 'x86_64':
+        return 'x86_64-linux-android'
+
+    raise ValueError(f'unknown arch: "{arch}"')
+
+
 def target_output(root: str, arch: str, mode: str, opted: bool = True):
     root = os.path.abspath(os.path.expanduser(root))
     if opted:
