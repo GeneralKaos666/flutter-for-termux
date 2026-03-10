@@ -127,6 +127,13 @@ class Build:
         repo = git.Repo(path)
         repo.git.apply([file])
 
+    def ndk_root(self, toolchain: str):
+        path = Path(toolchain).resolve()
+        for root in (path, *path.parents):
+            if (root/'source.properties').is_file():
+                return root
+        raise ValueError(f'failed to locate NDK root from toolchain: "{toolchain}"')
+
     def configure(
         self,
         arch: str,
@@ -139,7 +146,7 @@ class Build:
         root = root or self.root
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
-        ndk_root = Path(toolchain).parents[3]
+        ndk_root = self.ndk_root(toolchain)
         stubs = os.path.abspath(Path(__file__).parent / 'stubs')
         vulkan = os.path.abspath(ndk_root / 'sources/third_party/vulkan/include')
         cmd = [
