@@ -139,6 +139,8 @@ class Build:
         root = root or self.root
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
+        stubs = os.path.abspath(Path(__file__).parent / 'stubs')
+        vulkan = os.path.abspath(Path(toolchain) / '../../../sources/third_party/vulkan/include')
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -170,7 +172,8 @@ class Build:
             '--gn-args', f'termux_api_level={api}',
             '--gn-args', f'termux_enabled_archs=["{arch}"]',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
-			'--gn-args', f'extra_cflags_cc=["-I{toolchain}/../../../sources/third_party/vulkan/include"]',
+            '--gn-args',
+            f'extra_cflags_cc=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
         ]
         subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
 
