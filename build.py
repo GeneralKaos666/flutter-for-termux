@@ -182,8 +182,7 @@ class Build:
             '--gn-args', f'termux_api_level={api}',
             '--gn-args', f'termux_enabled_archs=["{arch}"]',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
-            '--gn-args',
-            f'extra_cflags_cc=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
+            '--gn-args', f'extra_cflags_cc=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
         ]
         subprocess.run(cmd, cwd=str(root), check=True, stdout=True, stderr=True)
 
