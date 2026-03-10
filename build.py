@@ -117,11 +117,11 @@ class Build:
 
     def sync(self, *, cfg: str = None, root: str = None):
         cfg = cfg or self.gclient
-        src = root or self.root
+        src = Path(root or self.root)
 
-        shutil.copy(cfg, os.path.join(src, '.gclient'))
+        shutil.copy(cfg, src/'.gclient')
         cmd = ['gclient', 'sync', '-DR', '--no-history']
-        subprocess.run(cmd, cwd=src, check=True, stdout=True, stderr=True)
+        subprocess.run(cmd, cwd=str(src), check=True)
 
     def patch(self, *, file, path):
         repo = git.Repo(path)
@@ -182,12 +182,13 @@ class Build:
             '--gn-args', f'termux_api_level={api}',
             '--gn-args', f'termux_enabled_archs=["{arch}"]',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
+            '--gn-args', f'extra_cflags=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
             '--gn-args', f'extra_cflags_cc=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
         ]
-        subprocess.run(cmd, cwd=str(root), check=True, stdout=True, stderr=True)
+        subprocess.run(cmd, cwd=str(root), check=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
-        root = root or self.root
+        root = Path(root or self.root)
         cmd = [
             'ninja', '-C', utils.target_output(root, arch, mode),
             'flutter',
@@ -200,7 +201,7 @@ class Build:
         ]
         if jobs:
             cmd.append(f'-j{jobs}')
-        subprocess.run(cmd, check=True, stdout=True, stderr=True)
+        subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
         conf = conf or self.package
