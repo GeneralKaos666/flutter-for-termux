@@ -127,12 +127,14 @@ class Build:
         repo = git.Repo(path)
         repo.git.apply([file])
 
-    def ndk_root(self, toolchain: str):
+    def find_ndk_root(self, toolchain: str):
         path = Path(toolchain).resolve()
         for root in (path, *path.parents):
             if (root/'source.properties').is_file():
                 return root
-        raise ValueError(f'failed to locate NDK root from toolchain: "{toolchain}"')
+        raise ValueError(
+            f'failed to locate NDK root from toolchain: "{toolchain}" '
+            f'(searched {path} and its parents)')
 
     def configure(
         self,
@@ -143,12 +145,12 @@ class Build:
         sysroot: str = None,
         toolchain: str = None,
     ):
-        root = root or self.root
-        sysroot = os.path.abspath(sysroot or self.sysroot.path)
-        toolchain = os.path.abspath(toolchain or self.toolchain)
-        ndk_root = self.ndk_root(toolchain)
-        stubs = os.path.abspath(Path(__file__).parent / 'stubs')
-        vulkan = os.path.abspath(ndk_root / 'sources/third_party/vulkan/include')
+        root = Path(root or self.root)
+        sysroot = Path(sysroot or self.sysroot.path).resolve()
+        toolchain = Path(toolchain or self.toolchain).resolve()
+        ndk_root = self.find_ndk_root(toolchain)
+        stubs = Path(__file__).parent.resolve() / 'stubs'
+        vulkan = ndk_root / 'sources/third_party/vulkan/include'
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -162,7 +164,7 @@ class Build:
             '--no-enable-unittests',
             '--no-build-embedder-examples',
             '--no-prebuilt-dart-sdk',
-            '--target-toolchain', toolchain,
+            '--target-toolchain', str(toolchain),
             '--runtime-mode', mode,
             '--no-build-glfw-shell',
             '--gn-args', 'symbol_level=0',
@@ -183,7 +185,7 @@ class Build:
             '--gn-args',
             f'extra_cflags_cc=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
         ]
-        subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
+        subprocess.run(cmd, cwd=str(root), check=True, stdout=True, stderr=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
         root = root or self.root
