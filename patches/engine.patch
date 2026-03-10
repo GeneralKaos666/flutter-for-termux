@@ -390,7 +390,7 @@ new file mode 100644
 index 0000000..6f2f9fd
 --- /dev/null
 +++ b/engine/src/build/toolchain/termux/BUILD.gn
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,30 @@
 +import("//build/toolchain/gcc_toolchain.gni")
 +import("//build/config/android/config.gni")
 +import("//build/config/termux/termux.gni")
@@ -421,8 +421,6 @@ index 0000000..6f2f9fd
 +    toolchain_cpu = arch
 +  }
 +}
-
-    metadata = {
 diff --git a/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn b/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn
 --- a/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn
 +++ b/engine/src/flutter/build/secondary/third_party/inja/BUILD.gn
