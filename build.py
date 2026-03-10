@@ -139,8 +139,9 @@ class Build:
         root = root or self.root
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
+        ndk_root = Path(toolchain).parents[3]
         stubs = os.path.abspath(Path(__file__).parent / 'stubs')
-        vulkan = os.path.abspath(Path(toolchain) / '../../../sources/third_party/vulkan/include')
+        vulkan = os.path.abspath(ndk_root / 'sources/third_party/vulkan/include')
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
