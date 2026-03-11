@@ -189,7 +189,7 @@ new file mode 100644
 index 0000000..8208b13
 --- /dev/null
 +++ b/engine/src/build/config/termux/BUILD.gn
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,188 @@
 +import("//build/config/termux/termux.gni")
 +import("//build/config/sysroot.gni")
 +import("//build/config/profiler.gni")
@@ -198,6 +198,9 @@ index 0000000..8208b13
 +  angle_build_all = false
 +  angle_enable_commit_id = false
 +  angle_has_astc_encoder = false
++  extra_cflags = []
++  extra_cflags_cc = []
++  extra_ldflags = []
 +}
 +
 +config("compiler") {
@@ -216,6 +219,9 @@ index 0000000..8208b13
 +    ]
 +    cflags_cc = ["-fvisibility-inlines-hidden"]
 +    cflags_objcc = ["-fvisibility-inlines-hidden"]
++    cflags += extra_cflags
++    cflags_cc += extra_cflags_cc
++    cflags_objcc += extra_cflags_cc
 +    ldflags = [
 +      "-Wl,--fatal-warnings",
 +      "-fPIC",
@@ -317,6 +323,7 @@ index 0000000..8208b13
 +      cflags += [ "--target=x86_64-linux-androideabi${termux_api_level}" ]
 +      ldflags += [ "--target=x86_64-linux-androideabi${termux_api_level}" ]
 +    }
++    ldflags += extra_ldflags
 +    asmflags = cflags
 +  } else {
 +    configs = ["//build/config/compiler:compiler"]

@@ -83,7 +83,7 @@ async def _resolve_packages(sess, arch, repo, dist, pkgs):
 
 
 def _extract(out, deb):
-    subprocess.run(['dpkg', '-x', str(deb), str(out)], check=True, stderr=True)
+    subprocess.run(['dpkg', '-x', str(deb), str(out)], check=True)
     logger.info(f'✓ 成功安装 {deb.name}')
 
 
