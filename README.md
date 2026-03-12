@@ -69,7 +69,8 @@ apt remove flutter
 
 ## Note
 
+- If your engine build keeps failing in the Vulkan/SwiftShader parts, keep `[build].vulkan = false` in `build.toml` to pass `shell_enable_vulkan=false` and `skia_use_vulkan=false` during GN generation.
+
 - `impeller3d` is enabled but it doesn't work with `gtk3` currently. You can build a `glfw` application using `libflutter_engine.so` like this [demo](https://github.com/mumumusuc/termux-flutter-impeller-demo)
 
 - [How to build flutter engine on Termux](https://github.com/mumumusuc/termux-flutter/wiki/How-to-build-flutter-engine-on-Termux)
-

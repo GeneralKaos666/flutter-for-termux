@@ -2,6 +2,7 @@
 
 import os
 import sys
+import json
 import git
 import fire
 import yaml
@@ -37,6 +38,7 @@ class Build:
         root = cfg['flutter'].get('path')
         arch = cfg['build'].get('arch')
         mode = cfg['build'].get('runtime')
+        vulkan = cfg['build'].get('vulkan')
         gclient = cfg['build'].get('gclient')
         sysroot = cfg['sysroot']
         syspath = sysroot.pop('path')
@@ -64,6 +66,7 @@ class Build:
             raise ValueError('only arm64/aarch64 Termux builds are supported')
         self.arch = arch
         self.mode = mode or 'debug'
+        self.vulkan = True if vulkan is None else vulkan
         self.sysroot = Sysroot(path=path/syspath, **sysroot)
         self.root = path/root
         self.gclient = path/gclient
@@ -148,9 +151,7 @@ class Build:
         root = Path(root or self.root)
         sysroot = Path(sysroot or self.sysroot.path).resolve()
         toolchain = Path(toolchain or self.toolchain).resolve()
-        ndk_root = self.find_ndk_root(toolchain)
-        stubs = Path(__file__).parent.resolve() / 'stubs'
-        vulkan = ndk_root / 'sources/third_party/vulkan/include'
+        extra_cflags = ['-Wno-newline-eof']
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -182,8 +183,20 @@ class Build:
             '--gn-args', f'termux_api_level={api}',
             '--gn-args', f'termux_enabled_archs=["{arch}"]',
             '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
-            '--gn-args', f'extra_cflags=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
-            '--gn-args', f'extra_cflags_cc=["-Wno-newline-eof", "-I{stubs}", "-I{vulkan}"]',
+        ]
+        if self.vulkan:
+            ndk_root = self.find_ndk_root(toolchain)
+            stubs = Path(__file__).parent.resolve() / 'stubs'
+            vulkan = ndk_root / 'sources/third_party/vulkan/include'
+            extra_cflags += [f'-I{stubs}', f'-I{vulkan}']
+        else:
+            cmd += [
+                '--gn-args', 'shell_enable_vulkan=false',
+                '--gn-args', 'skia_use_vulkan=false',
+            ]
+        cmd += [
+            '--gn-args', f'extra_cflags={json.dumps(extra_cflags)}',
+            '--gn-args', f'extra_cflags_cc={json.dumps(extra_cflags)}',
         ]
         subprocess.run(cmd, cwd=str(root), check=True)
 
