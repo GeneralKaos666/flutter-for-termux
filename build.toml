@@ -11,6 +11,7 @@ api = 26 # >=26
 [build]
 arch = ['arm64'] # arm, arm64, x86, x64
 runtime = ['debug'] # debug, release, profile
+vulkan = false # set true to keep Vulkan/SwiftShader engine build support
 gclient = './.gclient'
 
 [patch.engine]
