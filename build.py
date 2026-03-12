@@ -151,7 +151,8 @@ class Build:
         root = Path(root or self.root)
         sysroot = Path(sysroot or self.sysroot.path).resolve()
         toolchain = Path(toolchain or self.toolchain).resolve()
-        extra_cflags = ['-Wno-newline-eof']
+        stubs = Path(__file__).parent.resolve() / 'stubs'
+        extra_cflags = ['-Wno-newline-eof', f'-I{stubs}']
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -186,9 +187,8 @@ class Build:
         ]
         if self.vulkan:
             ndk_root = self.find_ndk_root(toolchain)
-            stubs = Path(__file__).parent.resolve() / 'stubs'
             vulkan = ndk_root / 'sources/third_party/vulkan/include'
-            extra_cflags += [f'-I{stubs}', f'-I{vulkan}']
+            extra_cflags.append(f'-I{vulkan}')
         else:
             cmd += [
                 '--gn-args', 'shell_enable_vulkan=false',
