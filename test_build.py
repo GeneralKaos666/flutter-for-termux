@@ -1,6 +1,5 @@
 import os
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 import build
@@ -40,7 +39,7 @@ class BuildTest(unittest.TestCase):
 
         cmd = run.call_args.args[0]
         gn_args = [cmd[index + 1] for index, value in enumerate(cmd[:-1]) if value == '--gn-args']
-        stubs = os.path.abspath(Path(build.__file__).parent / 'stubs')
+        stubs = build.termux_stubs_dir()
         vulkan = f'-I{build.ndk_vulkan_include(self.instance.toolchain)}'
 
         self.assertIn('termux_api_level=29', gn_args)

@@ -20,8 +20,16 @@ class GitProgress(git.RemoteProgress):
         logger.trace(f"cloning {cur_count}/{max_count} {message}")
 
 
+def gn_list(values):
+    return '[' + ', '.join(f'"{it}"' for it in values) + ']'
+
+
 def ndk_vulkan_include(toolchain: str):
     return os.path.abspath(Path(toolchain, '..', '..', '..', 'sources', 'third_party', 'vulkan', 'include'))
+
+
+def termux_stubs_dir():
+    return os.path.abspath(Path(__file__).parent / 'stubs')
 
 
 @utils.record
@@ -141,11 +149,8 @@ class Build:
         toolchain = os.path.abspath(toolchain or self.toolchain)
         # Stub headers for platform-internal Android headers not shipped with
         # the public NDK (e.g. vk_android_native_buffer.h used by SwiftShader).
-        stubs = os.path.abspath(Path(__file__).parent / 'stubs')
+        stubs = termux_stubs_dir()
         vulkan = ndk_vulkan_include(toolchain)
-
-        def gn_list(values):
-            return '[' + ', '.join(f'"{it}"' for it in values) + ']'
 
         cmd = [
             'vpython3',
