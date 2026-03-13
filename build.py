@@ -20,6 +20,10 @@ class GitProgress(git.RemoteProgress):
         logger.trace(f"cloning {cur_count}/{max_count} {message}")
 
 
+def ndk_vulkan_include(toolchain: str):
+    return os.path.abspath(Path(toolchain, '..', '..', '..', 'sources', 'third_party', 'vulkan', 'include'))
+
+
 @utils.record
 class Build:
     @utils.recordm
@@ -138,7 +142,7 @@ class Build:
         # Stub headers for platform-internal Android headers not shipped with
         # the public NDK (e.g. vk_android_native_buffer.h used by SwiftShader).
         stubs = os.path.abspath(Path(__file__).parent / 'stubs')
-        vulkan = f'{toolchain}/../../../sources/third_party/vulkan/include'
+        vulkan = ndk_vulkan_include(toolchain)
 
         def gn_list(values):
             return '[' + ', '.join(f'"{it}"' for it in values) + ']'

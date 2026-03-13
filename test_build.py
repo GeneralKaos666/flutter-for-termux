@@ -41,7 +41,7 @@ class BuildTest(unittest.TestCase):
         cmd = run.call_args.args[0]
         gn_args = [cmd[index + 1] for index, value in enumerate(cmd[:-1]) if value == '--gn-args']
         stubs = os.path.abspath(Path(build.__file__).parent / 'stubs')
-        vulkan = f'-I{os.path.abspath(self.instance.toolchain)}/../../../sources/third_party/vulkan/include'
+        vulkan = f'-I{build.ndk_vulkan_include(self.instance.toolchain)}'
 
         self.assertIn('termux_api_level=29', gn_args)
         self.assertIn(f'extra_cflags=["{vulkan}", "-I{stubs}"]', gn_args)
