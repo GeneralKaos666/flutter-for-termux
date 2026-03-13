@@ -18,6 +18,10 @@ extern "C" {
 /* Simplified HAL API version used by SwiftShader HAL stubs. */
 #define HARDWARE_HAL_API_VERSION HARDWARE_MODULE_API_VERSION(1, 0)
 
+/* Reserved slot counts mirror the upstream AOSP layouts. */
+#define HW_MODULE_RESERVED_SLOTS (32 - 7)
+#define HW_DEVICE_RESERVED_SLOTS 12
+
 struct hw_module_t;
 struct hw_module_methods_t;
 struct hw_device_t;
@@ -31,10 +35,11 @@ typedef struct hw_module_t {
     const char* author;
     struct hw_module_methods_t* methods;
     void* dso;
+    /* Padding matches the AOSP hw_module_t layout (128 bytes total). */
 #ifdef __LP64__
-    uint64_t reserved[32 - 7];
+    uint64_t reserved[HW_MODULE_RESERVED_SLOTS];
 #else
-    uint32_t reserved[32 - 7];
+    uint32_t reserved[HW_MODULE_RESERVED_SLOTS];
 #endif
 } hw_module_t;
 
@@ -47,10 +52,11 @@ typedef struct hw_device_t {
     uint32_t tag;
     uint32_t version;
     struct hw_module_t* module;
+    /* Reserved slots preserved from the upstream HAL definition. */
 #ifdef __LP64__
-    uint64_t reserved[12];
+    uint64_t reserved[HW_DEVICE_RESERVED_SLOTS];
 #else
-    uint32_t reserved[12];
+    uint32_t reserved[HW_DEVICE_RESERVED_SLOTS];
 #endif
     int (*close)(struct hw_device_t* device);
 } hw_device_t;
