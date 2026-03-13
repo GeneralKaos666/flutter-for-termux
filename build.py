@@ -25,7 +25,12 @@ def gn_list(values):
 
 
 def ndk_vulkan_include(toolchain: str):
-    return os.path.abspath(Path(toolchain, '..', '..', '..', 'sources', 'third_party', 'vulkan', 'include'))
+    # Use the NDK sysroot's canonical Vulkan headers.  These are under
+    # toolchain/sysroot/usr/include and include vulkan_android.h with all
+    # Android AHB extension types (VkAndroidHardwareBufferUsageANDROID etc.).
+    # The old path (sources/third_party/vulkan/include) was both computed
+    # incorrectly and lacked Android-specific extension types.
+    return os.path.abspath(Path(toolchain, 'sysroot', 'usr', 'include'))
 
 
 def termux_stubs_dir():
