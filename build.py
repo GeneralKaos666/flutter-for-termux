@@ -126,17 +126,23 @@ class Build:
         self,
         arch: str,
         mode: str,
-        api: int = 26,
+        api: int = None,
         root: str = None,
         sysroot: str = None,
         toolchain: str = None,
     ):
         root = root or self.root
+        api = self.api if api is None else api
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
         # Stub headers for platform-internal Android headers not shipped with
         # the public NDK (e.g. vk_android_native_buffer.h used by SwiftShader).
         stubs = os.path.abspath(Path(__file__).parent / 'stubs')
+        vulkan = f'{toolchain}/../../../sources/third_party/vulkan/include'
+
+        def gn_list(values):
+            return '[' + ', '.join(f'"{it}"' for it in values) + ']'
+
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -173,21 +179,25 @@ class Build:
             # Also suppress -Wnewline-eof which fires on third-party headers
             # (SwiftShader) that legitimately lack a trailing newline.
             '--gn-args',
-            f'extra_cflags_cc=["-I{toolchain}/../../../sources/third_party/vulkan/include", "-I{stubs}", "-Wno-newline-eof"]',
+            f'extra_cflags={gn_list([f"-I{vulkan}", f"-I{stubs}"])}',
+            '--gn-args',
+            f'extra_cflags_cc={gn_list([f"-I{vulkan}", f"-I{stubs}", "-Wno-newline-eof"])}',
         ]
         subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
         root = root or self.root
+        targets = [
+            'flutter',
+            'flutter/build/archives:artifacts',
+            'flutter/build/archives:dart_sdk_archive',
+            'flutter/build/archives:flutter_patched_sdk',
+            'flutter/shell/platform/linux:flutter_gtk',
+            'flutter/tools/font_subset',
+        ]
         cmd = [
             'ninja', '-C', utils.target_output(root, arch, mode),
-            'flutter',
-            # disable zip_archives
-            # 'flutter/build/archives:artifacts',
-            # 'flutter/build/archives:dart_sdk_archive',
-            # 'flutter/build/archives:flutter_patched_sdk',
-            # 'flutter/shell/platform/linux:flutter_gtk',
-            # 'flutter/tools/font_subset',
+            *targets,
         ]
         if jobs:
             cmd.append(f'-j{jobs}')
