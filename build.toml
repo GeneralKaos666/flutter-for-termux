@@ -1,5 +1,5 @@
 [flutter]
-tag = '3.29.2'
+tag = '3.41.4'
 repo = 'https://github.com/flutter/flutter'
 path = './flutter'
 
@@ -9,8 +9,8 @@ api = 26 # >=26
 # path = 'path/to/ndk'
 
 [build]
-arch = ['arm64'] # arm, arm64, x86, x64
-runtime = ['debug'] # debug, release, profile
+arch = ['arm64']       # arm, arm64, x86, x64
+runtime = ['debug']    # debug, release, profile
 gclient = './.gclient'
 
 [patch.engine]
@@ -76,13 +76,7 @@ pkgs = [
 [sysroot.termux-x11]
 repo = 'https://packages-cf.termux.dev/apt/termux-x11/'
 dist = 'x11'
-pkgs = [
-  'gtk3',
-  'libxcomposite',
-  'libxdamage',
-  'libxinerama',
-  'libxkbcommon',
-]
+pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 
 [package]
 conf = './package.yaml'
