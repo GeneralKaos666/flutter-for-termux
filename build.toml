@@ -1,5 +1,5 @@
 [flutter]
-tag = '3.41.2'
+tag = '3.29.2'
 repo = 'https://github.com/flutter/flutter'
 path = './flutter'
 
@@ -10,7 +10,7 @@ api = 26 # >=26
 
 [build]
 arch = ['arm64'] # arm, arm64, x86, x64
-runtime = ['debug', 'release', 'profile'] # debug, release, profile
+runtime = ['debug'] # debug, release, profile
 gclient = './.gclient'
 
 [patch.engine]
@@ -46,7 +46,6 @@ pkgs = [
   'libexpat',
   'libffi',
   'libglvnd',
-  'libglvnd-dev',
   'libgraphite',
   'libjpeg-turbo',
   'liblzma',
