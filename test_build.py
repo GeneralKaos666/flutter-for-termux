@@ -1,4 +1,5 @@
 import os
+import re
 import unittest
 from unittest.mock import patch
 
@@ -55,13 +56,29 @@ class BuildTest(unittest.TestCase):
     def test_default_build_modes_cover_packaged_variants(self):
         self.assertEqual(self.instance.mode, ['debug'])
 
-    def test_engine_patch_suppresses_unknown_warning_options_for_termux_clang(self):
+    def test_engine_patch_suppresses_unknown_warning_option_for_termux_clang(self):
         patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'engine.patch')
         with open(patch_file, encoding='utf-8') as f:
             patch_contents = f.read()
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
-        self.assertIn('@@ -0,0 +1,175 @@', patch_contents)
+
+        # Matches the added-file hunk for termux BUILD.gn and captures:
+        # 1) declared added-line count in "@@ -0,0 +1,N @@" and 2) hunk body.
+        termux_build_gn_hunk_pattern = (
+            r"\+\+\+ b/engine/src/build/config/termux/BUILD\.gn\n"
+            r"@@ -0,0 \+1,(\d+) @@\n"
+            r"(?P<body>.*?)(?:\ndiff --git |\Z)"
+        )
+        hunk = re.search(
+            termux_build_gn_hunk_pattern,
+            patch_contents,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(hunk)
+        hunk_line_count = int(hunk.group(1))
+        added_lines = sum(1 for line in hunk.group('body').splitlines() if line.startswith('+'))
+        self.assertEqual(added_lines, hunk_line_count)
 
 
 if __name__ == '__main__':
