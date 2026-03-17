@@ -61,6 +61,7 @@ class BuildTest(unittest.TestCase):
             patch_contents = f.read()
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
+        self.assertIn('@@ -0,0 +1,175 @@', patch_contents)
 
 
 if __name__ == '__main__':
