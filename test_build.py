@@ -64,15 +64,15 @@ class BuildTest(unittest.TestCase):
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
         self.assertIn('"-llog"', patch_contents)
-        sdk_hunk = re.search(
-            r'config\("sdk"\) \{\n(?P<body>.*?)\n\+\}',
+        self.assertRegex(
             patch_contents,
-            re.DOTALL,
+            r'config\("sdk"\) \{\n'
+            r'\+  cflags = \[\]\n'
+            r'\+  ldflags = \[ "-Wl,-rpath=/data/data/com\.termux/files/usr/lib" \]\n'
+            r'\+  if \(current_toolchain == "//build/toolchain/termux:\$\{current_cpu\}"\) \{\n'
+            r'\+    ldflags \+= \[ "-llog" \]\n'
+            r'\+  \}',
         )
-        self.assertIsNotNone(sdk_hunk)
-        self.assertIn('ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib" ]', sdk_hunk.group('body'))
-        self.assertIn('if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {', sdk_hunk.group('body'))
-        self.assertIn('ldflags += [ "-llog" ]', sdk_hunk.group('body'))
         self.assertIn('#if defined(__TERMUX__)', patch_contents)
         self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
         fl_view_accessible_hunk = re.search(
