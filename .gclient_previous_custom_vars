@@ -1,0 +1,1 @@
+{".": {"setup_githooks": false, "use_cipd_goma": false, "download_emsdk": false, "download_dart_sdk": false, "download_linux_deps": false, "download_fuchsia_sdk": false, "download_android_deps": false, "download_windows_deps": false, "download_fuchsia_deps": false}}
