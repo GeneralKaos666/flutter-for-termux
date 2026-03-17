@@ -62,6 +62,8 @@ class BuildTest(unittest.TestCase):
             patch_contents = f.read()
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
+        self.assertIn('#if defined(__TERMUX__)', patch_contents)
+        self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
 
         # Matches the added-file hunk for termux BUILD.gn and captures:
         # 1) declared added-line count in "@@ -0,0 +1,N @@" and 2) hunk body.

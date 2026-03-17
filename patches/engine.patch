@@ -329,3 +329,20 @@ diff --git a/engine/src/flutter/shell/testing/BUILD.gn b/engine/src/flutter/shel
    }
  
    metadata = {
+diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc b/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc
+--- a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc
++++ b/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc
+@@ -4,9 +4,13 @@
+ 
+ // Workaround missing C code compatibility in ATK header.
+ // Fixed in https://gitlab.gnome.org/GNOME/at-spi2-core/-/merge_requests/219
++#if defined(__TERMUX__)
++#include <atk/atk.h>
++#else
+ extern "C" {
+ #include <atk/atk.h>
+ }
++#endif
+ 
+ #include "flutter/shell/platform/linux/fl_accessible_node.h"
+ #include "flutter/shell/platform/linux/fl_accessible_text_field.h"
