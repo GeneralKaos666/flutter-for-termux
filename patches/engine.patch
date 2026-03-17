@@ -80,7 +80,7 @@ new file mode 100644
 index 0000000..8208b13
 --- /dev/null
 +++ b/engine/src/build/config/termux/BUILD.gn
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,178 @@
 +import("//build/config/termux/termux.gni")
 +import("//build/config/sysroot.gni")
 +import("//build/config/profiler.gni")
@@ -245,7 +245,10 @@ index 0000000..8208b13
 +# TODO: limit to linux:sdk
 +config("sdk") {
 +  cflags = []
-+  ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib", "-llog" ]
++  ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib" ]
++  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {
++    ldflags += [ "-llog" ]
++  }
 +  lib_dirs = [ "$custom_toolchain/lib/clang/18/lib/linux/" ]
 +  if (defined(target_sysroot) && target_sysroot != "") {
 +    cflags += [ "--sysroot=" + target_sysroot ]
