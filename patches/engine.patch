@@ -330,6 +330,7 @@ diff --git a/engine/src/flutter/shell/testing/BUILD.gn b/engine/src/flutter/shel
  
    metadata = {
 diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc b/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc
+index df3a986a..02f8ae9d 100644
 --- a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc
 +++ b/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc
 @@ -4,9 +4,13 @@

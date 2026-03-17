@@ -56,7 +56,7 @@ class BuildTest(unittest.TestCase):
     def test_default_build_modes_cover_packaged_variants(self):
         self.assertEqual(self.instance.mode, ['debug'])
 
-    def test_engine_patch_suppresses_unknown_warning_option_for_termux_clang(self):
+    def test_engine_patch_contains_termux_build_fixes(self):
         patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'engine.patch')
         with open(patch_file, encoding='utf-8') as f:
             patch_contents = f.read()
@@ -64,6 +64,20 @@ class BuildTest(unittest.TestCase):
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
         self.assertIn('#if defined(__TERMUX__)', patch_contents)
         self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
+        fl_view_accessible_hunk = re.search(
+            r"\+\+\+ b/engine/src/flutter/shell/platform/linux/fl_view_accessible\.cc\n"
+            r"@@ -\d+,\d+ \+\d+,\d+ @@\n"
+            r"(?P<body>.*?)(?:\ndiff --git |\Z)",
+            patch_contents,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(fl_view_accessible_hunk)
+        fl_view_accessible_hunk_body = fl_view_accessible_hunk.group('body')
+        self.assertIn('+#if defined(__TERMUX__)', fl_view_accessible_hunk_body)
+        self.assertIn('+#include <atk/atk.h>', fl_view_accessible_hunk_body)
+        self.assertIn('+#else', fl_view_accessible_hunk_body)
+        self.assertIn(' extern "C" {', fl_view_accessible_hunk_body)
+        self.assertIn('+#endif', fl_view_accessible_hunk_body)
 
         # Matches the added-file hunk for termux BUILD.gn and captures:
         # 1) declared added-line count in "@@ -0,0 +1,N @@" and 2) hunk body.
