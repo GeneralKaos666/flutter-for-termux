@@ -55,6 +55,13 @@ class BuildTest(unittest.TestCase):
     def test_default_build_modes_cover_packaged_variants(self):
         self.assertEqual(self.instance.mode, ['debug'])
 
+    def test_engine_patch_suppresses_unknown_warning_options_for_termux_clang(self):
+        patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'engine.patch')
+        with open(patch_file, encoding='utf-8') as f:
+            patch_contents = f.read()
+
+        self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
+
 
 if __name__ == '__main__':
     unittest.main()

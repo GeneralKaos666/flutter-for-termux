@@ -98,6 +98,7 @@ index 0000000..8208b13
 +      "-funwind-tables",
 +      "-fno-short-enums",
 +      "-nostdinc++",
++      "-Wno-unknown-warning-option",
 +    ]
 +    cflags_cc = ["-fvisibility-inlines-hidden"]
 +    cflags_objcc = ["-fvisibility-inlines-hidden"]
