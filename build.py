@@ -182,7 +182,7 @@ class Build:
             '--gn-args', 'is_termux=true',
             '--gn-args', f'is_termux_host={utils.__TERMUX__}',
             '--gn-args', f'termux_api_level={api}',
-            '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
+            '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2", "-llog"]',
             # Provide stub headers for Android platform-internal APIs that are
             # not part of the public NDK (e.g. vk_android_native_buffer.h,
             # hardware/hwvulkan.h, vndk/hardware_buffer.h).
