@@ -245,7 +245,7 @@ index 0000000..8208b13
 +# TODO: limit to linux:sdk
 +config("sdk") {
 +  cflags = []
-+  ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib" ]
++  ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib", "-llog" ]
 +  lib_dirs = [ "$custom_toolchain/lib/clang/18/lib/linux/" ]
 +  if (defined(target_sysroot) && target_sysroot != "") {
 +    cflags += [ "--sysroot=" + target_sysroot ]

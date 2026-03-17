@@ -63,6 +63,7 @@ class BuildTest(unittest.TestCase):
             patch_contents = f.read()
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
+        self.assertIn('"-llog"', patch_contents)
         self.assertIn('#if defined(__TERMUX__)', patch_contents)
         self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
         fl_view_accessible_hunk = re.search(
