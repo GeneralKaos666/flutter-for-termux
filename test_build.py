@@ -1,4 +1,5 @@
 import os
+import re
 import unittest
 from unittest.mock import patch
 
@@ -43,6 +44,7 @@ class BuildTest(unittest.TestCase):
         vulkan = f'-I{build.ndk_vulkan_include(self.instance.toolchain)}'
 
         self.assertIn('termux_api_level=29', gn_args)
+        self.assertIn('extra_ldflags=["-lEGL", "-lGLESv2", "-llog"]', gn_args)
         self.assertIn(
             f'extra_cflags=["{vulkan}", "-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__"]',
             gn_args,
@@ -54,6 +56,56 @@ class BuildTest(unittest.TestCase):
 
     def test_default_build_modes_cover_packaged_variants(self):
         self.assertEqual(self.instance.mode, ['debug'])
+
+    def test_engine_patch_contains_termux_build_fixes(self):
+        patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'engine.patch')
+        with open(patch_file, encoding='utf-8') as f:
+            patch_contents = f.read()
+
+        self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
+        self.assertIn('"-llog"', patch_contents)
+        self.assertRegex(
+            patch_contents,
+            r'config\("sdk"\) \{\n'
+            r'\+  cflags = \[\]\n'
+            r'\+  ldflags = \[ "-Wl,-rpath=/data/data/com\.termux/files/usr/lib" \]\n'
+            r'\+  if \(current_toolchain == "//build/toolchain/termux:\$\{current_cpu\}"\) \{\n'
+            r'\+    ldflags \+= \[ "-llog" \]\n'
+            r'\+  \}',
+        )
+        self.assertIn('#if defined(__TERMUX__)', patch_contents)
+        self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
+        fl_view_accessible_hunk = re.search(
+            r"\+\+\+ b/engine/src/flutter/shell/platform/linux/fl_view_accessible\.cc\n"
+            r"@@ -\d+,\d+ \+\d+,\d+ @@\n"
+            r"(?P<body>.*?)(?:\ndiff --git |\Z)",
+            patch_contents,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(fl_view_accessible_hunk)
+        fl_view_accessible_hunk_body = fl_view_accessible_hunk.group('body')
+        self.assertIn('+#if defined(__TERMUX__)', fl_view_accessible_hunk_body)
+        self.assertIn('+#include <atk/atk.h>', fl_view_accessible_hunk_body)
+        self.assertIn('+#else', fl_view_accessible_hunk_body)
+        self.assertIn(' extern "C" {', fl_view_accessible_hunk_body)
+        self.assertIn('+#endif', fl_view_accessible_hunk_body)
+
+        # Matches the added-file hunk for termux BUILD.gn and captures:
+        # 1) declared added-line count in "@@ -0,0 +1,N @@" and 2) hunk body.
+        termux_build_gn_hunk_pattern = (
+            r"\+\+\+ b/engine/src/build/config/termux/BUILD\.gn\n"
+            r"@@ -0,0 \+1,(\d+) @@\n"
+            r"(?P<body>.*?)(?:\ndiff --git |\Z)"
+        )
+        hunk = re.search(
+            termux_build_gn_hunk_pattern,
+            patch_contents,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(hunk)
+        hunk_line_count = int(hunk.group(1))
+        added_lines = sum(1 for line in hunk.group('body').splitlines() if line.startswith('+'))
+        self.assertEqual(added_lines, hunk_line_count)
 
 
 if __name__ == '__main__':
