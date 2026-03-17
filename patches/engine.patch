@@ -314,10 +314,9 @@ index 0000000..564c582
 +  toolchain_cpu = "x86"
 +}
 diff --git a/engine/src/flutter/shell/testing/BUILD.gn b/engine/src/flutter/shell/testing/BUILD.gn
-index 28a19c7..5c3992b 100644
 --- a/engine/src/flutter/shell/testing/BUILD.gn
 +++ b/engine/src/flutter/shell/testing/BUILD.gn
-@@ -56,6 +56,10 @@ executable("testing") {
+@@ -60,7 +60,11 @@ executable("testing") {
        "//flutter/impeller",
        "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
      ]
@@ -325,6 +324,7 @@ index 28a19c7..5c3992b 100644
 +      libs += [ "vk_swiftshader" ]
 +      deps -= [ "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static" ]
 +    }
+     sources += [ "tester_context_vk_factory.cc" ]
    }
  
    metadata = {

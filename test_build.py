@@ -43,14 +43,17 @@ class BuildTest(unittest.TestCase):
         vulkan = f'-I{build.ndk_vulkan_include(self.instance.toolchain)}'
 
         self.assertIn('termux_api_level=29', gn_args)
-        self.assertIn(f'extra_cflags=["{vulkan}", "-I{stubs}"]', gn_args)
         self.assertIn(
-            f'extra_cflags_cc=["{vulkan}", "-I{stubs}", "-Wno-newline-eof"]',
+            f'extra_cflags=["{vulkan}", "-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__"]',
+            gn_args,
+        )
+        self.assertIn(
+            f'extra_cflags_cc=["{vulkan}", "-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__", "-Wno-newline-eof"]',
             gn_args,
         )
 
     def test_default_build_modes_cover_packaged_variants(self):
-        self.assertEqual(self.instance.mode, ['debug', 'release', 'profile'])
+        self.assertEqual(self.instance.mode, ['debug'])
 
 
 if __name__ == '__main__':

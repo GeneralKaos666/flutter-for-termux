@@ -20,6 +20,23 @@ class GitProgress(git.RemoteProgress):
         logger.trace(f"cloning {cur_count}/{max_count} {message}")
 
 
+def ndk_vulkan_include(toolchain):
+    # NDK sysroot canonical Vulkan headers (includes vulkan_android.h with
+    # VkAndroidHardwareBufferUsageANDROID and other platform types).
+    return Path(toolchain, 'sysroot', 'usr', 'include')
+
+
+def termux_stubs_dir():
+    # Stub headers for Android platform-internal APIs absent from the NDK
+    # (hardware/hwvulkan.h, vndk/hardware_buffer.h, vulkan/vk_android_native_buffer.h).
+    return Path(__file__).parent / 'stubs'
+
+
+def gn_list(items):
+    quoted = ', '.join(f'"{it}"' for it in items)
+    return f'[{quoted}]'
+
+
 @utils.record
 class Build:
     @utils.recordm
@@ -125,14 +142,17 @@ class Build:
         self,
         arch: str,
         mode: str,
-        api: int = 26,
+        api: int = None,
         root: str = None,
         sysroot: str = None,
         toolchain: str = None,
     ):
         root = root or self.root
+        api = api or self.api
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
+        vulkan = ndk_vulkan_include(toolchain)
+        stubs = termux_stubs_dir()
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -162,6 +182,23 @@ class Build:
             '--gn-args', 'is_termux=true',
             '--gn-args', f'is_termux_host={utils.__TERMUX__}',
             '--gn-args', f'termux_api_level={api}',
+            '--gn-args', 'extra_ldflags=["-lEGL", "-lGLESv2"]',
+            # Provide stub headers for Android platform-internal APIs that are
+            # not part of the public NDK (e.g. vk_android_native_buffer.h,
+            # hardware/hwvulkan.h, vndk/hardware_buffer.h).
+            # -D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__: NDK headers guard
+            #   API-level-gated functions with __BIONIC_AVAILABILITY(strict,...).
+            #   Defining this macro before any NDK headers are included changes
+            #   the mode from "hard error" to "weak import", allowing SwiftShader
+            #   to call API-29 functions (e.g. AHardwareBuffer_lockPlanes) even
+            #   when targeting API 26.  Termux runs on Android where these
+            #   symbols are present, so the weak-import behaviour is correct.
+            # -Wno-newline-eof: suppress warning on third-party headers
+            #   (SwiftShader) that legitimately lack a trailing newline.
+            '--gn-args',
+            f'extra_cflags={gn_list([f"-I{vulkan}", f"-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__"])}',
+            '--gn-args',
+            f'extra_cflags_cc={gn_list([f"-I{vulkan}", f"-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__", "-Wno-newline-eof"])}',
         ]
         subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
 
@@ -170,12 +207,11 @@ class Build:
         cmd = [
             'ninja', '-C', utils.target_output(root, arch, mode),
             'flutter',
-            # disable zip_archives
-            # 'flutter/build/archives:artifacts',
-            # 'flutter/build/archives:dart_sdk_archive',
-            # 'flutter/build/archives:flutter_patched_sdk',
-            # 'flutter/shell/platform/linux:flutter_gtk',
-            # 'flutter/tools/font_subset',
+            'flutter/build/archives:artifacts',
+            'flutter/build/archives:dart_sdk_archive',
+            'flutter/build/archives:flutter_patched_sdk',
+            'flutter/shell/platform/linux:flutter_gtk',
+            'flutter/tools/font_subset',
         ]
         if jobs:
             cmd.append(f'-j{jobs}')
