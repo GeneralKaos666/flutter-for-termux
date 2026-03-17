@@ -1,0 +1,80 @@
+name: validate
+
+on:
+  push:
+    paths:
+      - 'patches/**'
+      - 'build.py'
+      - 'build.toml'
+      - 'test_build.py'
+      - 'utils.py'
+      - 'stubs/**'
+      - 'requirements.txt'
+  pull_request:
+    paths:
+      - 'patches/**'
+      - 'build.py'
+      - 'build.toml'
+      - 'test_build.py'
+      - 'utils.py'
+      - 'stubs/**'
+      - 'requirements.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  test-python:
+    name: Python unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python requirements
+        run: pip install -r requirements.txt pytest
+
+      - name: Run unit tests
+        run: python3 -m pytest test_build.py -v
+
+  test-patch:
+    name: Verify engine patch applies to Flutter tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Read Flutter tag from build.toml
+        id: tag
+        run: |
+          TAG=$(python3 -c "
+          import tomllib
+          with open('build.toml', 'rb') as f:
+              cfg = tomllib.load(f)
+          print(cfg['flutter']['tag'])
+          ")
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "Flutter tag: $TAG"
+
+      - name: Clone Flutter at configured tag (shallow)
+        run: |
+          git clone --depth=1 --branch "${{ steps.tag.outputs.TAG }}" \
+            https://github.com/flutter/flutter flutter
+
+      - name: Apply engine patch
+        working-directory: flutter
+        run: git apply ../patches/engine.patch
+
+      - name: Verify patched files
+        run: |
+          echo "=== engine/src/build/config/BUILDCONFIG.gn (termux sections) ==="
+          grep -n "is_termux\|termux:compiler\|termux:runtime_library" \
+            flutter/engine/src/build/config/BUILDCONFIG.gn
+          echo "=== engine/src/flutter/shell/testing/BUILD.gn ==="
+          grep -n "is_termux\|vk_swiftshader\|tester_context_vk_factory" \
+            flutter/engine/src/flutter/shell/testing/BUILD.gn
+          echo "=== New termux config files ==="
+          ls flutter/engine/src/build/config/termux/
+          ls flutter/engine/src/build/toolchain/termux/
