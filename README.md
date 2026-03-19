@@ -1,6 +1,6 @@
 # Flutter-Termux 
-![GitHub Release](https://img.shields.io/github/v/release/mumumusuc/termux-flutter)
-![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/mumumusuc/termux-flutter/latest/total)
+![GitHub Release](https://img.shields.io/github/v/release/GeneralKaos666/flutter-for-termux)
+![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/GeneralKaos666/flutter-for-termux/latest/total)
 
 Run Flutter on Termux !
 
@@ -9,12 +9,9 @@ Run Flutter on Termux !
     <img src="https://raw.githubusercontent.com/mumumusuc/termux-flutter-impeller-demo/main/preview.webp" width="40%"/>
 </p>
 
-> [!CAUTION] 
-> This build is incompatible with **Android 14**
-
 ## Install 
 
-Download `flutter.deb` from [release](https://github.com/mumumusuc/termux-flutter/releases) page, then run 
+Download `flutter.deb` from [release](https://github.com/GeneralKaos666/flutter-for-termux/releases) page, then run 
 ```
 apt install x11-repo
 apt install /path/to/flutter.deb
