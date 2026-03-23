@@ -45,6 +45,7 @@ class BuildTest(unittest.TestCase):
 
         self.assertIn('termux_api_level=29', gn_args)
         self.assertIn('extra_ldflags=["-lEGL", "-lGLESv2", "-llog"]', gn_args)
+        self.assertIn('enable_profiling=false', gn_args)
         self.assertIn(
             f'extra_cflags=["{vulkan}", "-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__"]',
             gn_args,
@@ -64,15 +65,18 @@ class BuildTest(unittest.TestCase):
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
         self.assertIn('"-llog"', patch_contents)
-        self.assertRegex(
+        self.assertIn('+  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {', patch_contents)
+        self.assertIn('+    cflags = []', patch_contents)
+        self.assertIn('+    ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib" ]', patch_contents)
+        self.assertIn('+    ldflags += [ "-llog" ]', patch_contents)
+        self.assertIn('+    configs = [ "//build/config/linux:sdk" ]', patch_contents)
+        self.assertIn(
+            '+} else if (is_termux && current_toolchain == default_toolchain && custom_sysroot != "") {',
             patch_contents,
-            r'config\("sdk"\) \{\n'
-            r'\+  cflags = \[\]\n'
-            r'\+  ldflags = \[ "-Wl,-rpath=/data/data/com\.termux/files/usr/lib" \]\n'
-            r'\+  if \(current_toolchain == "//build/toolchain/termux:\$\{current_cpu\}"\) \{\n'
-            r'\+    ldflags \+= \[ "-llog" \]\n'
-            r'\+  \}',
         )
+        termux_if_pos = patch_contents.index('+  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {')
+        fallback_pos = patch_contents.index('+    configs = [ "//build/config/linux:sdk" ]')
+        self.assertGreater(fallback_pos, termux_if_pos)
         self.assertIn('#if defined(__TERMUX__)', patch_contents)
         self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
         fl_view_accessible_hunk = re.search(
@@ -106,6 +110,20 @@ class BuildTest(unittest.TestCase):
         hunk_line_count = int(hunk.group(1))
         added_lines = sum(1 for line in hunk.group('body').splitlines() if line.startswith('+'))
         self.assertEqual(added_lines, hunk_line_count)
+
+    def test_skia_patch_matches_upstream_skfeatures_context(self):
+        patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'skia.patch')
+        with open(patch_file, encoding='utf-8') as f:
+            patch_contents = f.read()
+
+        self.assertIn('diff --git a/include/private/base/SkFeatures.h b/include/private/base/SkFeatures.h', patch_contents)
+        self.assertRegex(
+            patch_contents,
+            r'-    #elif defined\(ANDROID\) \|\| defined\(__ANDROID__\)\n'
+            r'\+    #elif \(defined\(ANDROID\) \|\| defined\(__ANDROID__\)\) && !defined\(__TERMUX__\)\n'
+            r'         #define SK_BUILD_FOR_ANDROID\n'
+            r'     #elif defined\(__EMSCRIPTEN__\)',
+        )
 
 
 if __name__ == '__main__':
