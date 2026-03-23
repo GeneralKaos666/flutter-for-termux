@@ -69,6 +69,10 @@ class BuildTest(unittest.TestCase):
         self.assertIn('+    ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib" ]', patch_contents)
         self.assertIn('+    ldflags += [ "-llog" ]', patch_contents)
         self.assertIn('+    configs = [ "//build/config/linux:sdk" ]', patch_contents)
+        self.assertIn(
+            '+} else if (is_termux && current_toolchain == default_toolchain && custom_sysroot != "") {',
+            patch_contents,
+        )
         termux_if_pos = patch_contents.index('+  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {')
         fallback_pos = patch_contents.index('+    configs = [ "//build/config/linux:sdk" ]')
         self.assertGreater(fallback_pos, termux_if_pos)

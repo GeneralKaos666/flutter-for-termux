@@ -70,7 +70,7 @@ index 5f7e48a..0f9c2e3 100644
  
  if (current_toolchain == default_toolchain && target_sysroot != "") {
    sysroot = target_sysroot
-+} else if (is_termux && custom_sysroot != "") {
++} else if (is_termux && current_toolchain == default_toolchain && custom_sysroot != "") {
 +  sysroot = custom_sysroot
  } else if (is_android) {
    import("//build/config/android/config.gni")
