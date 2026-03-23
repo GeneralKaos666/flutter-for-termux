@@ -107,6 +107,15 @@ class BuildTest(unittest.TestCase):
         added_lines = sum(1 for line in hunk.group('body').splitlines() if line.startswith('+'))
         self.assertEqual(added_lines, hunk_line_count)
 
+    def test_skia_patch_matches_upstream_skfeatures_context(self):
+        patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'skia.patch')
+        with open(patch_file, encoding='utf-8') as f:
+            patch_contents = f.read()
+
+        self.assertIn('diff --git a/include/private/base/SkFeatures.h b/include/private/base/SkFeatures.h', patch_contents)
+        self.assertIn('+    #elif (defined(ANDROID) || defined(__ANDROID__)) && !defined(__TERMUX__)', patch_contents)
+        self.assertIn(' #elif defined(__EMSCRIPTEN__)', patch_contents)
+
 
 if __name__ == '__main__':
     unittest.main()
