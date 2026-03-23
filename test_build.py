@@ -64,15 +64,14 @@ class BuildTest(unittest.TestCase):
 
         self.assertIn('"-Wno-unknown-warning-option"', patch_contents)
         self.assertIn('"-llog"', patch_contents)
-        self.assertRegex(
-            patch_contents,
-            r'config\("sdk"\) \{\n'
-            r'\+  cflags = \[\]\n'
-            r'\+  ldflags = \[ "-Wl,-rpath=/data/data/com\.termux/files/usr/lib" \]\n'
-            r'\+  if \(current_toolchain == "//build/toolchain/termux:\$\{current_cpu\}"\) \{\n'
-            r'\+    ldflags \+= \[ "-llog" \]\n'
-            r'\+  \}',
-        )
+        self.assertIn('+  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {', patch_contents)
+        self.assertIn('+    cflags = []', patch_contents)
+        self.assertIn('+    ldflags = [ "-Wl,-rpath=/data/data/com.termux/files/usr/lib" ]', patch_contents)
+        self.assertIn('+    ldflags += [ "-llog" ]', patch_contents)
+        self.assertIn('+    configs = [ "//build/config/linux:sdk" ]', patch_contents)
+        termux_if_pos = patch_contents.index('+  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {')
+        fallback_pos = patch_contents.index('+    configs = [ "//build/config/linux:sdk" ]')
+        self.assertGreater(fallback_pos, termux_if_pos)
         self.assertIn('#if defined(__TERMUX__)', patch_contents)
         self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
         fl_view_accessible_hunk = re.search(
