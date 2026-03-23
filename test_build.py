@@ -113,8 +113,13 @@ class BuildTest(unittest.TestCase):
             patch_contents = f.read()
 
         self.assertIn('diff --git a/include/private/base/SkFeatures.h b/include/private/base/SkFeatures.h', patch_contents)
-        self.assertIn('+    #elif (defined(ANDROID) || defined(__ANDROID__)) && !defined(__TERMUX__)', patch_contents)
-        self.assertIn(' #elif defined(__EMSCRIPTEN__)', patch_contents)
+        self.assertRegex(
+            patch_contents,
+            r'-    #elif defined\(ANDROID\) \|\| defined\(__ANDROID__\)\n'
+            r'\+    #elif \(defined\(ANDROID\) \|\| defined\(__ANDROID__\)\) && !defined\(__TERMUX__\)\n'
+            r'         #define SK_BUILD_FOR_ANDROID\n'
+            r'     #elif defined\(__EMSCRIPTEN__\)',
+        )
 
 
 if __name__ == '__main__':
