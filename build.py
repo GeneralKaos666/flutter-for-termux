@@ -176,7 +176,6 @@ class Build:
             '--gn-args', 'dart_platform_sdk=false',
             '--gn-args', 'is_desktop_linux=false',
             '--gn-args', 'use_default_linux_sysroot=false',
-            '--gn-args', 'dart_support_perfetto=false',
             '--gn-args', 'skia_use_perfetto=false',
             '--gn-args', f'custom_sysroot="{sysroot}"',
             '--gn-args', 'is_termux=true',
