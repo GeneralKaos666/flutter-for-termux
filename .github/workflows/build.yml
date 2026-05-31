@@ -10,7 +10,12 @@ jobs:
       uses: actions/checkout@v4
 
     - name: install deps
- sudo apt update && sudo apt install libfreetype-dev libfontconfig1-dev ninja-build -y
+  run: |
+    sudo apt update
+    sudo apt install -y \
+      libfreetype-dev \
+      libfontconfig1-dev \
+      ninja-build
 
     - name: setup depot-tools
       uses: newkdev/setup-depot-tools@v1.0.1
