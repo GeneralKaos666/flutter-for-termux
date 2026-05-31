@@ -75,6 +75,9 @@ class BuildTest(unittest.TestCase):
         )
         self.assertIn('#if defined(__TERMUX__)', patch_contents)
         self.assertIn('diff --git a/engine/src/flutter/shell/platform/linux/fl_view_accessible.cc', patch_contents)
+        self.assertIn('+    if (defined(invoker.libs)) {', patch_contents)
+        self.assertIn('+      libs += invoker.libs', patch_contents)
+        self.assertIn('+      libs = [ "vk_swiftshader" ]', patch_contents)
         fl_view_accessible_hunk = re.search(
             r"\+\+\+ b/engine/src/flutter/shell/platform/linux/fl_view_accessible\.cc\n"
             r"@@ -\d+,\d+ \+\d+,\d+ @@\n"
