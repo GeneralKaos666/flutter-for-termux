@@ -1,13 +1,80 @@
+diff --git a/pkg/_fe_analyzer_shared/lib/src/util/colors.dart b/pkg/_fe_analyzer_shared/lib/src/util/colors.dart
+index 81d66b11..00000000 100644
+--- a/pkg/_fe_analyzer_shared/lib/src/util/colors.dart
++++ b/pkg/_fe_analyzer_shared/lib/src/util/colors.dart
+@@ -147,8 +147,8 @@ bool _computeEnableColors() {
+   // The `-S` option of `tput` allows us to query multiple capabilities at
+   // once.
+-  ProcessResult result = Process.runSync("/bin/sh", [
++  ProcessResult result = Process.runSync("/data/data/com.termux/files/usr/bin/sh", [
+     "-c",
+     "printf '%s' '$TERMINAL_CAPABILITIES' | tput -S",
+   ]);
+ 
+   if (result.exitCode != 0) {
+diff --git a/runtime/bin/directory_linux.cc b/runtime/bin/directory_linux.cc
+index ddfed623..00000000 100644
+--- a/runtime/bin/directory_linux.cc
++++ b/runtime/bin/directory_linux.cc
+@@ -425,7 +425,7 @@ const char* Directory::SystemTemp(Namespace* namespc) {
+   }
+   if (temp_dir == nullptr) {
+ #if defined(DART_HOST_OS_ANDROID)
+-    temp_dir = "/data/local/tmp";
++    temp_dir = "/data/data/com.termux/files/usr/tmp";
+ #else
+     temp_dir = "/tmp";
+ #endif
 diff --git a/runtime/platform/globals.h b/runtime/platform/globals.h
-index 29bbb969..ea5a09ee 100644
+index 66c3f273..00000000 100644
 --- a/runtime/platform/globals.h
 +++ b/runtime/platform/globals.h
-@@ -104,7 +104,7 @@
- // for more information on predefined macros:
- //   - http://msdn.microsoft.com/en-us/library/b0084kay.aspx
- //   - with gcc, run: "echo | gcc -E -dM -"
--#if defined(__ANDROID__)
-+#if defined(__ANDROID__) && !defined(__TERMUX__)
+@@ -708,6 +708,8 @@
+ #undef OVERFLOW
  
- // Check for Android first, to determine its difference from Linux.
- #define DART_HOST_OS_ANDROID 1
+-#if defined(DART_HOST_OS_ANDROID)
++#if defined(DART_HOST_OS_ANDROID) && defined(__TERMUX__)
++#define kHostOperatingSystemName "linux"
++#elif defined(DART_HOST_OS_ANDROID)
+ #define kHostOperatingSystemName "android"
+ #elif defined(DART_HOST_OS_FUCHSIA)
+ #define kHostOperatingSystemName "fuchsia"
+diff --git a/runtime/vm/os_android.cc b/runtime/vm/os_android.cc
+index a5cf6b52..00000000 100644
+--- a/runtime/vm/os_android.cc
++++ b/runtime/vm/os_android.cc
+@@ -30,7 +30,7 @@ namespace dart {
+ 
+ DEFINE_FLAG(bool,
+             android_log_to_stderr,
+-            false,
++            true,
+             "Send Dart VM logs to stdout and stderr instead of the Android "
+             "system logs.");
+ 
+@@ -49,7 +49,7 @@ class PerfCodeObserver : public CodeObserver {
+     if (file_open == nullptr) {
+       return;
+     }
+     intptr_t pid = getpid();
+-    char* filename = OS::SCreate(nullptr, "/tmp/perf-%" Pd ".map", pid);
++    char* filename = OS::SCreate(nullptr, "/data/data/com.termux/files/usr/tmp/perf-%" Pd ".map", pid);
+     out_file_ = (*file_open)(filename, true);
+     free(filename);
+   }
+diff --git a/sdk/lib/_internal/vm/bin/process_patch.dart b/sdk/lib/_internal/vm/bin/process_patch.dart
+index 7c458430..00000000 100644
+--- a/sdk/lib/_internal/vm/bin/process_patch.dart
++++ b/sdk/lib/_internal/vm/bin/process_patch.dart
+@@ -287,10 +287,10 @@ base class _ProcessImpl extends _ProcessImplNativeWrapper implements _Process {
+   static String _getShellCommand() {
+     if (Platform.isWindows) {
+       return 'cmd.exe';
+     }
+     if (Platform.isAndroid) {
+-      return '/system/bin/sh';
++      return '/data/data/com.termux/files/usr/bin/sh';
+     }
+     return '/bin/sh';
+   }
+ 
