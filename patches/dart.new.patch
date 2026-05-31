@@ -33,7 +33,7 @@ index 124b85be..4e513a6c 100644
  #endif
  
 -#if defined(DART_HOST_OS_ANDROID)
-+#if defined(DART_HOST_OS_ANDROID) and defined(__TERMUX__)
++#if defined(DART_HOST_OS_ANDROID) && defined(__TERMUX__)
 +#define kHostOperatingSystemName "linux"
 +#elif defined(DART_HOST_OS_ANDROID)
  #define kHostOperatingSystemName "android"
