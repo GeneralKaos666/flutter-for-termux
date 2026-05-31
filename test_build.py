@@ -45,6 +45,7 @@ class BuildTest(unittest.TestCase):
 
         self.assertIn('termux_api_level=29', gn_args)
         self.assertIn('extra_ldflags=["-lEGL", "-lGLESv2", "-llog"]', gn_args)
+        self.assertNotIn('dart_support_perfetto=false', gn_args)
         self.assertIn(
             f'extra_cflags=["{vulkan}", "-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__"]',
             gn_args,
