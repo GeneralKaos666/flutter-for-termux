@@ -57,6 +57,21 @@ class BuildTest(unittest.TestCase):
     def test_default_build_modes_cover_packaged_variants(self):
         self.assertEqual(self.instance.mode, ['debug'])
 
+    def test_dart_patches_are_kept_in_sync_for_flutter_3_44_0(self):
+        patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
+        with open(os.path.join(patch_dir, 'dart.patch'), encoding='utf-8') as f:
+            dart_patch = f.read()
+        with open(os.path.join(patch_dir, 'dart.new.patch'), encoding='utf-8') as f:
+            dart_new_patch = f.read()
+
+        self.assertEqual(dart_patch, dart_new_patch)
+        self.assertIn(
+            '+  ProcessResult result = Process.runSync("/data/data/com.termux/files/usr/bin/sh", [',
+            dart_patch,
+        )
+        self.assertIn('+#if defined(DART_HOST_OS_ANDROID) && defined(__TERMUX__)', dart_patch)
+        self.assertIn("+      return '/data/data/com.termux/files/usr/bin/sh';", dart_patch)
+
     def test_engine_patch_contains_termux_build_fixes(self):
         patch_file = os.path.join(os.path.dirname(__file__), 'patches', 'engine.patch')
         with open(patch_file, encoding='utf-8') as f:
