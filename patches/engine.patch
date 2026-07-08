@@ -368,11 +368,12 @@ index df3a986a..02f8ae9d 100644
 diff --git a/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc b/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
 --- a/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
 +++ b/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
-@@ -4,9 +4,12 @@
- // found in the LICENSE file.
+@@ -4,11 +4,13 @@
  
  #include "flutter/shell/platform/linux/fl_accessible_text_field.h"
-+
+ #include "flutter/shell/platform/linux/public/flutter_linux/fl_standard_message_codec.h"
+ #include "flutter/shell/platform/linux/public/flutter_linux/fl_value.h"
+ 
 +#if !PANGO_VERSION_CHECK(1, 58, 0)
  G_DEFINE_AUTOPTR_CLEANUP_FUNC(PangoContext, g_object_unref)
 +#endif
