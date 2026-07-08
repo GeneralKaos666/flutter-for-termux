@@ -364,3 +364,20 @@ index df3a986a..02f8ae9d 100644
  
  #include "flutter/shell/platform/linux/fl_accessible_node.h"
  #include "flutter/shell/platform/linux/fl_accessible_text_field.h"
+
+diff --git a/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc b/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
+--- a/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
++++ b/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
+@@ -4,9 +4,13 @@
+ // found in the LICENSE file.
+ 
+ #include "flutter/shell/platform/linux/fl_accessible_text_field.h"
++
++#if !PANGO_VERSION_CHECK(1, 58, 0)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(PangoContext, g_object_unref)
++#endif
+ // PangoLayout g_autoptr macro weren't added until 1.49.4. Add them manually.
+ // https://gitlab.gnome.org/GNOME/pango/-/commit/0b84e14
+ #if !PANGO_VERSION_CHECK(1, 49, 4)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC(PangoLayout, g_object_unref)
+ #endif
