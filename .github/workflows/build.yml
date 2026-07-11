@@ -46,11 +46,20 @@ jobs:
         echo "TAG=$TAG" >> $GITHUB_OUTPUT
         echo "TITLE=Flutter $TAG" >> $GITHUB_OUTPUT
 
+    - name: last commit message
+      id: commitmsg
+      run: |
+        MSG=$(git log -1 --format=%B)
+        echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$MSG" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
     - name: release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.parser.outputs.TAG }}
         name: ${{ steps.parser.outputs.TITLE }}
+        body: ${{ steps.commitmsg.outputs.BODY }}
         files: '**/*.deb'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
