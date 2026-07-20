@@ -1,5 +1,5 @@
 [flutter]
-tag = '3.44.6'
+tag = '3.44.7'
 repo = 'https://github.com/flutter/flutter'
 path = './flutter'
 
@@ -10,7 +10,7 @@ api = 26 # >=26
 
 [build]
 arch = ['arm64']       # arm, arm64, x86, x64
-runtime = ['debug']    # debug, release, profile
+runtime = ['release']    # debug, release, profile
 gclient = './.gclient'
 
 [patch.engine]
