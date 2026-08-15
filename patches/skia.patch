@@ -1,7 +1,7 @@
-diff --git a/include/private/base/SkFeatures.h b/include/private/base/SkFeatures.h
+diff --git a/include/private/SkFeatures.h b/include/private/SkFeatures.h
 index 2452386..efaaf46 100644
---- a/include/private/base/SkFeatures.h
-+++ b/include/private/base/SkFeatures.h
+--- a/include/private/SkFeatures.h
++++ b/include/private/SkFeatures.h
 @@ -17,7 +17,7 @@
  
      #if defined(_WIN32) || defined(__SYMBIAN32__)
