@@ -76,7 +76,9 @@ def reset(info):
 
 
 def add_bin(tar, out, src, mod=None):
-    assert tar, out and isinstance(src, bytes)
+    assert tar, 'bad tar'
+    assert out, 'bad out'
+    assert isinstance(src, bytes), f'bad src type: "{type(src)}"'
 
     info = tarfile.TarInfo(str(out))
     info.mode = mod or 0o644
@@ -86,7 +88,9 @@ def add_bin(tar, out, src, mod=None):
 
 
 def add_file(tar, out, src, mod=None):
-    assert tar, out and src.exists()
+    assert tar, 'bad tar'
+    assert out, 'bad out'
+    assert src.exists(), f'source not found: "{src}"'
 
     info = tar.gettarinfo(src, out)
     info.mode = mod or info.mode
@@ -97,7 +101,8 @@ def add_file(tar, out, src, mod=None):
 
 
 def add_dir(tar, out, mod=None):
-    assert tar, out
+    assert tar, 'bad tar'
+    assert out, 'bad out'
 
     cache = getattr(tar, '__cache__', set())
     tar.__cache__ = cache
@@ -150,7 +155,8 @@ def base64_md5_file(path):
 
 
 def download(url, out):
-    assert url, out
+    assert url, 'bad url'
+    assert out, 'bad out'
 
     with requests.get(url, allow_redirects=True, stream=True) as resp:
         if resp.status_code != 200:
@@ -159,7 +165,7 @@ def download(url, out):
             hash = dict([it.strip().split('=', 1) for it in hash.split(',')])
         if (dst := Path(out)) and dst.is_dir():
             dst = dst/url.split('?')[0].split('/')[-1]
-        if dst.is_file() and (md5 := base64_md5_file(dst)):
+        if dst.is_file() and hash and (md5 := base64_md5_file(dst)):
             if md5 == hash.get('md5'):
                 return dst
         resp = requests.get(url)
@@ -295,6 +301,7 @@ class Package(object):
         path = self.__format__(test['path'], **deps)
         if not (dest := download(file, Path('~/storage/downloads/1DMP/General').expanduser())):
             logger.warning(f'test file not found: "{file}"')
+            return None
 
         data = {it['out'] for it in self.gen_resource(name)}
         with zipfile.ZipFile(dest) as f:

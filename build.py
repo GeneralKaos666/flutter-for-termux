@@ -115,7 +115,6 @@ class Build:
         elif os.path.isdir(out):
             logger.info(f'moving {out} to {out}.old ...')
             os.rename(out, f'{out}.old')
-            return
 
         try:
             git.Repo.clone_from(

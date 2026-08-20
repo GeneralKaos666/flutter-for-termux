@@ -1,6 +1,6 @@
 # %YAML 1.2
 # root: path/to/flutter
-# arcĥ: build arch
+# arch: build arch
 # version: engine version
 define:
   prefix: '"data/data/com.termux/files/usr"'

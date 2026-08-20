@@ -1,4 +1,9 @@
 flutter
+flutter.old
 sysroot
-token
+depot_tools
+.gclient_entries
+.gclient_previous_custom_vars
+.gclient_previous_sync_commits
 **/__pycache__
+AGENTS.md
