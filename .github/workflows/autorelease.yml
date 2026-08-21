@@ -51,23 +51,29 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Skip if nothing to release
+        id: check
         run: |
           if [ "${{ steps.detect.outputs.TAG }}" = "${{ steps.current.outputs.TAG }}" ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
             echo "build.toml already at latest (${{ steps.detect.outputs.TAG }}), nothing to do."
             exit 0
           fi
           if gh api "repos/${{ github.repository }}/git/refs/tags/${{ steps.detect.outputs.TAG }}" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
             echo "tag ${{ steps.detect.outputs.TAG }} already released, nothing to do."
             exit 0
           fi
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "new Flutter release detected: ${{ steps.current.outputs.TAG }} -> ${{ steps.detect.outputs.TAG }}"
 
       - name: Bump build.toml
+        if: steps.check.outputs.should_release == 'true'
         run: |
           sed -i "s/^tag = .*/tag = '${{ steps.detect.outputs.TAG }}'/" build.toml
           git diff -- build.toml
 
       - name: Commit and push bump
+        if: steps.check.outputs.should_release == 'true'
         id: commit
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -84,6 +90,7 @@ jobs:
           echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Wait for validate.yml on bump commit
+        if: steps.check.outputs.should_release == 'true'
         env:
           SHA: ${{ steps.commit.outputs.SHA }}
         run: |
@@ -109,4 +116,5 @@ jobs:
           exit 1
 
       - name: Dispatch build
+        if: steps.check.outputs.should_release == 'true'
         run: gh workflow run build.yml --ref main
