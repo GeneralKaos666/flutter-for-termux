@@ -52,6 +52,8 @@ jobs:
 
       - name: Skip if nothing to release
         id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ steps.detect.outputs.TAG }}" = "${{ steps.current.outputs.TAG }}" ]; then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
@@ -93,6 +95,7 @@ jobs:
         if: steps.check.outputs.should_release == 'true'
         env:
           SHA: ${{ steps.commit.outputs.SHA }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           DEADLINE=$(( $(date +%s) + 1800 ))
           while [ "$(date +%s)" -lt "$DEADLINE" ]; do
@@ -117,4 +120,6 @@ jobs:
 
       - name: Dispatch build
         if: steps.check.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: gh workflow run build.yml --ref main
