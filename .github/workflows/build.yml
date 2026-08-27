@@ -14,7 +14,9 @@ concurrency:
 jobs:
   Ubuntu:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
     - name: checkout
       uses: actions/checkout@v7
