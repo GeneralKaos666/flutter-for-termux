@@ -89,37 +89,3 @@ jobs:
           git add build.toml
           git commit -m "Update build.toml"
           git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
-          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for validate.yml on bump commit
-        if: steps.check.outputs.should_release == 'true'
-        env:
-          SHA: ${{ steps.commit.outputs.SHA }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          DEADLINE=$(( $(date +%s) + 1800 ))
-          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-            RESULT=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=$SHA&event=push" \
-              --jq '.workflow_runs[] | select(.name == "validate") | .status + " " + (.conclusion // "")' | head -1)
-            if [ -n "$RESULT" ]; then
-              STATUS=$(echo "$RESULT" | awk '{print $1}')
-              CONCLUSION=$(echo "$RESULT" | awk '{print $2}')
-              if [ "$STATUS" = "completed" ]; then
-                if [ "$CONCLUSION" = "success" ]; then
-                  echo "validate.yml passed on $SHA"
-                  exit 0
-                fi
-                echo "validate.yml conclusion on $SHA: $CONCLUSION" >&2
-                exit 1
-              fi
-            fi
-            sleep 20
-          done
-          echo "timed out waiting for validate.yml on $SHA" >&2
-          exit 1
-
-      - name: Dispatch build
-        if: steps.check.outputs.should_release == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build.yml --ref main
