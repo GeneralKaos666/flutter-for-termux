@@ -1,9 +1,156 @@
-flutter
+# =====================================================
+# Termux Flutter WSL .gitignore
+# =====================================================
+
+# ----- Large build artifacts (not version controlled) -----
+flutter/
 flutter.old
-sysroot
-depot_tools
+sysroot/
+release/
+depot_tools/
+*.deb
+out/
+!.gclient
 .gclient_entries
 .gclient_previous_custom_vars
 .gclient_previous_sync_commits
-**/__pycache__
-AGENTS.md
+
+# ----- Python related -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+
+# ----- Log files -----
+*.log
+*.txt
+!README*.txt
+!requirements.txt
+
+# ----- IDE / editors -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ----- System files -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Node.js (if any) -----
+node_modules/
+
+# ----- Build tool caches and local config -----
+.cache/
+.ninja_log
+.ninja_deps
+.omx/
+.omc/
+build.local.toml
+*.local.toml
+
+# ----- Intermediate artifacts -----
+*.o
+*.a
+*.so.*
+*.dSYM/
+
+# ----- Screenshots and temporary test assets -----
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# ----- Large binaries and archives -----
+*.zip
+*.tar.gz
+*.tar.xz
+*.bin
+*.7z
+*.rar
+
+# ----- Large Flutter build artifacts -----
+gen_snapshot
+gen_snapshot_profile
+impellerc
+data.tar.xz
+
+# ----- Misc -----
+nul
+
+# ----- Sensitive files -----
+devices.md
+.claude/
+
+# ----- Temporary dev scripts -----
+fix_*.sh
+test_*.sh
+check_*.sh
+wsl_*.sh
+e2e_*.sh
+run_*.sh
+build_*.sh
+!build.py
+gradle_*.sh
+strace_*.sh
+copy_*.sh
+setup_*.sh
+device_*.sh
+find_*.sh
+patch.sh
+install.sh
+run.sh
+full_e2e.sh
+clean_e2e_test.sh
+
+# ----- Temporary binaries / snapshots -----
+*.snapshot
+*.apk
+*.b64
+gen_snapshot_*
+temp_*.*
+
+# ----- Temporary PowerShell scripts -----
+*.ps1
+!scripts/**/*.ps1
+!scripts/**/*.sh
+
+# ----- Agent / Orchestrator Metadata -----
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+GATE_STATUS.md
+evidence.json
+build_evidence.json
+device_smoke_evidence.json
+
+
+# ----- Backup and patch state files (#55) -----
+*.bak
+*.bak.*
+*.orig
+*.rej
+.termux_project_config.json
+patch_state.json
+*.receipt.json
+.gclient_sync.receipt.json
+
+# ----- Test and coverage caches (#55) -----
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+scratch/
+temp_*/
+tmp_*/
+*.tmp
+*.temp
+dpkg_state.json
