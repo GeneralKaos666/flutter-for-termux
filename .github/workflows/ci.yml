@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-sanity:
+    name: Repository sanity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt pytest
+
+      - name: Python compile check
+        run: python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py
+
+      - name: Run pytest unit tests
+        run: pytest test_build.py
+
+      - name: Shell syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          find scripts -name "*.sh" -exec bash -n {} +
+          bash -n install_flutter_complete.sh
+
+      - name: ShellCheck lint shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exclude .sh files that are actually Python scripts (e.g. config_jdk.sh)
+          mapfile -t SHELL_FILES < <(find scripts -name "*.sh" -exec grep -l '^#!/.*\(ba\)\?sh' {} +  2>/dev/null || true)
+          shellcheck --severity=error install_flutter_complete.sh "${SHELL_FILES[@]}"
+
+      - name: actionlint workflow lint
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! type -p actionlint &>/dev/null; then
+            bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          fi
+          # Disable embedded shellcheck (handled by separate ShellCheck step)
+          ./actionlint -shellcheck="" .github/workflows/*.yml
+
+      - name: Validate build.toml schema
+        run: |
+          python -c "
+          import tomllib
+          with open('build.toml', 'rb') as f:
+              data = tomllib.load(f)
+          assert 'flutter' in data, 'Missing [flutter]'
+          assert 'tag' in data['flutter'], 'Missing flutter.tag'
+          assert 'ndk' in data, 'Missing [ndk]'
+          assert 'api' in data['ndk'], 'Missing ndk.api'
+          print('build.toml schema valid!')
+          "
+
+      - name: PowerShell syntax check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $null = [scriptblock]::Create((Get-Content scripts/device/run_termux_smoke.ps1 -Raw))
+
+      - name: Version drift check
+        run: python scripts/ci/check_version_drift.py
+
+      - name: Repository contract checks
+        run: python scripts/ci/check_repo.py
+
+      - name: Diff whitespace check
+        run: git diff --check
