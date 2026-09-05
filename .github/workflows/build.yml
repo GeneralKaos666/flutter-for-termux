@@ -67,7 +67,7 @@ jobs:
         echo "EOF" >> "$GITHUB_OUTPUT"
 
     - name: release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.parser.outputs.TAG }}
         name: ${{ steps.parser.outputs.TITLE }}
