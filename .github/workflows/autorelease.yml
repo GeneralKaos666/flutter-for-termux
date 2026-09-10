@@ -74,6 +74,35 @@ jobs:
           sed -i "s/^tag = .*/tag = '${{ steps.detect.outputs.TAG }}'/" build.toml
           git diff -- build.toml
 
+      - name: Sync version references across all files
+        if: steps.check.outputs.should_release == 'true'
+        env:
+          OLD_TAG: ${{ steps.current.outputs.TAG }}
+          NEW_TAG: ${{ steps.detect.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          FILES=(
+            AGENTS.md CLAUDE.md GEMINI.md README_ZH.md
+            docs/CI_CD.md docs/releases/RELEASE_NOTES.md
+            docs/guides/BUILD_GUIDE.md docs/guides/BUILD_GUIDE_ZH.md
+            docs/guides/BUILD_PROCESS.md docs/guides/BUILD_PROCESS_ZH.md
+            docs/guides/INSTALL_GUIDE.md docs/guides/INSTALL_GUIDE_ZH.md
+            docs/guides/UPGRADE_GUIDE.md docs/guides/UPGRADE_GUIDE_ZH.md
+            install_flutter_complete.sh
+            scripts/build/build_complete_deb.sh
+            scripts/ci/check_repo.py
+            scripts/device/run_termux_smoke.ps1
+            scripts/install/flutter_termux_doctor.sh
+            scripts/install/install_termux_flutter.sh
+            scripts/install/lib_common.sh
+            scripts/install/post_install.sh
+            scripts/test/gh_e2e_test.sh
+          )
+          for f in "${FILES[@]}"; do
+            [ -f "$f" ] && sed -i "s/${OLD_TAG}/${NEW_TAG}/g" "$f"
+          done
+          git diff --stat
+
       - name: Commit and push bump
         if: steps.check.outputs.should_release == 'true'
         id: commit
@@ -86,6 +115,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add build.toml
-          git commit -m "Update build.toml"
+          git add -A
+          git commit -m "Update build.toml to ${{ steps.detect.outputs.TAG }}"
           git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
