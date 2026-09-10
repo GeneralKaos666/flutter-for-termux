@@ -1,8 +1,8 @@
 **English** | [中文](INSTALL_GUIDE_ZH.md)
 
-# Termux Flutter 3.47.2 Installation Guide
+# Termux Flutter 3.47.3 Installation Guide
 
-This guide covers `flutter_3.47.2_aarch64.deb`, targeting the following on ARM64 Termux:
+This guide covers `flutter_3.47.3_aarch64.deb`, targeting the following on ARM64 Termux:
 
 - `flutter doctor -v`
 - `flutter create`
@@ -14,7 +14,7 @@ This guide covers `flutter_3.47.2_aarch64.deb`, targeting the following on ARM64
 
 | Item | Value |
 |------|-------|
-| Flutter | 3.47.2 |
+| Flutter | 3.47.3 |
 | Flutter Tools Dart | 3.13.2 |
 | Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.2 (`android_arm64`) |
 
@@ -48,11 +48,11 @@ pkg update -y
 pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
 
 cd ~
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.2/flutter_3.47.2_aarch64.deb
-sha256sum flutter_3.47.2_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.3/flutter_3.47.3_aarch64.deb
+sha256sum flutter_3.47.3_aarch64.deb
 # Confirm the output matches: 4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0
 
-dpkg -i flutter_3.47.2_aarch64.deb
+dpkg -i flutter_3.47.3_aarch64.deb
 apt --fix-broken install -y
 
 # Required: dpkg only installs files; this step patches the Termux runtime.
@@ -96,7 +96,7 @@ flutter doctor -v
 
 Expected highlights:
 
-- `flutter --version` shows Flutter 3.47.2.
+- `flutter --version` shows Flutter 3.47.3.
 - `dart --version` shows `android_arm64` (Termux JIT Dart).
 - `dartvm --version` shows `linux_arm64` (engine VM).
 
@@ -184,7 +184,7 @@ If `flutter doctor` shows no connected device, it only means ADB is not connecte
 
 ### `PLATFORM_ABI_LIST` unresolved
 
-This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.2 deb, run:
+This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.3 deb, run:
 
 ```bash
 bash $PREFIX/share/flutter/post_install.sh

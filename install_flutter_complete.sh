@@ -359,7 +359,7 @@ if [ "${TERMUX_TEST_MODE:-false}" = "true" ]; then
 fi
 
 # Version configuration
-FLUTTER_VERSION="3.47.2"
+FLUTTER_VERSION="3.47.3"
 EXPECTED_SHA256="4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0"
 
 # Other version configuration
