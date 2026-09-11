@@ -157,3 +157,18 @@ resource:
     define:
       out: *cache
     mode: 0o644
+
+  manifest:
+    source: |-
+      {
+        "flutter_version": "$tag",
+        "framework_revision": "$framework_revision",
+        "framework_commit_date": "$framework_commit_date",
+        "engine_revision": "$version",
+        "dart_version": "$dart_version",
+        "devtools_version": "$devtools_version"
+      }
+    output:
+      - $prefix/share/flutter/manifest.json
+    binary: true
+    mode: 0o644

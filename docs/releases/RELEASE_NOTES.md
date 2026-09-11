@@ -1,6 +1,6 @@
 # Flutter 3.47.3 for Termux ARM64
 
-**Flutter 3.47.3 / Dart 3.13.2 for Android-bionic ARM64 hosts.**
+**Flutter 3.47.3 / Dart 3.13.3 for Android-bionic ARM64 hosts.**
 
 This release updates the Termux Flutter SDK package to Flutter 3.47.3. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
 
@@ -12,8 +12,8 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.3. It incorp
 | Size | 606,648,952 bytes (~166.1 MiB) |
 | SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
 | Flutter | 3.47.3 |
-| Flutter Tools Dart | 3.13.2 |
-| Dart VM | post-install `dartvm` resolves to Dart 3.13.2 (`android_arm64`) |
+| Flutter Tools Dart | 3.13.3 |
+| Dart VM | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 | Target host | Termux / Android bionic / ARM64 |
 
 ## Install
@@ -36,8 +36,8 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 | Command | Result |
 |---------|--------|
 | `flutter --version` | ✅ Flutter 3.47.3 |
-| `dart --version` | ✅ Dart 3.13.2 on `android_arm64` |
-| `dartvm --version` | ✅ Dart 3.13.2 on `linux_arm64` |
+| `dart --version` | ✅ Dart 3.13.3 on `android_arm64` |
+| `dartvm --version` | ✅ Dart 3.13.3 on `linux_arm64` |
 | `flutter doctor -v` | ✅ completes; unknown channel / no connected device are expected warnings |
 | `flutter create --platforms=android,linux` | ✅ |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ ARM64 APK produced |
@@ -48,7 +48,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 ### Flutter 3.47.3 update
 
-- Updated package metadata, NDK configurations, and patches to target Flutter 3.47.3 (Dart 3.13.2).
+- Updated package metadata, NDK configurations, and patches to target Flutter 3.47.3 (Dart 3.13.3).
 - Keeps Flutter CLI on Termux JIT Dart while preserving engine VM tools for snapshots.
 
 ### Installer & Environment Hardening

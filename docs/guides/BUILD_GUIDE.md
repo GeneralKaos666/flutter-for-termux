@@ -582,9 +582,9 @@ flutter run                     # ✅ verified (Hot Reload supported)
 
 | Feature | Status | Description |
 |------|------|------|
-| `flutter --version` | ✅ OK | Flutter 3.47.3 / Tools Dart 3.13.2 |
-| `dart --version` | ✅ OK | Termux JIT Dart 3.13.2 (`android_arm64`) |
-| `dartvm --version` | ✅ OK | post-install `dartvm` resolves to Dart 3.13.2 (`android_arm64`) |
+| `flutter --version` | ✅ OK | Flutter 3.47.3 / Tools Dart 3.13.3 |
+| `dart --version` | ✅ OK | Termux JIT Dart 3.13.3 (`android_arm64`) |
+| `dartvm --version` | ✅ OK | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 | `flutter doctor -v` | ✅ OK | unknown channel / no device are expected warnings |
 | `flutter create` | ✅ OK | Can create Android + Linux projects |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ OK | Requires running post_install.sh; only supports android-arm64 |

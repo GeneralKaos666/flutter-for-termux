@@ -355,7 +355,7 @@ flutter-for-termux/
 ## 更新日誌
 
 ### 2026-06-01
-- 更新本文檔至 Flutter 3.47.3 / Dart 3.12 狀態
+- 更新本文檔至 Flutter 3.47.3 / Dart 3.13.3 狀態
 - 補上 `scripts/ci`、`scripts/device`、GitHub Actions 與 release metadata check
 - 測試流程改為 ARM64 APK + Linux release smoke
 
