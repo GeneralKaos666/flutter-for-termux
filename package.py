@@ -192,7 +192,7 @@ class Output(object):
 
 @utils.record
 class Package(object):
-    def __init__(self, root, arch, control, resource, define=None):
+    def __init__(self, root, arch, control, resource, define=None, **extra):
         root = Path(root).resolve()
         assert root.is_dir(), f'bad flutter root path: "{root}"'
         self.globals = {
@@ -203,6 +203,7 @@ class Package(object):
             'version': utils.engine_version(root),
             'architecture': utils.termux_arch(arch),
         }
+        self.globals.update(extra)
         self.defines = {
             k: eval(v, self.globals) for k, v in define.items()
         }

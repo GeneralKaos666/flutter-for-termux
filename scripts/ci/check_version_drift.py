@@ -95,6 +95,15 @@ def check_package_yaml(cfg: dict[str, str], root_path: Path | None = None) -> No
     text = pkg_yaml.read_text(encoding="utf-8")
     if "Version: $package_version" not in text and "Version: $tag" not in text:
         fail("package.yaml control block must specify 'Version: $package_version' or 'Version: $tag'")
+    manifest_keys = ("flutter_version", "framework_revision", "framework_commit_date",
+                     "engine_revision", "dart_version", "devtools_version")
+    for key in manifest_keys:
+        if f'"{key}"' not in text:
+            fail(f"package.yaml: manifest resource missing JSON key '{key}'")
+    for var in ("$tag", "$framework_revision", "$framework_commit_date",
+                "$version", "$dart_version", "$devtools_version"):
+        if var not in text:
+            fail(f"package.yaml: manifest resource missing template var '{var}'")
     if "FLUTTER_PREBUILT_ENGINE_VERSION=" in text:
         match = re.search(r'export FLUTTER_PREBUILT_ENGINE_VERSION=["\']?([^"\'\n]+)', text)
         if match:
@@ -290,6 +299,24 @@ def check_post_install_script(cfg: dict[str, str], root_path: Path | None = None
         fail(f"scripts/install/post_install.sh: CANONICAL_DEVTOOLS_VER mismatch, expected '{dev_ver}'")
 
 
+def check_doctor_script(cfg: dict[str, str], root_path: Path | None = None) -> None:
+    base_root = root_path or ROOT
+    path = base_root / "scripts" / "install" / "flutter_termux_doctor.sh"
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    tag = cfg.get("tag")
+    dart_ver = cfg.get("dart_version")
+    fw_rev = cfg.get("framework_revision")
+
+    if tag and f'EXP_VER="{tag}"' not in text:
+        fail(f"scripts/install/flutter_termux_doctor.sh: EXP_VER mismatch, expected '{tag}'")
+    if dart_ver and f'EXP_DART="{dart_ver}"' not in text:
+        fail(f"scripts/install/flutter_termux_doctor.sh: EXP_DART mismatch, expected '{dart_ver}'")
+    if fw_rev and f'EXP_REV="{fw_rev}"' not in text:
+        fail(f"scripts/install/flutter_termux_doctor.sh: EXP_REV mismatch, expected '{fw_rev}'")
+
+
 def run_checks(root_path: Path | None = None) -> list[str]:
     ERRORS.clear()
     cfg = load_build_config(root_path)
@@ -303,6 +330,7 @@ def run_checks(root_path: Path | None = None) -> list[str]:
     check_guide_docs(cfg, root_path)
     check_installer_scripts(cfg, root_path)
     check_post_install_script(cfg, root_path)
+    check_doctor_script(cfg, root_path)
 
     return ERRORS
 

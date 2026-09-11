@@ -582,9 +582,9 @@ flutter run                     # ✅ 已驗證（Hot Reload 支援）
 
 | 功能 | 狀態 | 說明 |
 |------|------|------|
-| `flutter --version` | ✅ 正常 | Flutter 3.47.3 / Tools Dart 3.13.2 |
-| `dart --version` | ✅ 正常 | Termux JIT Dart 3.13.2 (`android_arm64`) |
-| `dartvm --version` | ✅ 正常 | post-install `dartvm` resolves to Dart 3.13.2 (`android_arm64`) |
+| `flutter --version` | ✅ 正常 | Flutter 3.47.3 / Tools Dart 3.13.3 |
+| `dart --version` | ✅ 正常 | Termux JIT Dart 3.13.3 (`android_arm64`) |
+| `dartvm --version` | ✅ 正常 | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 | `flutter doctor -v` | ✅ 正常 | unknown channel / no device 是預期警告 |
 | `flutter create` | ✅ 正常 | 可創建 Android + Linux 專案 |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ 正常 | 需執行 post_install.sh，僅支援 android-arm64 |

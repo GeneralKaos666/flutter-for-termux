@@ -68,6 +68,10 @@ class Build:
 
         # TODO: check parameters
         self.tag = tag
+        self.dart_version = cfg['flutter'].get('dart_version') or ''
+        self.framework_revision = cfg['flutter'].get('framework_revision') or ''
+        self.framework_commit_date = cfg['flutter'].get('framework_commit_date') or ''
+        self.devtools_version = cfg['flutter'].get('devtools_version') or ''
         self.api = api or 26
         self.conf = conf
         # TODO: detect host
@@ -220,7 +224,14 @@ class Build:
         root = root or self.root
         output = output or self.output(arch)
 
-        pkg = Package(root=root, arch=arch, **conf)
+        pkg = Package(
+            root=root,
+            arch=arch,
+            dart_version=self.dart_version,
+            framework_revision=self.framework_revision,
+            framework_commit_date=self.framework_commit_date,
+            devtools_version=self.devtools_version,
+            **conf)
         pkg.debuild(output=output)
 
     def output(self, arch: str):

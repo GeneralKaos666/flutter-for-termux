@@ -2,6 +2,10 @@
 tag = '3.47.3'
 repo = 'https://github.com/flutter/flutter'
 path = './flutter'
+dart_version = '3.13.3'
+framework_revision = 'e8113bf45620cbeb8aff64947ee4c93e16adb4cf'
+framework_commit_date = '2026-09-04 13:20:08 -0700'
+devtools_version = '2.60.0'
 
 [ndk]
 api = 26 # >=26
