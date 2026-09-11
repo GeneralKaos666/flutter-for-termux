@@ -15,8 +15,8 @@ This guide covers `flutter_3.47.3_aarch64.deb`, targeting the following on ARM64
 | Item | Value |
 |------|-------|
 | Flutter | 3.47.3 |
-| Flutter Tools Dart | 3.13.2 |
-| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.2 (`android_arm64`) |
+| Flutter Tools Dart | 3.13.3 |
+| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
 | deb size | 177,161,976 bytes (about 169 MiB) |

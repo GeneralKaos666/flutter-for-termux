@@ -355,7 +355,7 @@ flutter-for-termux/
 ## Update Log
 
 ### 2026-06-01
-- Updated this document to the Flutter 3.47.3 / Dart 3.12 state
+- Updated this document to the Flutter 3.47.3 / Dart 3.13.3 state
 - Added `scripts/ci`, `scripts/device`, GitHub Actions and release metadata check
 - Changed the testing process to ARM64 APK + Linux release smoke
 

@@ -1,9 +1,14 @@
+import json
 import os
 import re
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import build
+import package
+import yaml
 
 
 class BuildTest(unittest.TestCase):
@@ -126,6 +131,52 @@ class BuildTest(unittest.TestCase):
         hunk_line_count = int(hunk.group(1))
         added_lines = sum(1 for line in hunk.group('body').splitlines() if line.startswith('+'))
         self.assertEqual(added_lines, hunk_line_count)
+
+
+class PackageManifestTest(unittest.TestCase):
+    def test_manifest_resource_generates_ship_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
+            release_out.mkdir(parents=True)
+
+            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+                src = yaml.safe_load(f)
+
+            with (
+                patch('package.utils.flutter_tag', return_value='3.47.3'),
+                patch('package.utils.engine_version', return_value='06a2e2a110089dff50fe635cffd2a61e1b24fbcd'),
+            ):
+                pkg = package.Package(
+                    root=str(root),
+                    arch='arm64',
+                    dart_version='3.13.3',
+                    framework_revision='e8113bf45620cbeb8aff64947ee4c93e16adb4cf',
+                    framework_commit_date='2026-09-04 13:20:08 -0700',
+                    devtools_version='2.60.0',
+                    **src,
+                )
+
+            items = list(pkg.gen_resource('manifest'))
+
+            self.assertEqual(len(items), 1)
+            item = items[0]
+            self.assertEqual(
+                str(item['out']), 'data/data/com.termux/files/usr/share/flutter/manifest.json'
+            )
+            self.assertEqual(item['mod'], 0o644)
+            manifest = json.loads(item['src'].decode('utf-8'))
+            self.assertEqual(
+                manifest,
+                {
+                    'flutter_version': '3.47.3',
+                    'framework_revision': 'e8113bf45620cbeb8aff64947ee4c93e16adb4cf',
+                    'framework_commit_date': '2026-09-04 13:20:08 -0700',
+                    'engine_revision': '06a2e2a110089dff50fe635cffd2a61e1b24fbcd',
+                    'dart_version': '3.13.3',
+                    'devtools_version': '2.60.0',
+                },
+            )
 
 
 if __name__ == '__main__':

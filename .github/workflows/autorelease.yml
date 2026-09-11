@@ -39,16 +39,19 @@ jobs:
           echo "latest Flutter stable tag: $STABLE"
           echo "TAG=$STABLE" >> "$GITHUB_OUTPUT"
 
-      - name: Read current tag from build.toml
+      - name: Read current metadata from build.toml
         id: current
         run: |
-          TAG=$(python3 -c "
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import tomllib
           with open('build.toml', 'rb') as f:
               cfg = tomllib.load(f)
-          print(cfg['flutter']['tag'])
-          ")
-          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          flutter = cfg['flutter']
+          for key in ('tag', 'dart_version', 'framework_revision', 'framework_commit_date', 'devtools_version'):
+              name = 'TAG' if key == 'tag' else 'OLD_' + key.upper()
+              print(f"{name}={flutter.get(key, '')}")
+          PY
 
       - name: Skip if nothing to release
         id: check
@@ -68,6 +71,43 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "new Flutter release detected: ${{ steps.current.outputs.TAG }} -> ${{ steps.detect.outputs.TAG }}"
 
+      - name: Fetch new release metadata
+        id: meta
+        if: steps.check.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - "${{ steps.detect.outputs.TAG }}" >> "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import sys
+          import urllib.request
+          from datetime import datetime, timedelta, timezone
+
+          tag = sys.argv[1]
+          with urllib.request.urlopen(
+              "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json"
+          ) as resp:
+              rel = json.load(resp)
+          entries = [r for r in rel["releases"] if r.get("version") == tag]
+          if not entries:
+              raise SystemExit(f"no stable release entry for {tag} in releases_linux.json")
+          entry = entries[0]
+          rev = entry["hash"]
+          dart = entry.get("dart_sdk_version", "")
+          if not dart:
+              raise SystemExit(f"dart_sdk_version missing for {tag} in releases_linux.json")
+          with urllib.request.urlopen(
+              f"https://api.github.com/repos/flutter/flutter/commits/{rev}"
+          ) as resp:
+              commit = json.load(resp)
+          iso = commit["commit"]["committer"]["date"].replace("Z", "+00:00")
+          dt = datetime.fromisoformat(iso).astimezone(timezone(timedelta(hours=-7)))
+          print(f"NEW_REV={rev}")
+          print(f"NEW_DART={dart}")
+          print(f"NEW_DATE={dt:%Y-%m-%d %H:%M:%S %z}")
+          PY
+
       - name: Bump build.toml
         if: steps.check.outputs.should_release == 'true'
         run: |
@@ -77,8 +117,14 @@ jobs:
       - name: Sync version references across all files
         if: steps.check.outputs.should_release == 'true'
         env:
-          OLD_TAG: ${{ steps.current.outputs.TAG }}
+          OLD_TAG: ${{ steps.current.outputs.OLD_TAG }}
           NEW_TAG: ${{ steps.detect.outputs.TAG }}
+          OLD_DART: ${{ steps.current.outputs.OLD_DART_VERSION }}
+          NEW_DART: ${{ steps.meta.outputs.NEW_DART }}
+          OLD_REV: ${{ steps.current.outputs.OLD_FRAMEWORK_REVISION }}
+          NEW_REV: ${{ steps.meta.outputs.NEW_REV }}
+          OLD_DATE: ${{ steps.current.outputs.OLD_FRAMEWORK_COMMIT_DATE }}
+          NEW_DATE: ${{ steps.meta.outputs.NEW_DATE }}
         run: |
           set -euo pipefail
           FILES=(
@@ -98,9 +144,20 @@ jobs:
             scripts/install/post_install.sh
             scripts/test/gh_e2e_test.sh
           )
-          for f in "${FILES[@]}"; do
-            [ -f "$f" ] && sed -i "s/${OLD_TAG}/${NEW_TAG}/g" "$f"
-          done
+          bump() {
+            local old="$1" new="$2" field="$3"
+            if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
+              return
+            fi
+            for f in "${FILES[@]}"; do
+              [ -f "$f" ] && sed -i "s/${old}/${new}/g" "$f"
+            done
+            [ -n "$field" ] && sed -i "s/^${field} = .*/${field} = '${new}'/" build.toml
+          }
+          bump "$OLD_TAG" "$NEW_TAG" tag
+          bump "$OLD_DART" "$NEW_DART" dart_version
+          bump "$OLD_REV" "$NEW_REV" framework_revision
+          bump "$OLD_DATE" "$NEW_DATE" framework_commit_date
           git diff --stat
 
       - name: Commit and push bump

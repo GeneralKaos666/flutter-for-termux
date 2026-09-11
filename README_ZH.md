@@ -18,7 +18,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Flutter-3.47.3-02569B?logo=flutter" alt="Flutter Version"/>
-  <img src="https://img.shields.io/badge/Dart-3.13.2-0175C2?logo=dart" alt="Dart Version"/>
+  <img src="https://img.shields.io/badge/Dart-3.13.3-0175C2?logo=dart" alt="Dart Version"/>
   <img src="https://img.shields.io/badge/Target-aarch64-green" alt="Target"/>
   <a href="https://github.com/GeneralKaos666/flutter-for-termux/actions/workflows/ci.yml"><img src="https://github.com/GeneralKaos666/flutter-for-termux/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue" alt="License"/>
@@ -62,7 +62,7 @@ Flutter 官方 SDK 支援 ARM64 target，不代表可以直接把 Flutter SDK �
 | 項目 | 狀態 |
 | --- | --- |
 | Flutter | `3.47.3` |
-| Dart | `3.13.2` |
+| Dart | `3.13.3` |
 | 架構 | `aarch64` / `arm64-v8a` |
 | Release asset | [`flutter_3.47.3_aarch64.deb`](https://github.com/GeneralKaos666/flutter-for-termux/releases/tag/3.47.3) |
 | Size | `606,648,952` bytes (~578 MiB) |
