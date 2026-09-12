@@ -4,18 +4,18 @@
 
 本文檔說明如何從零開始構建包含 Android gen_snapshot 的 Flutter deb 包。
 
-## 目前版本狀態（3.47.3 / 2026-08-15）
+## 目前版本狀態（3.47.4 / 2026-08-15）
 
 | 項目 | 值 |
 |------|----|
-| Flutter tag | `3.47.3` |
+| Flutter tag | `3.47.4` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
-| Package | `flutter_3.47.3_aarch64.deb` |
+| Package | `flutter_3.47.4_aarch64.deb` |
 | Package size | 666,366,556 bytes（約 636 MiB） |
 | SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
-3.47.3 需要特別注意三個新點：
+3.47.4 需要特別注意三個新點：
 
 1. **Dart VM/tool split**：Flutter CLI 使用 Termux JIT `dart`，但 engine snapshots 仍需要配套 `dartvm` / `dartaotruntime`，所以 deb validator 必須檢查三者。dart SDK 由標準構建的 `dart_sdk_archive` target 產出。
 2. **Flutter Tools Android host**：Termux 上 Dart 回報 `Platform.operatingSystem == "android"`，必須把 host artifact lookup 映射到 Linux ARM64。
@@ -198,7 +198,7 @@ python3 build.py debuild --arch=arm64
 
 構建完成後，deb 包位於：
 ```
-release/flutter_3.47.3_aarch64.deb
+release/flutter_3.47.4_aarch64.deb
 ```
 
 ## deb 包內容
@@ -275,12 +275,12 @@ export PATH="$HOME/depot_tools:$PATH"
 ### 磁碟空間不足
 Flutter Engine 源碼約 30GB，編譯產物約 20GB，至少需要 60GB 空間。
 
-## Termux 使用前設置（3.47.3）
+## Termux 使用前設置（3.47.4）
 
 deb 安裝後要在 Termux 內執行：
 
 ```bash
-dpkg -i flutter_3.47.3_aarch64.deb
+dpkg -i flutter_3.47.4_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -576,13 +576,13 @@ flutter build linux --debug     # ✅ 已驗證（需要 Termux:X11）
 flutter run                     # ✅ 已驗證（Hot Reload 支援）
 ```
 
-## 目標版本狀態 (3.47.3)
+## 目標版本狀態 (3.47.4)
 
 ### 功能測試結果（2026-08-15 更新）
 
 | 功能 | 狀態 | 說明 |
 |------|------|------|
-| `flutter --version` | ✅ 正常 | Flutter 3.47.3 / Tools Dart 3.13.3 |
+| `flutter --version` | ✅ 正常 | Flutter 3.47.4 / Tools Dart 3.13.3 |
 | `dart --version` | ✅ 正常 | Termux JIT Dart 3.13.3 (`android_arm64`) |
 | `dartvm --version` | ✅ 正常 | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 | `flutter doctor -v` | ✅ 正常 | unknown channel / no device 是預期警告 |
@@ -649,7 +649,7 @@ error: This system call is not available on Android
 
 ---
 
-## Termux APK 構建完整設置指南（3.47.3）
+## Termux APK 構建完整設置指南（3.47.4）
 
 > **📌 重要：runtime 層級由 `post_install.sh` 自動完成；本節只列每個 Flutter project 必須保留的設定。**
 

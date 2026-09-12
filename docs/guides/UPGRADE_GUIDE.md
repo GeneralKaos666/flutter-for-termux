@@ -2,7 +2,7 @@
 
 # Flutter Version Upgrade Guide
 
-This document explains how to upgrade Termux Flutter from the current 3.47.3 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle plugins that must be re-checked after 3.47.3.
+This document explains how to upgrade Termux Flutter from the current 3.47.4 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle plugins that must be re-checked after 3.47.4.
 
 ---
 
@@ -22,7 +22,7 @@ This document explains how to upgrade Termux Flutter from the current 3.47.3 to 
 □ Step 11: Publish a GitHub Release
 ```
 
-## Must-Check Items After 3.47.3
+## Must-Check Items After 3.47.4
 
 | Item | Why it matters | How to check |
 |------|------------|----------|

@@ -106,7 +106,7 @@ python3 build.py build --arch=arm64 --mode=debug --jobs=24
 python3 build.py debuild --arch=arm64
 ```
 
-產出：`release/flutter_3.47.3_aarch64.deb`
+產出：`release/flutter_3.47.4_aarch64.deb`
 
 ---
 
@@ -227,11 +227,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. 傳輸 deb 到設備
 # 使用 PowerShell（Git Bash 會損壞路徑）
-adb push flutter_3.47.3_aarch64.deb /sdcard/Download/
+adb push flutter_3.47.4_aarch64.deb /sdcard/Download/
 
 # 2. 在 Termux 中安裝
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.47.3_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.47.4_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -276,13 +276,13 @@ flutter build linux --release
 
 ```bash
 # 最終產物位置
-release/flutter_3.47.3_aarch64.deb
+release/flutter_3.47.4_aarch64.deb
 ```
 
 ### 3. 上傳到 GitHub Releases
 
-1. 創建新 Release：`3.47.3`
-2. 上傳 deb 檔案：`flutter_3.47.3_aarch64.deb`
+1. 創建新 Release：`3.47.4`
+2. 上傳 deb 檔案：`flutter_3.47.4_aarch64.deb`
 3. 填寫 Release Notes
 
 ### 4. 驗證一鍵安裝腳本
@@ -355,7 +355,7 @@ flutter-for-termux/
 ## 更新日誌
 
 ### 2026-06-01
-- 更新本文檔至 Flutter 3.47.3 / Dart 3.13.3 狀態
+- 更新本文檔至 Flutter 3.47.4 / Dart 3.13.3 狀態
 - 補上 `scripts/ci`、`scripts/device`、GitHub Actions 與 release metadata check
 - 測試流程改為 ARM64 APK + Linux release smoke
 
