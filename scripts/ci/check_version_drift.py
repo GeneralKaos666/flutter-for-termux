@@ -7,6 +7,7 @@ installer scripts, and build scripts match.
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -21,10 +22,83 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[2]
 ERRORS: list[str] = []
+MARKDOWN_DOCS = [
+    "README.md",
+    "README_ZH.md",
+    "docs/releases/RELEASE_NOTES.md",
+]
+GUIDANCE_DOCS = ["AGENTS.md", "GEMINI.md", "CLAUDE.md"]
+GUIDE_DOCS = [
+    "docs/guides/BUILD_GUIDE.md",
+    "docs/guides/BUILD_PROCESS.md",
+    "docs/guides/INSTALL_GUIDE.md",
+    "docs/guides/UPGRADE_GUIDE.md",
+]
+INSTALLER_SCRIPTS = [
+    "install_flutter_complete.sh",
+    "scripts/install/install.sh",
+    "scripts/install/install_termux_flutter.sh",
+    "scripts/test/gh_e2e_test.sh",
+]
+SEMVER_PATTERN = r"\d+\.\d+\.\d+"
 
 
 def fail(msg: str) -> None:
     ERRORS.append(msg)
+
+
+def replace_line_value(text: str, key: str, value: str) -> tuple[str, int]:
+    return re.subn(
+        rf'(?m)^(\s*{re.escape(key)}\s*=\s*["\']?){SEMVER_PATTERN}(["\']?)',
+        rf'\g<1>{value}\g<2>',
+        text,
+    )
+
+
+def replace_default_var_value(text: str, key: str, value: str) -> tuple[str, int]:
+    return re.subn(rf'(\$\{{\s*{re.escape(key)}\s*:-){SEMVER_PATTERN}(}})', rf'\g<1>{value}\g<2>', text)
+
+
+def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) -> list[str]:
+    base_root = root_path or ROOT
+    tag = cfg["tag"]
+    release_tag = cfg["release_tag"]
+    asset_name = cfg["asset_name"]
+    changed_files: list[str] = []
+    file_list = sorted(set(MARKDOWN_DOCS + GUIDANCE_DOCS + GUIDE_DOCS + INSTALLER_SCRIPTS + [
+        "scripts/install/post_install.sh",
+        "scripts/install/flutter_termux_doctor.sh",
+    ]))
+
+    for rel_path in file_list:
+        path = base_root / rel_path
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        original = text
+
+        text = re.sub(
+            rf"(https://github\.com/GeneralKaos666/flutter-for-termux/releases/download/){SEMVER_PATTERN}(/)",
+            rf"\g<1>{release_tag}\g<2>",
+            text,
+        )
+        text = re.sub(rf"flutter_{SEMVER_PATTERN}_aarch64\.deb", asset_name, text)
+        text = re.sub(rf"patches/{SEMVER_PATTERN}/", f"patches/{tag}/", text)
+        text = re.sub(r"Target:\s*aarch64,\s*Flutter\s+[0-9.]+", f"Target: aarch64, Flutter {tag}", text)
+        text = re.sub(r"(?m)^(\|\s*Flutter tag\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{tag}\g<2>", text)
+        text = re.sub(r"(?m)^(\|\s*Package\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{asset_name}\g<2>", text)
+        text = replace_line_value(text, "FLUTTER_VERSION", tag)[0]
+        text = replace_line_value(text, "RELEASE_TAG", release_tag)[0]
+        text = replace_default_var_value(text, "FLUTTER_VERSION", tag)[0]
+        text = replace_default_var_value(text, "RELEASE_TAG", release_tag)[0]
+        text = replace_line_value(text, "CANONICAL_FLUTTER_VER", tag)[0]
+        text = replace_line_value(text, "EXP_VER", tag)[0]
+
+        if text != original:
+            path.write_text(text, encoding="utf-8")
+            changed_files.append(rel_path)
+
+    return changed_files
 
 
 def load_build_config(root_path: Path | None = None) -> dict[str, str]:
@@ -118,13 +192,7 @@ def check_markdown_docs(cfg: dict[str, str], root_path: Path | None = None) -> N
     dart_version = cfg["dart_version"]
     engine_commit = cfg.get("engine_commit")
 
-    docs_to_check = [
-        "README.md",
-        "README_ZH.md",
-        "docs/releases/RELEASE_NOTES.md",
-    ]
-
-    for rel_path in docs_to_check:
+    for rel_path in MARKDOWN_DOCS:
         path = base_root / rel_path
         if not path.is_file():
             continue
@@ -158,9 +226,7 @@ def check_agent_guidance_docs(cfg: dict[str, str], root_path: Path | None = None
     base_root = root_path or ROOT
     tag = cfg["tag"]
     asset_name = cfg["asset_name"]
-
-    guidance_docs = ["AGENTS.md", "GEMINI.md", "CLAUDE.md"]
-    for rel_path in guidance_docs:
+    for rel_path in GUIDANCE_DOCS:
         path = base_root / rel_path
         if not path.is_file():
             continue
@@ -192,15 +258,7 @@ def check_guide_docs(cfg: dict[str, str], root_path: Path | None = None) -> None
     asset_name = cfg["asset_name"]
     engine_commit = cfg.get("engine_commit")
     sha256 = cfg.get("sha256")
-
-    guides = [
-        "docs/guides/BUILD_GUIDE.md",
-        "docs/guides/BUILD_PROCESS.md",
-        "docs/guides/INSTALL_GUIDE.md",
-        "docs/guides/UPGRADE_GUIDE.md",
-    ]
-
-    for rel_path in guides:
+    for rel_path in GUIDE_DOCS:
         path = base_root / rel_path
         if not path.is_file():
             continue
@@ -241,15 +299,7 @@ def check_installer_scripts(cfg: dict[str, str], root_path: Path | None = None) 
     base_root = root_path or ROOT
     tag = cfg["tag"]
     release_tag = cfg["release_tag"]
-
-    scripts = [
-        "install_flutter_complete.sh",
-        "scripts/install/install.sh",
-        "scripts/install/install_termux_flutter.sh",
-        "scripts/test/gh_e2e_test.sh",
-    ]
-
-    for rel_path in scripts:
+    for rel_path in INSTALLER_SCRIPTS:
         path = base_root / rel_path
         if not path.is_file():
             continue
@@ -261,12 +311,22 @@ def check_installer_scripts(cfg: dict[str, str], root_path: Path | None = None) 
             found_ver = ver_match.group(1).lstrip("v")
             if found_ver != tag and not found_ver.startswith("${"):
                 fail(f"{rel_path}: FLUTTER_VERSION mismatch: found '{found_ver}', expected '{tag}'")
+        ver_default_match = re.search(rf'\$\{{\s*FLUTTER_VERSION\s*:-\s*({SEMVER_PATTERN})\s*}}', text)
+        if ver_default_match:
+            found_ver = ver_default_match.group(1)
+            if found_ver != tag:
+                fail(f"{rel_path}: FLUTTER_VERSION default mismatch: found '{found_ver}', expected '{tag}'")
 
         tag_match = re.search(r'RELEASE_TAG=["\']?([^"\':\s\n}]+)', text)
         if tag_match:
             found_tag = tag_match.group(1)
             if found_tag != release_tag and not found_tag.startswith("${"):
                 fail(f"{rel_path}: RELEASE_TAG mismatch: found '{found_tag}', expected '{release_tag}'")
+        tag_default_match = re.search(rf'\$\{{\s*RELEASE_TAG\s*:-\s*({SEMVER_PATTERN})\s*}}', text)
+        if tag_default_match:
+            found_tag = tag_default_match.group(1)
+            if found_tag != release_tag:
+                fail(f"{rel_path}: RELEASE_TAG default mismatch: found '{found_tag}', expected '{release_tag}'")
 
         sha_match = re.search(r'EXPECTED_SHA256=.*', text)
         if sha_match and cfg.get("sha256"):
@@ -335,7 +395,30 @@ def run_checks(root_path: Path | None = None) -> list[str]:
     return ERRORS
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Check and optionally auto-fix version drift from build.toml")
+    parser.add_argument("--fix", action="store_true", help="Rewrite drift-prone version references before checking")
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
+    if args.fix:
+        ERRORS.clear()
+        cfg = load_build_config()
+        if not cfg:
+            print("Version drift check FAILED:", file=sys.stderr)
+            for err in ERRORS:
+                print(f"  - {err}", file=sys.stderr)
+            return 1
+        changed = apply_version_autofix(cfg)
+        if changed:
+            print(f"Auto-fix updated {len(changed)} file(s):")
+            for rel in changed:
+                print(f"  - {rel}")
+        else:
+            print("Auto-fix made no changes.")
+
     errors = run_checks()
     if errors:
         print("Version drift check FAILED:", file=sys.stderr)

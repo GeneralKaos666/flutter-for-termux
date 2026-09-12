@@ -131,7 +131,7 @@ android {
 - Host: Windows + WSL2 Ubuntu, Ryzen 9950X3D (24 threads allocated)
 - NDK: r29 at `/opt/android-ndk-r29`
 - WSL build dir: `<workspace-root>/`
-- Flutter: 3.47.3
+- Flutter: 3.47.4
 - Target: aarch64 (ARM64)
 - Test device: `[REDACTED]` (Samsung SM-X716B / Android 16)
 
@@ -139,10 +139,10 @@ android {
 
 ```powershell
 # From Windows (use PowerShell, NOT Git Bash — path mangling)
-adb push flutter_3.47.3_aarch64.deb /data/local/tmp/
+adb push flutter_3.47.4_aarch64.deb /data/local/tmp/
 
 # In Termux
-dpkg -i /data/local/tmp/flutter_3.47.3_aarch64.deb
+dpkg -i /data/local/tmp/flutter_3.47.4_aarch64.deb
 apt-get install -f
 bash $PREFIX/share/flutter/post_install.sh  # Required for APK builds
 source $PREFIX/etc/profile.d/flutter.sh
