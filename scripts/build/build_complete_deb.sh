@@ -23,7 +23,7 @@ echo "=========================================="
 echo ""
 
 ARCH="arm64"
-VERSION="3.47.3"
+VERSION="3.47.4"
 
 # Step 1: Build Linux debug
 echo "[1/6] Building linux_debug_arm64..."

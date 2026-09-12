@@ -5,7 +5,7 @@
 #
 # Usage: curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/scripts/install/install_termux_flutter.sh -o ~/install.sh && bash ~/install.sh
 #
-# Target state (v3.47.3):
+# Target state (v3.47.4):
 #   - flutter doctor / create / build / run: must be re-verified on a clean Termux environment before release
 #
 

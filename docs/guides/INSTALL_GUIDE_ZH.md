@@ -1,8 +1,8 @@
 [English](INSTALL_GUIDE.md) | **中文**
 
-# Termux Flutter 3.47.3 安裝指南
+# Termux Flutter 3.47.4 安裝指南
 
-本指南適用於 `flutter_3.47.3_aarch64.deb`，目標是在 ARM64 Termux 上執行：
+本指南適用於 `flutter_3.47.4_aarch64.deb`，目標是在 ARM64 Termux 上執行：
 
 - `flutter doctor -v`
 - `flutter create`
@@ -14,7 +14,7 @@
 
 | 項目 | 值 |
 |------|----|
-| Flutter | 3.47.3 |
+| Flutter | 3.47.4 |
 | Flutter Tools Dart | 3.13.3 |
 | Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 
@@ -48,11 +48,11 @@ pkg update -y
 pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
 
 cd ~
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.3/flutter_3.47.3_aarch64.deb
-sha256sum flutter_3.47.3_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
+sha256sum flutter_3.47.4_aarch64.deb
 # 確認輸出為：4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0
 
-dpkg -i flutter_3.47.3_aarch64.deb
+dpkg -i flutter_3.47.4_aarch64.deb
 apt --fix-broken install -y
 
 # 必跑：dpkg 只安裝檔案；這一步才會修補 Termux runtime。
@@ -96,7 +96,7 @@ flutter doctor -v
 
 預期重點：
 
-- `flutter --version` 顯示 Flutter 3.47.3。
+- `flutter --version` 顯示 Flutter 3.47.4。
 - `dart --version` 顯示 `android_arm64`（Termux JIT Dart）。
 - `dartvm --version` 顯示 `linux_arm64`（engine VM）。
 
@@ -184,7 +184,7 @@ flutter run -d <device_id>
 
 ### `PLATFORM_ABI_LIST` unresolved
 
-代表 post-install 的 Flutter Gradle plugin 模板或 Gradle cache 是舊的。更新到 3.47.3 deb 後執行：
+代表 post-install 的 Flutter Gradle plugin 模板或 Gradle cache 是舊的。更新到 3.47.4 deb 後執行：
 
 ```bash
 bash $PREFIX/share/flutter/post_install.sh
