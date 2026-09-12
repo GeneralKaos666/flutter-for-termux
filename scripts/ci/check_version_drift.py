@@ -48,7 +48,11 @@ def fail(msg: str) -> None:
 
 
 def replace_line_value(text: str, key: str, value: str) -> tuple[str, int]:
-    return re.subn(rf'(?m)^(\s*{re.escape(key)}\s*=\s*["\'])[^"\']*(["\'])', rf'\g<1>{value}\g<2>', text)
+    return re.subn(
+        rf'(?m)^(\s*{re.escape(key)}\s*=\s*["\']?){SEMVER_PATTERN}(["\']?)',
+        rf'\g<1>{value}\g<2>',
+        text,
+    )
 
 
 def replace_default_var_value(text: str, key: str, value: str) -> tuple[str, int]:
@@ -73,7 +77,11 @@ def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) ->
         text = path.read_text(encoding="utf-8")
         original = text
 
-        text = re.sub(rf"releases/download/{SEMVER_PATTERN}/", f"releases/download/{release_tag}/", text)
+        text = re.sub(
+            rf"(https://github\.com/GeneralKaos666/flutter-for-termux/releases/download/){SEMVER_PATTERN}(/)",
+            rf"\g<1>{release_tag}\g<2>",
+            text,
+        )
         text = re.sub(rf"flutter_{SEMVER_PATTERN}_aarch64\.deb", asset_name, text)
         text = re.sub(rf"patches/{SEMVER_PATTERN}/", f"patches/{tag}/", text)
         text = re.sub(r"Target:\s*aarch64,\s*Flutter\s+[0-9.]+", f"Target: aarch64, Flutter {tag}", text)
@@ -303,12 +311,22 @@ def check_installer_scripts(cfg: dict[str, str], root_path: Path | None = None) 
             found_ver = ver_match.group(1).lstrip("v")
             if found_ver != tag and not found_ver.startswith("${"):
                 fail(f"{rel_path}: FLUTTER_VERSION mismatch: found '{found_ver}', expected '{tag}'")
+        ver_default_match = re.search(rf'\$\{{\s*FLUTTER_VERSION\s*:-\s*({SEMVER_PATTERN})\s*}}', text)
+        if ver_default_match:
+            found_ver = ver_default_match.group(1)
+            if found_ver != tag:
+                fail(f"{rel_path}: FLUTTER_VERSION default mismatch: found '{found_ver}', expected '{tag}'")
 
         tag_match = re.search(r'RELEASE_TAG=["\']?([^"\':\s\n}]+)', text)
         if tag_match:
             found_tag = tag_match.group(1)
             if found_tag != release_tag and not found_tag.startswith("${"):
                 fail(f"{rel_path}: RELEASE_TAG mismatch: found '{found_tag}', expected '{release_tag}'")
+        tag_default_match = re.search(rf'\$\{{\s*RELEASE_TAG\s*:-\s*({SEMVER_PATTERN})\s*}}', text)
+        if tag_default_match:
+            found_tag = tag_default_match.group(1)
+            if found_tag != release_tag:
+                fail(f"{rel_path}: RELEASE_TAG default mismatch: found '{found_tag}', expected '{release_tag}'")
 
         sha_match = re.search(r'EXPECTED_SHA256=.*', text)
         if sha_match and cfg.get("sha256"):
