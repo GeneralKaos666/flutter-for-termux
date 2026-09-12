@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Flutter-3.47.3-02569B?logo=flutter" alt="Flutter Version"/>
+  <img src="https://img.shields.io/badge/Flutter-3.47.4-02569B?logo=flutter" alt="Flutter Version"/>
   <img src="https://img.shields.io/badge/Dart-3.13.3-0175C2?logo=dart" alt="Dart Version"/>
   <img src="https://img.shields.io/badge/Target-aarch64-green" alt="Target"/>
   <a href="https://github.com/GeneralKaos666/flutter-for-termux/actions/workflows/ci.yml"><img src="https://github.com/GeneralKaos666/flutter-for-termux/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
@@ -53,7 +53,7 @@ Flutter 官方 SDK 支援 ARM64 target，不代表可以直接把 Flutter SDK �
 本專案提供一套針對 Termux ARM64 的 Flutter SDK 打包流程：
 
 - 從 WSL/Linux 交叉編譯 Flutter Engine、Dart runtime 與必要工具。
-- 將產物整理成 Termux 可安裝的 `flutter_3.47.3_aarch64.deb`。
+- 將產物整理成 Termux 可安裝的 `flutter_3.47.4_aarch64.deb`。
 - 安裝後透過 `post_install.sh` 修補 Flutter Tools、Gradle plugin、NDK/build-tools wrappers、Android SDK 限制與 Termux shebang。
 - 讓 Termux 內可以執行 `flutter doctor`、`flutter create`、`flutter build apk`、`flutter build linux`，並可搭配 Termux:X11 進行 hot reload。
 
@@ -61,10 +61,10 @@ Flutter 官方 SDK 支援 ARM64 target，不代表可以直接把 Flutter SDK �
 
 | 項目 | 狀態 |
 | --- | --- |
-| Flutter | `3.47.3` |
+| Flutter | `3.47.4` |
 | Dart | `3.13.3` |
 | 架構 | `aarch64` / `arm64-v8a` |
-| Release asset | [`flutter_3.47.3_aarch64.deb`](https://github.com/GeneralKaos666/flutter-for-termux/releases/tag/3.47.3) |
+| Release asset | [`flutter_3.47.4_aarch64.deb`](https://github.com/GeneralKaos666/flutter-for-termux/releases/tag/3.47.4) |
 | Size | `606,648,952` bytes (~578 MiB) |
 | SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
 
@@ -105,10 +105,10 @@ bash install_flutter_complete.sh
 
 ```bash
 pkg update && pkg install -y wget
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.3/flutter_3.47.3_aarch64.deb
-sha256sum flutter_3.47.3_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
+sha256sum flutter_3.47.4_aarch64.deb
 
-dpkg -i flutter_3.47.3_aarch64.deb
+dpkg -i flutter_3.47.4_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source ~/.bashrc

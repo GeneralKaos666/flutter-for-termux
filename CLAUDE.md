@@ -65,7 +65,7 @@ flutter_termux/
 ├── build.toml                  # Build configuration
 ├── install_flutter_complete.sh # Termux installation script
 ├── patches/
-│   └── 3.47.3/                 # Version-specific patches
+│   └── 3.47.4/                 # Version-specific patches
 │       ├── engine.patch
 │       ├── dart.patch
 │       └── skia.patch
@@ -212,11 +212,11 @@ chmod +x depot_tools/vpython3
 
 ```powershell
 # Transfer deb to device
-powershell -Command "adb push 'flutter_3.47.3_aarch64.deb' '/data/local/tmp/'"
+powershell -Command "adb push 'flutter_3.47.4_aarch64.deb' '/data/local/tmp/'"
 
 # Install in Termux
 pkg install x11-repo
-dpkg -i /data/local/tmp/flutter_3.47.3_aarch64.deb
+dpkg -i /data/local/tmp/flutter_3.47.4_aarch64.deb
 apt-get install -f
 bash $PREFIX/share/flutter/post_install.sh  # Required for APK builds!
 
@@ -233,7 +233,7 @@ flutter doctor -v
 
 ## Version Info
 
-- Flutter: 3.47.3
+- Flutter: 3.47.4
 - Flutter Tools Dart: 3.13.2
 - Dart VM: post-install `dartvm` resolves to Dart 3.13.2 (`android_arm64`)
 - Target: aarch64 (ARM64)
