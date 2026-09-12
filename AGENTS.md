@@ -16,7 +16,7 @@ NDK_PATH=/opt/android-ndk-rXX python3 build.py
 
 # Individual steps
 python3 build.py tag                                    # Print release tag from build.toml
-python3 build.py clone                                  # Clone Flutter 3.47.3
+python3 build.py clone                                  # Clone Flutter 3.47.4
 python3 build.py sync                                   # gclient sync (~30GB)
 python3 build.py patch --file=./patches/engine.patch --path=.
 python3 build.py sysroot --arch=arm64                   # Assemble Termux sysroot from apt
@@ -62,7 +62,7 @@ Self-hosted workflows are manual-only. Do not run expensive full build or tablet
 
 ## Critical Implementation Details
 
-1. **Release tag = build.toml `[flutter] tag`** (e.g. `3.47.3`), no `v` prefix. Release asset is `flutter_<tag>_aarch64.deb`.
+1. **Release tag = build.toml `[flutter] tag`** (e.g. `3.47.4`), no `v` prefix. Release asset is `flutter_<tag>_aarch64.deb`.
 2. **`python3 build.py` with no args** runs `Build.__call__`: config → clone → sync → for each arch: sysroot, configure+build per mode, debuild.
 3. **Only ARM64 APK gen_snapshot works**. 32-bit ARM fails (BoringSSL), x64 fails (sysroot mismatch).
 4. **`package.yaml` uses `safe_eval()`** for variable resolution — constrained evaluation with recursion limits, be careful with template strings.
@@ -110,6 +110,6 @@ flutter/engine/src/out/
 
 - Build: Linux (WSL2 Ubuntu on Windows or GitHub self-hosted runner), NDK r29 at `/opt/android-ndk-r29` (set `NDK_PATH` or `[ndk] path`)
 - Path: `<workspace-root>/`
-- Target: aarch64, Flutter 3.47.3
+- Target: aarch64, Flutter 3.47.4
 - Test device: `[REDACTED]` (Samsung SM-X716B / Android 16)
 - Use PowerShell (not Git Bash) for `adb push` to avoid path mangling
