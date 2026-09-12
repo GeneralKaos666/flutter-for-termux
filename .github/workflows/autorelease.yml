@@ -49,8 +49,12 @@ jobs:
               cfg = tomllib.load(f)
           flutter = cfg['flutter']
           for key in ('tag', 'dart_version', 'framework_revision', 'framework_commit_date', 'devtools_version'):
-              name = 'TAG' if key == 'tag' else 'OLD_' + key.upper()
-              print(f"{name}={flutter.get(key, '')}")
+              if key == 'tag':
+                  tag = flutter.get('tag', '')
+                  print(f'TAG={tag}')
+                  print(f'OLD_TAG={tag}')
+              else:
+                  print(f"OLD_{key.upper()}={flutter.get(key, '')}")
           PY
 
       - name: Skip if nothing to release
@@ -128,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           FILES=(
-            AGENTS.md CLAUDE.md GEMINI.md README_ZH.md
+            AGENTS.md CLAUDE.md GEMINI.md README.md README_ZH.md
             docs/CI_CD.md docs/releases/RELEASE_NOTES.md
             docs/guides/BUILD_GUIDE.md docs/guides/BUILD_GUIDE_ZH.md
             docs/guides/BUILD_PROCESS.md docs/guides/BUILD_PROCESS_ZH.md
@@ -139,6 +143,7 @@ jobs:
             scripts/ci/check_repo.py
             scripts/device/run_termux_smoke.ps1
             scripts/install/flutter_termux_doctor.sh
+            scripts/install/install.sh
             scripts/install/install_termux_flutter.sh
             scripts/install/lib_common.sh
             scripts/install/post_install.sh
@@ -158,6 +163,15 @@ jobs:
           bump "$OLD_DART" "$NEW_DART" dart_version
           bump "$OLD_REV" "$NEW_REV" framework_revision
           bump "$OLD_DATE" "$NEW_DATE" framework_commit_date
+          git diff --stat
+
+      - name: Verify version sync before pushing
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          pip install -q -r requirements.txt
+          python3 scripts/ci/check_version_drift.py --fix
+          python3 scripts/ci/check_repo.py
           git diff --stat
 
       - name: Commit and push bump
