@@ -4,18 +4,18 @@
 
 This document explains how to build a Flutter deb package that includes Android gen_snapshot from scratch.
 
-## Current Version Status (3.47.3 / 2026-08-15)
+## Current Version Status (3.47.4 / 2026-08-15)
 
 | Item | Value |
 |------|----|
-| Flutter tag | `3.47.3` |
+| Flutter tag | `3.47.4` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
-| Package | `flutter_3.47.3_aarch64.deb` |
+| Package | `flutter_3.47.4_aarch64.deb` |
 | Package size | 666,366,556 bytes (about 636 MiB) |
 | SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
-3.47.3 introduces three new points that require special attention:
+3.47.4 introduces three new points that require special attention:
 
 1. **Dart VM/tool split**: The Flutter CLI uses the Termux JIT `dart`, but engine snapshots still need the accompanying `dartvm` / `dartaotruntime`, so the package validator must check all three. The dart SDK is produced by the standard build's `dart_sdk_archive` target.
 2. **Flutter Tools Android host**: On Termux, Dart reports `Platform.operatingSystem == "android"`, so the host artifact lookup must be mapped to Linux ARM64.
@@ -198,7 +198,7 @@ python3 build.py debuild --arch=arm64
 
 After the build completes, the deb package is located at:
 ```
-release/flutter_3.47.3_aarch64.deb
+release/flutter_3.47.4_aarch64.deb
 ```
 
 ## deb Package Contents
@@ -275,12 +275,12 @@ export PATH="$HOME/depot_tools:$PATH"
 ### Insufficient disk space
 The Flutter Engine source is about 30GB and the build output about 20GB, so you need at least 60GB of space.
 
-## Termux Setup Before Use (3.47.3)
+## Termux Setup Before Use (3.47.4)
 
 After installing the deb, run the following in Termux:
 
 ```bash
-dpkg -i flutter_3.47.3_aarch64.deb
+dpkg -i flutter_3.47.4_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -576,13 +576,13 @@ flutter build linux --debug     # ✅ verified (requires Termux:X11)
 flutter run                     # ✅ verified (Hot Reload supported)
 ```
 
-## Target Version Status (3.47.3)
+## Target Version Status (3.47.4)
 
 ### Feature Test Results (updated 2026-08-15)
 
 | Feature | Status | Description |
 |------|------|------|
-| `flutter --version` | ✅ OK | Flutter 3.47.3 / Tools Dart 3.13.3 |
+| `flutter --version` | ✅ OK | Flutter 3.47.4 / Tools Dart 3.13.3 |
 | `dart --version` | ✅ OK | Termux JIT Dart 3.13.3 (`android_arm64`) |
 | `dartvm --version` | ✅ OK | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 | `flutter doctor -v` | ✅ OK | unknown channel / no device are expected warnings |
@@ -649,7 +649,7 @@ error: This system call is not available on Android
 
 ---
 
-## Termux APK Build Complete Setup Guide (3.47.3)
+## Termux APK Build Complete Setup Guide (3.47.4)
 
 > **📌 Important: the runtime layer is handled automatically by `post_install.sh`; this section only lists the settings that must be kept in each Flutter project.**
 

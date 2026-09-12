@@ -663,7 +663,7 @@ if ! [ -x "$GIT_BIN" ] && ! command -v "$GIT_BIN" >/dev/null 2>&1; then
 fi
 
 # Load canonical metadata from packaged manifest or embedded source-of-truth constants
-CANONICAL_FLUTTER_VER="3.47.3"
+CANONICAL_FLUTTER_VER="3.47.4"
 CANONICAL_FRAMEWORK_REV="9584c6713b324636289d067944a46fd6b49df14b"
 CANONICAL_FRAMEWORK_DATE="2026-09-10 15:25:10 -0700"
 CANONICAL_ENGINE_REV="$local_eng_ver"
