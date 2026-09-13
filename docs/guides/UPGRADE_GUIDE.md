@@ -13,7 +13,7 @@ This document explains how to upgrade Termux Flutter from the current 3.47.4 to 
 □ Step 4: Create the patch directory for the new version and rebase the patches
 □ Step 5: Apply the patches (engine / dart / skia)
 □ Step 6: Assemble the sysroot
-□ Step 7: configure + build (debug / release / profile)
+□ Step 7: configure + build (modes from `build.toml [build] runtime`, currently `['debug']`; release/profile need explicit `--mode=release`)
 □ Step 8: Run debuild to produce the .deb
 □ Step 9: Push to the device and test
 □ Step 10: Update post_install.sh (if necessary)
@@ -28,7 +28,7 @@ This document explains how to upgrade Termux Flutter from the current 3.47.4 to 
 | Flutter Tools host platform | Termux is treated by Dart as an `android` host; official Flutter Tools normally only handles macOS/Linux/Windows | Run `flutter doctor -v` on Termux; it must not crash during the cache/artifact/device-discovery phase |
 | Flutter Gradle plugin constants | As of Flutter 3.44, `FlutterPlugin.kt` directly imports `PLATFORM_ABI_LIST` | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` must not show Kotlin unresolved-reference errors |
 | Gradle included-build cache | post-install modifies the Kotlin source; on upgrade the old cache may mix old and new sources | `post_install.sh` must clear `packages/flutter_tools/gradle/.gradle`, `build`, `bin` |
-| Android SDK / aapt2 | Newer templates may raise `compileSdk`; Termux aapt2 still needs the API 34 workaround | Pin new projects to `compileSdk = 34`, `targetSdk = 34`, `android.aapt2FromMavenOverride` |
+| Android SDK / aapt2 | Newer templates may raise `compileSdk`; Termux aapt2 (16.0.0.4) loads android-36 `android.jar` | Default new projects to `compileSdk = 36`, `targetSdk = 36`, `android.aapt2FromMavenOverride`; post-install falls back 36 → 35 → 34 when aapt2 cannot load the newest platform |
 
 ---
 
@@ -50,7 +50,7 @@ tag = '3.XX.Y'    # ← change to the new version number
 
 ```bash
 # Run in WSL
-cd /root/projects/termux-flutter
+cd ~/termux-flutter
 python3 build.py clone
 ```
 
@@ -102,13 +102,13 @@ If the patch fails to apply (offset/conflict), you need to rebase it manually:
 ```bash
 cd flutter/engine/src/flutter
 # See which files the original patch touches
-git apply --stat /root/projects/termux-flutter/patches/engine.patch
+git apply --stat ~/termux-flutter/patches/engine.patch
 
 # Try applying it to see where it conflicts
 git apply --check patches/engine.patch
 
 # Manually fix conflicting files, then regenerate the patch
-git diff > /root/projects/termux-flutter/patches/engine.patch
+git diff > ~/termux-flutter/patches/engine.patch
 ```
 
 ### Key Modification Points for Each Patch
@@ -183,7 +183,9 @@ Downloads `.deb` packages from the Termux apt repo and extracts them into the sy
 
 ---
 
-## Step 7: Configure + Build (All Three Modes)
+## Step 7: Configure + Build (per Runtime Mode)
+
+The default pipeline runs only the modes in `build.toml [build] runtime` (currently `['debug']`). Configure + build each release/profile mode explicitly only if you are producing those engine variants (needed for the corresponding dart-sdk snapshots):
 
 ```bash
 # Debug (main mode — includes dart-sdk, gen_snapshot, etc.)
@@ -237,7 +239,7 @@ This will:
 2. Collect all build outputs according to `package.yaml`
 3. Package them into `flutter_3.XX.Y_aarch64.deb`
 
-> Output path: `/root/projects/termux-flutter/flutter_3.XX.Y_aarch64.deb`
+> Output path: `~/termux-flutter/flutter_3.XX.Y_aarch64.deb`
 
 ---
 
@@ -245,7 +247,7 @@ This will:
 
 ```powershell
 # Copy from WSL to Windows
-Copy-Item "\\wsl.localhost\Ubuntu\root\projects\termux-flutter\flutter_3.XX.Y_aarch64.deb" .
+Copy-Item "\\wsl.localhost\Ubuntu\home\YOUR_USER\termux-flutter\flutter_3.XX.Y_aarch64.deb" .
 
 # Push to the device
 adb push flutter_3.XX.Y_aarch64.deb /data/local/tmp/
@@ -317,7 +319,7 @@ python3 build.py
 1. config
 2. clone
 3. sync
-4. per arch: sysroot → configure + build (debug → release → profile), including `dart_sdk_archive`
+4. per arch: sysroot, then configure + build for each mode in `build.toml [build] runtime` (currently `['debug']`), including `dart_sdk_archive`
 5. debuild
 
 > ⏱ The whole thing takes about 2-4 hours
