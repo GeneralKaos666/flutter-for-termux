@@ -91,7 +91,7 @@ Auto on PRs: `ci.yml` (sanity) and `validate.yml` (path-filtered; verify command
 ## Termux runtime
 
 `post_install.sh` (run on-device after `dpkg -i`) auto-fixes:
-- compileSdk 36→34 — Termux aapt2 (v2.19) cannot load android-35/36 `android.jar`
+- compileSdk default 36 (fail-closed ladder 36→35→34) — Termux aapt2 16.0.0.4 loads android-36 `android.jar`; projects are pinned via `flutter_project_config.sh`, overridable with `TERMUX_COMPILE_SDK`/`TERMUX_TARGET_SDK`
 - NDK clang/clang++ wrappers → Termux ARM64 native wrappers (dynamic clang lib version)
 - NDK `llvm-objcopy`/`llvm-strip` → Termux ARM64 native binaries
 - All generated wrapper scripts → shebang `#!/data/data/com.termux/files/usr/bin/sh`
@@ -99,7 +99,7 @@ Auto on PRs: `ci.yml` (sanity) and `validate.yml` (path-filtered; verify command
 Per-project config for `flutter build apk` (see `scripts/install/flutter_project_config.sh`):
 
 - `android/gradle.properties`: `android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2`
-- `android/app/build.gradle.kts`: `compileSdk = 34`, `targetSdk = 34`, `ndk { abiFilters += listOf("arm64-v8a") }`
+- `android/app/build.gradle.kts`: `compileSdk = 36`, `targetSdk = 36`, `ndk { abiFilters += listOf("arm64-v8a") }`
 
 ## Build output
 

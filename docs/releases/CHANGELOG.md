@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Lifted `compileSdk`/`targetSdk` default from 34 to 36 (fail-closed ladder 36→35→34) using Termux aapt2 16.0.0.4 (Android Build-Tools), driven by `build.toml` `[android]` and applied per-project by `post_install.sh`/`flutter_project_config.sh`.
+- Centralized installer version/package metadata in `scripts/install/versions_common.sh`, sourced by `lib_common.sh` and drift-verified against `build.toml`.
+- Modernized packages: single JDK (`openjdk-21`), `7zip`, dynamic NDK clang detection, and an `apt-mark hold aapt2` hardening with a `TERMUX_NO_HOLD_AAPT2` opt-out.
+- Bumped host deps (`requirements.txt`) and CI/CD actions to `actions/checkout@v7.0.1` / `setup-python@v7.0.0` / `upload-artifact@v7.0.1`, Python 3.12; removed the legacy GitHub-hosted `build.yml`.
+- `test_build.py` version expectations are now fully derived from `build.toml` at test time (bump-agnostic).
+
 ### Changed
+- NDK is configured from `build.toml [ndk] version` everywhere (docs, `build-deb.yml` fallback to `/opt/android-ndk-r{M}`); `pytest.ini` `testpaths` points at `test_build.py`.
+- Retired the Mode-A "pin API 34" constraint documented in the AAPT2 analysis.
 - Reoriented repository documentation to English-first: `README.md` is now the English primary (promoted from `README_EN.md`), the Chinese README moved to `README_ZH.md`, and the four `docs/guides/*` documents gained English canonicals with Chinese `*_ZH.md` twins. Translated user-facing messages and comments in scripts to English. Removed stale `.orig` merge artifacts.
 
 ## [3.44.9-termux] - 2026-07-04
@@ -84,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **`flutter build linux` (release/profile) failure**: `build_all()` was only building debug mode engine for Linux, leaving `linux_release_arm64/` and `linux_profile_arm64/` empty in the deb package
-- **`utils.py __MODE__` ordering bug**: Original order `('release', 'debug', 'profile')` caused `Output.any` to select release (product mode) dart-sdk snapshots when release directory exists, breaking the entire Flutter CLI. Fixed to `('debug', 'release', 'profile')`
+- **`utils.py __MODE__` ordering**: the tuple is `('release', 'debug', 'profile')` (release first). `Output.any` picks the first existing engine output directory, so when a release directory exists its (product-mode) dart-sdk snapshots drive the Flutter CLI. Reordering modes arbitrarily breaks packaging. (This conflicts with an earlier changelog note claiming a debug-first order; current source of truth is `utils.py`, which is release-first.)
 
 ### Technical Details
 - Build output now includes 5 directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`, `android_release_arm64/`, `android_profile_arm64/`

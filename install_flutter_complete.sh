@@ -882,7 +882,7 @@ cat >>android/gradle.properties <<'PROPS'
 android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
 PROPS
 
-# Update build.gradle.kts (set compileSdk=34, targetSdk=34, abiFilters=arm64-v8a)
+# Update build.gradle.kts (set compileSdk=36, targetSdk=36, abiFilters=arm64-v8a)
 cat >android/app/build.gradle.kts <<'GRADLE'
 plugins {
     id("com.android.application")
@@ -892,7 +892,7 @@ plugins {
 
 android {
     namespace = "com.example.flutter_test_app"
-    compileSdk = 34
+    compileSdk = 36
     ndkVersion = "29.0.14206865"
 
     compileOptions {
@@ -907,7 +907,7 @@ android {
     defaultConfig {
         applicationId = "com.example.flutter_test_app"
         minSdk = flutter.minSdkVersion
-        targetSdk = 34
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         ndk {

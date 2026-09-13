@@ -107,8 +107,8 @@ android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
 
 ```kotlin
 android {
-    compileSdk = 34
-    targetSdk = 34
+    compileSdk = 36
+    targetSdk = 36
     defaultConfig {
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -117,10 +117,13 @@ android {
 }
 ```
 
-> Why compileSdk 34? Termux ships aapt2 2.19, which cannot load the
-> `android.jar` for SDK 35/36. The engine is built against Android API 26 with
-> weak imports, so targeting 34 keeps builds working on-device while remaining
-> compatible. See [AAPT2 analysis](docs/guides/AAPT2_RELEASE_BUILD_BUG_ANALYSIS.md).
+> Why compileSdk 36? Termux ships aapt2 16.0.0.4, which can load the
+> android-35/36 `android.jar`, so projects now default to `compileSdk = 36` /
+> `targetSdk = 36`. `post_install.sh` pins these via
+> `flutter_project_config.sh` and falls back 36 → 35 → 34 only if the installed
+> aapt2 cannot load the newest platform. The engine is built against Android
+> API 26 with weak imports, so this only affects the APK packaging tools.
+> See [AAPT2 analysis](docs/guides/AAPT2_RELEASE_BUILD_BUG_ANALYSIS.md).
 
 ## Hot reload
 

@@ -302,9 +302,9 @@ EOF
 
 ```kotlin
 android {
-    compileSdk = 34
+    compileSdk = 36
     defaultConfig {
-        targetSdk = 34
+        targetSdk = 36
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 }
@@ -364,6 +364,9 @@ chmod +x vpython3
 ```
 
 ### 2. openjdk-17 does not exist (Termux package issue)
+
+> **Deprecated:** modern installers pull a single JDK (`openjdk-21`) plus `7zip`;
+> `openjdk-17` is no longer referenced anywhere in the project.
 
 **Problem description:**
 ```
@@ -655,10 +658,10 @@ error: This system call is not available on Android
 
 ```kotlin
 android {
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
-        targetSdk = 34
+        targetSdk = 36
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 }

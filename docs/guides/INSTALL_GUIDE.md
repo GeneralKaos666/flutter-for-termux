@@ -121,10 +121,10 @@ org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
 
 ```kotlin
 android {
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
-        targetSdk = 34
+        targetSdk = 36
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
@@ -193,15 +193,15 @@ flutter build apk --release --target-platform android-arm64 --no-tree-shake-icon
 
 ### AAPT2 / compileSdk Errors
 
-Always use API 34 and point to the Termux ARM64 aapt2:
+Always use API 36 and point to the Termux ARM64 aapt2 (post-install falls back to 35/34 if aapt2 cannot load android-36):
 
 ```properties
 android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
 ```
 
 ```kotlin
-compileSdk = 34
-defaultConfig { targetSdk = 34 }
+compileSdk = 36
+defaultConfig { targetSdk = 36 }
 ```
 
 ### NDK or CMake Cannot Find the Compiler

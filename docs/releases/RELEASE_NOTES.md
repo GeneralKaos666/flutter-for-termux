@@ -20,7 +20,7 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.4. It incorp
 
 ```bash
 pkg update -y
-pkg install -y x11-repo wget openjdk-21 openjdk-17
+pkg install -y x11-repo wget openjdk-21 7zip
 wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
 dpkg -i flutter_3.47.4_aarch64.deb
 apt --fix-broken install -y
@@ -55,7 +55,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 - Fully guarded `$PREFIX` paths against whitespace and `set -u` unbound variable errors.
 - Dynamic `JAVA_HOME` discovery across Termux OpenJDK installations.
-- Automated dependency resolution including OpenJDK 21 and 17.
+- Automated dependency resolution including OpenJDK 21 and 7zip.
 
 ### Post-install Dart VM detection fix
 
@@ -79,9 +79,9 @@ android.enableResourceOptimizations=false
 ```kotlin
 // android/app/build.gradle.kts
 android {
-    compileSdk = 34
+    compileSdk = 36
     defaultConfig {
-        targetSdk = 34
+        targetSdk = 36
         ndk { abiFilters += listOf("arm64-v8a") }
     }
     buildTypes {
@@ -104,7 +104,7 @@ flutter build apk --release --target-platform android-arm64 --no-tree-shake-icon
 - Android APK targets are ARM64-only (`android-arm64` / `arm64-v8a`).
 - `flutter run` for Android requires ADB pairing/connection from inside Termux.
 - Some Flutter doctor warnings about unknown channel/source are expected for this repackaged SDK.
-- Termux aapt2 currently requires projects to compile against API 34 even though Android SDK Platform 36 is installed for Flutter metadata compatibility.
+- Termux aapt2 (16.0.0.4) is used via `android.aapt2FromMavenOverride`; projects default to `compileSdk`/`targetSdk` 36 with a fail-closed fallback to 35/34 when aapt2 cannot load the newest platform.
 
 ## Previous releases
 

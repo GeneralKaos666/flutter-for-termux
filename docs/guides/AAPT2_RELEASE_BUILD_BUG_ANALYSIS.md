@@ -2,6 +2,14 @@
 
 This document records the technical investigation, root cause analysis, workarounds, and long-term follow-up plans regarding the `aapt2 optimize` resource stripping issue on Android/Termux hosts.
 
+> **Status (2026-09-13):** Stage-B modernization is the winner. Termux now ships
+> aapt2 16.0.0.4 (Android Build-Tools), which loads the android-36 `android.jar`,
+> so new projects default to `compileSdk = 36` / `targetSdk = 36` via
+> `post_install.sh`, with a fail-closed ladder 36 → 35 → 34 for devices whose
+> aapt2 cannot load the newest platform. **The Mode-A "pin API 34" constraint is
+> retired as the default**; the R8 shrinking/resource-optimization workaround
+> below remains in effect for on-device build stability.
+
 ---
 
 ## 1. Background & Symptom
@@ -54,9 +62,9 @@ To resolve these toolchain limitations, the project establishes two distinct sup
 
 ### Mode A: Verified Termux Local APK Build (Default)
 *   **Target:** Native local execution, side-loading, and fast debug/test compiles on Termux.
-*   **SDK constraints:** Forced `compileSdk = 34`, `targetSdk = 34` (compatible with Termux system `aapt2`).
+*   **SDK constraints:** Default `compileSdk = 36`, `targetSdk = 36`; `post_install.sh` falls back 36 → 35 → 34 when the installed aapt2 cannot load the newest platform.
 *   **Optimization status:** R8 code/resource shrinking and resource optimizations are **completely disabled** to bypass packaging crashes and prevent Out-Of-Memory (OOM) compilation crashes under mobile JVM heap constraints.
-*   **Status:** **100% verified and stable** (tested on Android 16 Samsung SM-X716B).
+*   **Status:** **Verified and stable** (tested on Android 16 Samsung SM-X716B). The API-34 pin is **retired** — aapt2 16.0.0.4 loads android-36 `android.jar`; only the shrinking-disabled workaround remains.
 
 ### Mode B: Experimental Publish Toolchain (Future / CI Target)
 *   **Target:** Google Play Store compliance, App Bundle (`.aab`) generation, and full code/resource optimization.
@@ -103,10 +111,10 @@ org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
 ### 2. `android/app/build.gradle.kts`
 ```kotlin
 android {
-    compileSdk = 34 // Pin to API 34 to match Termux AAPT2 compiler limitations
+    compileSdk = 36 // Default API 36; post-install falls back to 35/34 as needed
 
     defaultConfig {
-        targetSdk = 34
+        targetSdk = 36
         ndk {
             abiFilters += listOf("arm64-v8a") // Pin to ARM64 target only
         }
