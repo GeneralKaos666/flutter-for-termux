@@ -262,11 +262,19 @@ if [ ! -f "${TARGET_GRADLE}.bak" ]; then
     TRACKED_BACKUPS+=("${TARGET_GRADLE}.bak")
 fi
 
+# SDK levels: TERMUX_COMPILE_SDK/TERMUX_TARGET_SDK override > defaults
+COMPILE_SDK="${TERMUX_COMPILE_SDK:-36}"
+TARGET_SDK="${TERMUX_TARGET_SDK:-$COMPILE_SDK}"
+export COMPILE_SDK TARGET_SDK
+
 # Call Python helper for scope-aware Gradle transformation
 "$PY_BIN" - "$TARGET_GRADLE" << 'EOF'
 import sys
 import re
 import os
+
+compile_sdk_value = os.environ.get('COMPILE_SDK', '36')
+target_sdk_value = os.environ.get('TARGET_SDK', '36')
 
 gradle_file = sys.argv[1]
 if len(gradle_file) > 2 and gradle_file[0] == '/' and gradle_file[2] == '/' and gradle_file[1].isalpha():
@@ -431,7 +439,7 @@ for line in lines:
             compile_sdk_found = True
             indent = m_comp.group(1)
             key = m_comp.group(2)
-            new_lines.append(f"{indent}{key} = 34")
+            new_lines.append(f"{indent}{key} = {compile_sdk_value}")
             continue
 
     m_targ = target_sdk_pattern.match(line)
@@ -440,13 +448,13 @@ for line in lines:
             target_sdk_found = True
             indent = m_targ.group(1)
             key = m_targ.group(2)
-            new_lines.append(f"{indent}{key} = 34")
+            new_lines.append(f"{indent}{key} = {target_sdk_value}")
             continue
 
     new_lines.append(line)
 
 text = '\n'.join(new_lines)
-print(f"Updated compileSdk and targetSdk to 34 in {gradle_file}")
+print(f"Updated compileSdk to {compile_sdk_value} and targetSdk to {target_sdk_value} in {gradle_file}")
 
 # Re-parse scopes
 blocks = parse_scopes(text)
@@ -469,7 +477,7 @@ for name, path, start_idx, end_idx in blocks:
 # If targetSdk was missing from defaultConfig, inject it
 if not target_sdk_found and default_config_block is not None:
     open_brace_pos = default_config_block[0]
-    targ_line = "        targetSdk = 34\n" if is_kts else "        targetSdkVersion = 34\n"
+    targ_line = f"        targetSdk = {target_sdk_value}\n" if is_kts else f"        targetSdkVersion = {target_sdk_value}\n"
     nl_pos = text.find('\n', open_brace_pos)
     if nl_pos != -1:
         text = text[:nl_pos+1] + targ_line + text[nl_pos+1:]
@@ -539,7 +547,7 @@ else:
     elif android_block is not None:
         open_brace_pos = android_block[0]
         nl_pos = text.find('\n', open_brace_pos)
-        target_sdk_str = "        targetSdk = 34\n" if is_kts else "        targetSdkVersion = 34\n"
+        target_sdk_str = f"        targetSdk = {target_sdk_value}\n" if is_kts else f"        targetSdkVersion = {target_sdk_value}\n"
         block_to_inject = f"    defaultConfig {{\n{target_sdk_str}        ndk {{\n{abi_line}\n        }}\n    }}\n"
         if nl_pos != -1:
             text = text[:nl_pos+1] + block_to_inject + text[nl_pos+1:]

@@ -47,14 +47,17 @@ patch_project() {
 	fi
 	python - <<'PY'
 from pathlib import Path
+import os
+compile_sdk = os.environ.get('COMPILE_SDK', '36')
+target_sdk = os.environ.get('TARGET_SDK', '36')
 p = Path('android/app/build.gradle.kts')
 s = p.read_text()
-s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 34')
-s = s.replace('compileSdk = flutter.compileSdkVersion.toInteger()', 'compileSdk = 34')
-s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 34')
-s = s.replace('targetSdk = flutter.targetSdkVersion.toInteger()', 'targetSdk = 34')
+s = s.replace('compileSdk = flutter.compileSdkVersion', f'compileSdk = {compile_sdk}')
+s = s.replace('compileSdk = flutter.compileSdkVersion.toInteger()', f'compileSdk = {compile_sdk}')
+s = s.replace('targetSdk = flutter.targetSdkVersion', f'targetSdk = {target_sdk}')
+s = s.replace('targetSdk = flutter.targetSdkVersion.toInteger()', f'targetSdk = {target_sdk}')
 if 'abiFilters += listOf("arm64-v8a")' not in s:
-    s = s.replace('targetSdk = 34\n', 'targetSdk = 34\n        ndk { abiFilters += listOf("arm64-v8a") }\n')
+    s = s.replace(f'targetSdk = {target_sdk}\n', f'targetSdk = {target_sdk}\n        ndk {{ abiFilters += listOf("arm64-v8a") }}\n')
 p.write_text(s)
 p = Path('linux/CMakeLists.txt')
 s = p.read_text()
