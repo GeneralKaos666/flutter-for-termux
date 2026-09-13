@@ -146,6 +146,7 @@ jobs:
             scripts/install/install_termux_flutter.sh
             scripts/install/lib_common.sh
             scripts/install/post_install.sh
+            scripts/install/versions_common.sh
             scripts/test/gh_e2e_test.sh
           )
           bump() {

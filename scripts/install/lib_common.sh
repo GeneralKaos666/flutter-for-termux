@@ -9,10 +9,28 @@ export BLUE='\033[0;34m'
 export CYAN='\033[0;36m'
 export NC='\033[0m'
 
-# Version info
-export FLUTTER_VERSION="3.47.4"
-export RELEASE_TAG="3.47.4"
+# Version info — single source is versions_common.sh (same dir). Fetch it when
+# this file was downloaded standalone; fail open with matching defaults.
+source_versions_common() {
+	local dir
+	dir="$(cd "$(dirname "${BASH_SOURCE[0]:-${0:-.}}")" 2>/dev/null && pwd || echo ".")"
+	if [ -f "$dir/versions_common.sh" ]; then
+		source "$dir/versions_common.sh"
+		return 0
+	fi
+	if [ -f "scripts/install/versions_common.sh" ]; then
+		source "scripts/install/versions_common.sh"
+		return 0
+	fi
+	curl -fsSL "https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/scripts/install/versions_common.sh" -o versions_common.sh 2>/dev/null || return 1
+	source ./versions_common.sh
+}
+
+source_versions_common || true
+export FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.4}"
+export RELEASE_TAG="${RELEASE_TAG:-3.47.4}"
 export EXPECTED_SHA256="${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800}}"
+export NDK_VERSION="${NDK_VERSION:-29.0.14206865}"
 
 declare -A STAGE_STATUS
 
