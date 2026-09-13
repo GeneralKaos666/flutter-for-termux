@@ -23,7 +23,8 @@ This document explains how to build a Flutter deb package that includes Android 
 
 ## CI/CD and Device Validation
 
-The full engine build should still run on a WSL/self-hosted runner, but PRs can run lightweight checks first:
+The full engine build runs on the free GitHub-hosted `ubuntu-latest` runner
+(`build.yml`); PRs run lightweight checks first:
 
 ```bash
 python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
@@ -32,10 +33,11 @@ python scripts/ci/check_repo.py
 git diff --check
 ```
 
-GitHub Actions is currently split into four tracks:
+GitHub Actions is currently split into these tracks:
 
 - `.github/workflows/ci.yml`: GitHub-hosted sanity checks for PRs/pushes.
-- `.github/workflows/build-deb.yml`: manual self-hosted Linux/WSL full `.deb` build, with optional release publish.
+- `.github/workflows/build.yml`: GitHub-hosted full `.deb` build, auto-triggered on CI success on `main` (or manual), publishes a release.
+- `.github/workflows/build-deb.yml`: self-hosted fallback full `.deb` build with evidence/artifact collection.
 - `.github/workflows/device-smoke.yml`: manual self-hosted Windows + ADB tablet smoke test.
 - `.github/workflows/release-check.yml`: Release asset metadata / SHA256 checks.
 
