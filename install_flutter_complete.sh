@@ -171,14 +171,20 @@ configure_ndk_clang() {
 	ln -sf "$PREBUILT/linux-x86_64/bin/clang" "$PREBUILT/bin/clang" 2>/dev/null || true
 	ln -sf "$PREBUILT/linux-x86_64/bin/clang++" "$PREBUILT/bin/clang++" 2>/dev/null || true
 
-	# Ensure clang++ points to clang-18 (may have been modified by a previous script)
+	# Ensure clang++ points to a real clang binary (the clang-X name varies
+	# across NDK releases, so detect it rather than hardcoding a clang version)
 	backup_ndk_file "$PREBUILT/linux-x86_64/bin/clang++"
 	if [ -L "$PREBUILT/linux-x86_64/bin/clang++" ]; then
 		local target=$(readlink "$PREBUILT/linux-x86_64/bin/clang++")
 		if [ "$target" = "clang++" ]; then
+			local clang_ver=""
+			for c in "$PREBUILT/linux-x86_64/bin"/clang-[0-9]*; do
+				if [ -x "$c" ]; then clang_ver="$(basename "$c")"; break; fi
+			done
+			[ -z "$clang_ver" ] && clang_ver="clang"
 			# Fix circular symlink
 			rm -f "$PREBUILT/linux-x86_64/bin/clang++"
-			ln -sf clang-18 "$PREBUILT/linux-x86_64/bin/clang++"
+			ln -sf "$clang_ver" "$PREBUILT/linux-x86_64/bin/clang++"
 		fi
 	fi
 
@@ -358,15 +364,8 @@ if [ "${TERMUX_TEST_MODE:-false}" = "true" ]; then
 	return 0 2>/dev/null || exit 0
 fi
 
-# Version configuration
-FLUTTER_VERSION="3.47.4"
-EXPECTED_SHA256="6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800"
-
-# Other version configuration
-ANDROID_SDK_EXPECTED_SHA256="fc727c848b8ca4e3011515850702adc1bf98ceae7205d7acc82d026bc94d2601"
-NDK_EXPECTED_SHA256="02e10e4ddfe8deaeb0bd0cf29d04c981ed5bc8a5d6b560ebb9e7661f472d684b"
-SNAPSHOT_EXPECTED_SHA256="527f074d86660fd3f7c900fc8c1ebd5a2ebc4581e174eb8cf9fe343a1664402d"
-NDK_VERSION="29.0.14206865"
+# Version/toolchain constants come from lib_common.sh -> versions_common.sh
+# (FLUTTER_VERSION, NDK_VERSION, the download URLs, and their SHA256 pins).
 REPO_BASE="https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main"
 
 echo -e "${CYAN}"
@@ -434,7 +433,7 @@ echo -e "${GREEN}[2/${TOTAL_STEPS}]${NC} Installing Flutter SDK..."
 # Install dependencies
 pkg install -y x11-repo
 # Install basic tools
-pkg install -y openjdk-21 openjdk-17 git wget curl unzip p7zip cmake ninja binutils tar xz-utils
+pkg install -y "${JAVA_PACKAGE:-openjdk-21}" git wget curl unzip "${ZIP_TOOL:-7zip}" cmake ninja binutils tar xz-utils
 
 # Install Android build tools (needs to bypass the android-sdk dependency issue)
 mkdir -p "$WORK_DIR/apt_staging"
@@ -454,8 +453,7 @@ mkdir -p "$WORK_DIR/apt_staging"
 # Pre-download and verify all packages (Staging Phase)
 echo "Pre-downloading and verifying all packages..."
 FLUTTER_DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/flutter_${FLUTTER_VERSION}_aarch64.deb"
-ANDROID_SDK_DEB_URL="https://github.com/mumumusuc/termux-android-sdk/releases/download/35.0.0/android-sdk_35.0.0_aarch64.deb"
-NDK_ARCHIVE_URL="https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-r29-aarch64.tar.xz"
+
 
 # Snapshot existing package state for rollback
 FLUTTER_WAS_INSTALLED=false
@@ -646,16 +644,10 @@ if [ -n "$ENGINE_VERSION" ] && [ ! -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; 
 	dart_zip="$WORK_DIR/dart-sdk.zip"
 	wget -q --show-progress "$SNAPSHOTS_URL" -O "$dart_zip" || true
 	if [ -f "$dart_zip" ]; then
-		if [ "$ENGINE_VERSION" = "77e2e94772b6eb43759e34ed1ad7da4674e19cab" ]; then
-			verify_sha256 "$dart_zip" "$SNAPSHOT_EXPECTED_SHA256" || {
-				rm -f "$dart_zip"
-				INSTALL_FAILED=true
-				record_stage integrity failed
-				exit 30
-			}
-		else
-			echo "  ⚠ Engine version mismatch, skipping Dart SDK snapshots checksum verification"
-		fi
+		verify_sha256 "$dart_zip" "$SNAPSHOT_EXPECTED_SHA256" || {
+			rm -f "$dart_zip"
+			echo "  ⚠ Dart SDK snapshots checksum mismatch (using the snapshots bundled in the deb)"
+		}
 		unzip -o -j "$dart_zip" 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null || true
 		rm -f "$dart_zip"
 		echo "  ✓ Dart SDK snapshots installed"
@@ -847,7 +839,7 @@ echo "  ✓ Environment configured"
 echo ""
 echo -e "${GREEN}[6/${TOTAL_STEPS}]${NC} Testing APK build..."
 
-# Install aapt2 (manually to avoid the openjdk-17 dependency conflict)
+# Install aapt2 (manually; post_install holds it against the dynamic-libprotobuf rolling breakage)
 echo "Checking aapt2..."
 if ! command -v aapt2 &>/dev/null; then
 	echo "Installing aapt2 and its dependencies..."

@@ -501,7 +501,7 @@ exec \"\$PREFIX/bin/clang++\" -L\"\$LIB_PATH\" -L\"\$CLANG_LIB_ARCH\" \"\$@\""
 
 	# Create wrappers in prebuilt/linux-x86_64/bin/ (official NDK structure)
 	mkdir -p "$PREBUILT/linux-x86_64/bin"
-	# Remove symlinks/files first (clang -> clang-18, clang++ -> clang chain causes overwrites)
+	# Remove symlinks/files first (clang/clang++ symlink chains cause overwrites)
 	# Must use unlink to properly remove symlinks before writing
 	for f in clang clang++; do
 		backup_ndk_file "$PREBUILT/linux-x86_64/bin/$f"

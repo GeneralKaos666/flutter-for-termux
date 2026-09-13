@@ -37,6 +37,7 @@ INSTALLER_SCRIPTS = [
     "install_flutter_complete.sh",
     "scripts/install/install.sh",
     "scripts/install/install_termux_flutter.sh",
+    "scripts/install/versions_common.sh",
     "scripts/test/gh_e2e_test.sh",
 ]
 SEMVER_PATTERN = r"\d+\.\d+\.\d+"

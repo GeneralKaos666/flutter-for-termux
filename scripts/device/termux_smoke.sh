@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Run inside Termux. Installs a deb copied to /sdcard/Download and performs
-# the same release smoke gate used for the Flutter 3.44.0 package.
+# the same release smoke gate used for the current Flutter package.
 
 set -u
 
@@ -154,8 +154,8 @@ find "$PREFIX/opt/flutter" "$PREFIX/share/flutter" -exec chmod 777 {} + 2>/dev/n
 echo "Updating apt package index..."
 apt-get update -y || true
 
-echo "Pre-installing required 7zip/p7zip dependencies..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y 7zip 2>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y p7zip 2>/dev/null || true
+echo "Pre-installing required 7zip dependency..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y 7zip 2>/dev/null || true
 
 echo "Installing candidate package $DEB..."
 dpkg -i "$DEB" || true
