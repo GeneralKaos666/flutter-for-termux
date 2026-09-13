@@ -40,12 +40,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.12'
           cache: pip
@@ -74,15 +74,19 @@ jobs:
           NDK_DIR="${NDK_PATH:-${ANDROID_NDK:-${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}}}"
           if [ -z "$NDK_DIR" ] || [ ! -d "$NDK_DIR" ]; then
             TOML_NDK=$(python3 -c "import tomllib; print(tomllib.load(open('build.toml', 'rb')).get('ndk', {}).get('path', '') or '')" 2>/dev/null || true)
+            TOML_NDK_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('build.toml', 'rb')).get('ndk', {}).get('version', '') or '')" 2>/dev/null || true)
             if [ -n "$TOML_NDK" ] && [ -d "$TOML_NDK" ]; then
               NDK_DIR="$TOML_NDK"
-            elif [ -d "/opt/android-ndk-r27d" ]; then
-              NDK_DIR="/opt/android-ndk-r27d"
+            elif [ -n "$TOML_NDK_VERSION" ]; then
+              NDK_MAJOR="${TOML_NDK_VERSION%%.*}"
+              if [ -n "$NDK_MAJOR" ] && [ -d "/opt/android-ndk-r${NDK_MAJOR}" ]; then
+                NDK_DIR="/opt/android-ndk-r${NDK_MAJOR}"
+              fi
             fi
           fi
 
           if [ -z "$NDK_DIR" ] || [ ! -d "$NDK_DIR" ]; then
-            echo "Error: Missing Android NDK. Please set NDK_PATH, ANDROID_NDK, ANDROID_NDK_HOME, or ANDROID_NDK_ROOT, or provide valid build.toml ndk.path or /opt/android-ndk-r27d" >&2
+            echo "Error: Missing Android NDK. Please set NDK_PATH, ANDROID_NDK, ANDROID_NDK_HOME, or ANDROID_NDK_ROOT, provide a valid build.toml ndk.path, or install to /opt/android-ndk-r${NDK_MAJOR:-NN} (version from build.toml)" >&2
             exit 1
           fi
 
@@ -114,7 +118,7 @@ jobs:
           fi
           echo "FLUTTER_VERSION=$VERSION" >> $GITHUB_ENV
           echo "BUILD_START_EPOCH=$(date +%s)" >> $GITHUB_ENV
-          python -m py_compile build.py package.py sysroot.py utils.py
+          python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
           bash -n scripts/install/post_install.sh
           python scripts/ci/check_repo.py
 
@@ -184,7 +188,7 @@ jobs:
           echo "inventory=inventory.txt" >> "$GITHUB_OUTPUT"
 
       - name: Upload deb artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: flutter-termux-${{ env.FLUTTER_VERSION }}-${{ inputs.arch }}
           path: |

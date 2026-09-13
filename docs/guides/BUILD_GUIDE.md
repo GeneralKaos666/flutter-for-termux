@@ -26,7 +26,7 @@ This document explains how to build a Flutter deb package that includes Android 
 The full engine build should still run on a WSL/self-hosted runner, but PRs can run lightweight checks first:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
 git diff --check
