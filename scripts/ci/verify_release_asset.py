@@ -22,8 +22,6 @@ INVENTORY_LINE_REGEX = re.compile(
 BUILD_CRITICAL_PREFIXES = (
     "patches/",
     "scripts/install/",
-    "scripts/fix/",
-    "scripts/setup/",
 )
 
 BUILD_CRITICAL_FILES = (
