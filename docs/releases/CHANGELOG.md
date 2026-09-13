@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lifted `compileSdk`/`targetSdk` default from 34 to 36 (fail-closed ladder 36→35→34) using Termux aapt2 16.0.0.4 (Android Build-Tools), driven by `build.toml` `[android]` and applied per-project by `post_install.sh`/`flutter_project_config.sh`.
 - Centralized installer version/package metadata in `scripts/install/versions_common.sh`, sourced by `lib_common.sh` and drift-verified against `build.toml`.
 - Modernized packages: single JDK (`openjdk-21`), `7zip`, dynamic NDK clang detection, and an `apt-mark hold aapt2` hardening with a `TERMUX_NO_HOLD_AAPT2` opt-out.
-- Bumped host deps (`requirements.txt`) and CI/CD actions to `actions/checkout@v7.0.1` / `setup-python@v7.0.0` / `upload-artifact@v7.0.1`, Python 3.12; removed the legacy GitHub-hosted `build.yml`.
+- Bumped host deps (`requirements.txt`) and CI/CD actions to `actions/checkout@v7.0.1` / `setup-python@v7.0.0` / `upload-artifact@v7.0.1`, Python 3.12.
+- Restored the GitHub-hosted `build.yml` full `.deb` build (auto-triggers on `CI` success on `main` or manual dispatch, publishes a release), modernized to an inline `depot_tools` bootstrap with the engine/dart/skia patches applied; `build-deb.yml` remains as the self-hosted fallback.
 - `test_build.py` version expectations are now fully derived from `build.toml` at test time (bump-agnostic).
 
 ### Changed

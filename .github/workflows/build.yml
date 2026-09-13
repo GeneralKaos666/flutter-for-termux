@@ -1,0 +1,130 @@
+name: build
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: build-hosted
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  Ubuntu:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 360
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: install deps
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: install python requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Ensure depot_tools is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v gclient >/dev/null 2>&1; then
+            DEPOT_DIR="$RUNNER_TEMP/depot_tools"
+            if [ ! -d "$DEPOT_DIR" ]; then
+              git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT_DIR"
+            fi
+            echo "$DEPOT_DIR" >> "$GITHUB_PATH"
+          fi
+
+      - name: detect Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${ANDROID_NDK:-}" ]; then
+            NDK_DIR="$ANDROID_NDK"
+          elif [ -n "${ANDROID_NDK_LATEST_HOME:-}" ]; then
+            NDK_DIR="$ANDROID_NDK_LATEST_HOME"
+          elif [ -n "${ANDROID_NDK_HOME:-}" ]; then
+            NDK_DIR="$ANDROID_NDK_HOME"
+          else
+            echo "Android NDK not found on runner" >&2
+            exit 1
+          fi
+          if [ ! -f "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
+            echo "Error: NDK at '$NDK_DIR' missing expected toolchain: clang" >&2
+            exit 1
+          fi
+          echo "ANDROID_NDK=$NDK_DIR" >> "$GITHUB_ENV"
+
+      - name: build flutter/toolchain + package deb
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python build.py clone
+          python build.py sync
+
+          python build.py patch_engine
+          python build.py patch_dart
+          python build.py patch_skia
+
+          mapfile -t ARCHES < <(python -c "import tomllib; print(*tomllib.load(open('build.toml','rb'))['build']['arch'])")
+          mapfile -t MODES < <(python -c "import tomllib; print(*tomllib.load(open('build.toml','rb'))['build']['runtime'])")
+
+          if [ "${#ARCHES[@]}" -eq 0 ] || [ "${#MODES[@]}" -eq 0 ]; then
+            echo "Error: build.toml [build] arch/runtime must not be empty" >&2
+            exit 1
+          fi
+
+          for ARCH in "${ARCHES[@]}"; do
+            python build.py sysroot --arch="$ARCH"
+            for MODE in "${MODES[@]}"; do
+              python build.py configure --arch="$ARCH" --mode="$MODE"
+              python build.py build --arch="$ARCH" --mode="$MODE"
+            done
+            python build.py debuild --arch="$ARCH"
+          done
+
+      - name: parse tag
+        id: parser
+        run: |
+          TAG=$(NO_RECORD=1 python build.py tag)
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "TITLE=Flutter $TAG" >> "$GITHUB_OUTPUT"
+
+      - name: last commit message
+        id: commitmsg
+        run: |
+          MSG=$(git log -1 --format=%B)
+          echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$MSG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.parser.outputs.TAG }}
+          name: ${{ steps.parser.outputs.TITLE }}
+          body: ${{ steps.commitmsg.outputs.BODY }}
+          files: '**/*.deb'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

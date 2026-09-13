@@ -331,7 +331,7 @@ Build and test by following the process described above.
 
 ```
 flutter-for-termux/
-├── .github/workflows/    # CI / self-hosted build and device smoke workflows
+├── .github/workflows/    # GitHub-hosted + self-hosted build / CI / device smoke workflows
 ├── docs/CI_CD.md         # CI/CD and device-lab guide
 ├── scripts/
 │   ├── ci/               # lightweight contract checks
