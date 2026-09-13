@@ -73,7 +73,9 @@ class BuildTest(unittest.TestCase):
         )
 
     def test_default_build_modes_cover_packaged_variants(self):
-        self.assertEqual(self.instance.mode, ['debug'])
+        with open(self.instance.conf, 'rb') as f:
+            runtime = tomllib.load(f)['build'].get('runtime')
+        self.assertEqual(self.instance.mode, runtime or ['debug'])
 
     def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')

@@ -13,7 +13,7 @@ This document explains how to upgrade Termux Flutter from the current 3.47.4 to 
 □ Step 4: Create the patch directory for the new version and rebase the patches
 □ Step 5: Apply the patches (engine / dart / skia)
 □ Step 6: Assemble the sysroot
-□ Step 7: configure + build (modes from `build.toml [build] runtime`, currently `['debug']`; release/profile need explicit `--mode=release`)
+□ Step 7: configure + build (modes from `build.toml [build] runtime`, currently `['release']`; debug/profile need explicit `--mode=debug|profile`)
 □ Step 8: Run debuild to produce the .deb
 □ Step 9: Push to the device and test
 □ Step 10: Update post_install.sh (if necessary)
@@ -195,16 +195,16 @@ Downloads `.deb` packages from the Termux apt repo and extracts them into the sy
 
 ## Step 7: Configure + Build (per Runtime Mode)
 
-The default pipeline runs only the modes in `build.toml [build] runtime` (currently `['debug']`). Configure + build each release/profile mode explicitly only if you are producing those engine variants (needed for the corresponding dart-sdk snapshots):
+The default pipeline runs only the modes in `build.toml [build] runtime` (currently `['release']`). Configure + build additional modes explicitly only if you are producing those engine variants (needed for the corresponding dart-sdk snapshots):
 
 ```bash
-# Debug (main mode — includes dart-sdk, gen_snapshot, etc.)
-python3 build.py configure --arch=arm64 --mode=debug
-python3 build.py build --arch=arm64 --mode=debug
-
-# Release (Linux release engine)
+# Release (main mode — includes dart-sdk, gen_snapshot, linux engine, etc.)
 python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
+
+# Debug (for flutter run -d linux debug mode; only if produced)
+python3 build.py configure --arch=arm64 --mode=debug
+python3 build.py build --arch=arm64 --mode=debug
 
 # Profile (Linux profile engine)
 python3 build.py configure --arch=arm64 --mode=profile
@@ -329,7 +329,7 @@ python3 build.py
 1. config
 2. clone
 3. sync
-4. per arch: sysroot, then configure + build for each mode in `build.toml [build] runtime` (currently `['debug']`), including `dart_sdk_archive`
+4. per arch: sysroot, then configure + build for each mode in `build.toml [build] runtime` (currently `['release']`), including `dart_sdk_archive`
 5. debuild
 
 > ⏱ The whole thing takes about 2-4 hours

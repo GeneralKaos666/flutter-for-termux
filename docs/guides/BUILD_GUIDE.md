@@ -168,7 +168,7 @@ python3 build.py
 ```
 
 This command automatically completes:
-1. Configure the Linux debug build
+1. Configure the Linux release build
 2. Compile the Flutter engine
 3. Compile the dart binary (critical!)
 4. Configure the Android gen_snapshot build
@@ -178,9 +178,9 @@ This command automatically completes:
 Or build step-by-step manually:
 
 ```bash
-# Linux debug (for flutter run -d linux)
-python3 build.py configure --arch=arm64 --mode=debug
-python3 build.py build --arch=arm64 --mode=debug
+# Linux release (for flutter run -d linux --release / flutter build linux --release)
+python3 build.py configure --arch=arm64 --mode=release
+python3 build.py build --arch=arm64 --mode=release
 
 # Android gen_snapshot (for flutter build apk)
 
@@ -607,18 +607,19 @@ flutter build apk --release --target-platform android-arm64 --no-tree-shake-icon
 
 #### 2. Debug vs Release mode mismatch (technical background)
 
-The current deb package uses binaries built in **debug mode**:
-- `dart` - debug mode
-- `dartaotruntime` - debug mode
-- `frontend_server_aot.dart.snapshot` - debug mode
-- `gen_snapshot` - debug mode
+The current deb package uses binaries built in **release mode**:
+- `dart` - release mode
+- `dartaotruntime` - release mode
+- `frontend_server_aot.dart.snapshot` - release mode
+- `gen_snapshot` - release mode
 
-This is because the release mode build hits sysroot conflicts in the WSL environment (glibc vs bionic headers).
+This is because the deb packages only the modes listed in `build.toml [build] runtime`.
 
 **Impact on users:**
 - `flutter doctor` ✅ runs normally
 - `flutter build apk --release` ✅ runs normally (uses the android gen_snapshot)
-- `flutter run -d linux` ⚠️ can only use debug mode
+- `flutter run -d linux --release` / `flutter build linux --release` ✅ run normally
+- `flutter run -d linux` (debug) ⚠️ needs a debug-mode engine, so pass `--release` or `--profile`, or rebuild with `--mode=debug`
 
 ### Release mode build problems (developer reference)
 

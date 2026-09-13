@@ -111,8 +111,8 @@ reusing the NDK that ships on GitHub-hosted runners. It:
    python3 build.py clone
    python3 build.py sync
    python3 build.py sysroot --arch=arm64
-   python3 build.py configure --arch=arm64 --mode=debug
-   python3 build.py build    --arch=arm64 --mode=debug
+   python3 build.py configure --arch=arm64 --mode=release
+   python3 build.py build    --arch=arm64 --mode=release
    python3 build.py debuild  --arch=arm64
    ```
 

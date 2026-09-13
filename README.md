@@ -169,8 +169,8 @@ export ANDROID_NDK=/opt/android-ndk-r29
 python3 build.py clone
 python3 build.py sync
 python3 build.py sysroot --arch=arm64
-python3 build.py configure --arch=arm64 --mode=debug
-python3 build.py build --arch=arm64 --mode=debug
+python3 build.py configure --arch=arm64 --mode=release
+python3 build.py build --arch=arm64 --mode=release
 python3 build.py debuild --arch=arm64
 ```
 
@@ -203,5 +203,5 @@ See [CI/CD and device lab](docs/CI_CD.md).
 
 - ARM64 only: `arm` and `x64` gen_snapshot builds fail (32-bit BoringSSL shift
   overflow / sysroot mismatch), so only the `aarch64` package is produced.
-- The bundled build targets `debug` mode by default; release/profile require
-  rebuilding those steps with `--mode=release`.
+- The bundled build targets `release` mode by default; debug/profile require
+  rebuilding those steps with `--mode=debug|profile`.
