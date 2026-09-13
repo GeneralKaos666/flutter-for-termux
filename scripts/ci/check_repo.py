@@ -23,12 +23,9 @@ ERRORS: list[str] = []
 
 ROOT_MARKDOWN_ALLOWLIST = {
     "AGENTS.md",
-    "CLAUDE.md",
-    "GEMINI.md",
     "ORIGINAL_REQUEST.md",
     "PROJECT.md",
     "README.md",
-    "README_ZH.md",
 }
 
 REQUIRED_DOCS = [
@@ -129,14 +126,11 @@ def check_no_stale_release_commands() -> None:
     }
     checked = [
         "README.md",
-        "README_ZH.md",
         "docs/guides/BUILD_GUIDE.md",
         "docs/guides/INSTALL_GUIDE.md",
         "docs/guides/UPGRADE_GUIDE.md",
         "docs/releases/CHANGELOG.md",
         "docs/releases/RELEASE_NOTES.md",
-        "CLAUDE.md",
-        "GEMINI.md",
         "AGENTS.md",
         "scripts/test/gh_e2e_test.sh",
     ]

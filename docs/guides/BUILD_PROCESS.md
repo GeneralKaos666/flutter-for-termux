@@ -1,5 +1,3 @@
-**English** | [中文](BUILD_PROCESS_ZH.md)
-
 # Flutter Termux Build Process Document
 
 This document records in detail the complete process of building Flutter for Termux, to serve as a reference for future version upgrades.
@@ -269,7 +267,7 @@ Confirm that the version numbers in the following files are consistent:
 - `build.toml` - `tag` field
 - `install_flutter_complete.sh` - `FLUTTER_VERSION`
 - `scripts/install/install_termux_flutter.sh` - `FLUTTER_VERSION`
-- `README.md` - version badge and text (English primary README; `README_ZH.md` is the Chinese translation)
+- `README.md` - version badge and text
 - `package.yaml` - `Version: $tag`
 
 ### 2. Build Artifact

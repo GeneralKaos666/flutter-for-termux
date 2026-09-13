@@ -1,5 +1,3 @@
-**English** | [中文](BUILD_GUIDE_ZH.md)
-
 # Flutter Termux Complete Build Guide
 
 This document explains how to build a Flutter deb package that includes Android gen_snapshot from scratch.
@@ -11,8 +9,8 @@ This document explains how to build a Flutter deb package that includes Android 
 | Flutter tag | `3.47.4` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
 | Package | `flutter_3.47.4_aarch64.deb` |
-| Package size | 666,366,556 bytes (about 636 MiB) |
-| SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
+| Package size | 617,009,288 bytes (about 588 MiB) |
+| SHA256 | `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
 3.47.4 introduces three new points that require special attention:

@@ -333,7 +333,7 @@ class Package(object):
                     stderr=True,
                     stdout=True)
 
-        logger.info(f'✓ 构建完成 {output}')
+        logger.info(f'✓ package built: {output}')
 
 
 if __name__ == '__main__':

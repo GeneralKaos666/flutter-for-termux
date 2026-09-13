@@ -24,10 +24,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ERRORS: list[str] = []
 MARKDOWN_DOCS = [
     "README.md",
-    "README_ZH.md",
     "docs/releases/RELEASE_NOTES.md",
 ]
-GUIDANCE_DOCS = ["AGENTS.md", "GEMINI.md", "CLAUDE.md"]
+GUIDANCE_DOCS = ["AGENTS.md"]
 GUIDE_DOCS = [
     "docs/guides/BUILD_GUIDE.md",
     "docs/guides/BUILD_PROCESS.md",

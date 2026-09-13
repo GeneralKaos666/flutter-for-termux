@@ -9,8 +9,8 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.4. It incorp
 | Item | Value |
 |------|-------|
 | Package | `flutter_3.47.4_aarch64.deb` |
-| Size | 606,648,952 bytes (~166.1 MiB) |
-| SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
+| Size | 617,009,288 bytes (~588 MiB) |
+| SHA256 | `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800` |
 | Flutter | 3.47.4 |
 | Flutter Tools Dart | 3.13.3 |
 | Dart VM | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
@@ -64,7 +64,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 ### Technical Details
 
 - Build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`, `android_release_arm64/`, `android_profile_arm64/`
-- Deb package size is ~169MB.
+- Deb package size is ~588MB.
 
 ## Required per-project Android settings
 

@@ -155,6 +155,3 @@ tmp_*/
 *.temp
 dpkg_state.json
 AGENTS.md
-AGENTS.md
-CLAUDE.md
-GEMINI.md

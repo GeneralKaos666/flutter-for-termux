@@ -1,5 +1,3 @@
-**English** | [中文](UPGRADE_GUIDE_ZH.md)
-
 # Flutter Version Upgrade Guide
 
 This document explains how to upgrade Termux Flutter from the current 3.47.4 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle plugins that must be re-checked after 3.47.4.
@@ -395,7 +393,6 @@ flutter-for-termux/
 ├── install_flutter_complete.sh # Complete install script (includes Android SDK)
 │
 ├── README.md                 # English (primary) documentation
-├── README_ZH.md              # Chinese translation
 ├── docs/guides/UPGRADE_GUIDE.md # ← This file
 ├── docs/releases/CHANGELOG.md   # Version changelog
 └── docs/releases/RELEASE_NOTES.md # Release notes
