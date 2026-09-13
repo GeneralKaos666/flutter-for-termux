@@ -12,37 +12,40 @@ export HOME=/data/data/com.termux/files/home
 export TMPDIR=$PREFIX/tmp
 export RELEASE_TAG=${RELEASE_TAG:-3.47.4}
 export FLUTTER_VERSION=${FLUTTER_VERSION:-3.47.4}
-export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0}}
+export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800}}
 export DEB_NAME="flutter_${FLUTTER_VERSION}_aarch64.deb"
 export DEB_URL=${DEB_URL:-"https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${DEB_NAME}"}
 
 source "$(dirname "$0")/../install/lib_common.sh" || {
-    echo "Fetching lib_common.sh..."
-    curl -sLO https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/scripts/install/lib_common.sh
-    source ./lib_common.sh
+	echo "Fetching lib_common.sh..."
+	curl -sLO https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/scripts/install/lib_common.sh
+	source ./lib_common.sh
 }
 
 FAILED=0
 
 pass() { echo -e "${GREEN}✅ PASS: $1${NC}"; }
-fail() { echo -e "${RED}❌ FAIL: $1${NC}"; FAILED=1; }
+fail() {
+	echo -e "${RED}❌ FAIL: $1${NC}"
+	FAILED=1
+}
 run_step() {
-    local name="$1"
-    shift
-    echo ""
-    echo "=== $name ==="
-    "$@"
-    local code=$?
-    if [ $code -eq 0 ]; then pass "$name"; else fail "$name (exit $code)"; fi
-    return $code
+	local name="$1"
+	shift
+	echo ""
+	echo "=== $name ==="
+	"$@"
+	local code=$?
+	if [ $code -eq 0 ]; then pass "$name"; else fail "$name (exit $code)"; fi
+	return $code
 }
 
 patch_project() {
-    sed -i "1s|#!/usr/bin/env bash|#!${PREFIX:-/data/data/com.termux/files/usr}/bin/bash|" android/gradlew
-    if ! grep -q '^android.aapt2FromMavenOverride=' android/gradle.properties; then
-        printf '\nandroid.aapt2FromMavenOverride=%s/bin/aapt2\n' "${PREFIX:-/data/data/com.termux/files/usr}" >> android/gradle.properties
-    fi
-    python - <<'PY'
+	sed -i "1s|#!/usr/bin/env bash|#!${PREFIX:-/data/data/com.termux/files/usr}/bin/bash|" android/gradlew
+	if ! grep -q '^android.aapt2FromMavenOverride=' android/gradle.properties; then
+		printf '\nandroid.aapt2FromMavenOverride=%s/bin/aapt2\n' "${PREFIX:-/data/data/com.termux/files/usr}" >>android/gradle.properties
+	fi
+	python - <<'PY'
 from pathlib import Path
 p = Path('android/app/build.gradle.kts')
 s = p.read_text()
@@ -76,7 +79,10 @@ echo "=== Download release deb ==="
 rm -f "$DEB_NAME"
 wget -q --show-progress "$DEB_URL" -O "$DEB_NAME"
 if [ -n "$EXPECTED_SHA256" ]; then
-    verify_sha256 "$DEB_NAME" "$EXPECTED_SHA256" || { fail "SHA256 mismatch"; exit 1; }
+	verify_sha256 "$DEB_NAME" "$EXPECTED_SHA256" || {
+		fail "SHA256 mismatch"
+		exit 1
+	}
 fi
 ls -lh "$DEB_NAME"
 
@@ -107,14 +113,20 @@ run_step "flutter build apk" flutter build apk --release --target-platform andro
 run_step "flutter build linux" flutter build linux --release
 
 APK=$(find build/app/outputs/flutter-apk -name '*.apk' -type f 2>/dev/null | head -1)
-if [ -n "$APK" ]; then ls -lh "$APK"; pass "APK artifact exists"; else fail "APK artifact missing"; fi
+if [ -n "$APK" ]; then
+	ls -lh "$APK"
+	pass "APK artifact exists"
+else fail "APK artifact missing"; fi
 LINUX_BIN="build/linux/arm64/release/bundle/gh_e2e_test"
-if [ -f "$LINUX_BIN" ]; then ls -lh "$LINUX_BIN"; pass "Linux artifact exists"; else fail "Linux artifact missing"; fi
+if [ -f "$LINUX_BIN" ]; then
+	ls -lh "$LINUX_BIN"
+	pass "Linux artifact exists"
+else fail "Linux artifact missing"; fi
 
 echo ""
 if [ "$FAILED" = "0" ]; then
-    echo "🎉 ALL TESTS PASSED"
+	echo "🎉 ALL TESTS PASSED"
 else
-    echo "⚠️ SOME TESTS FAILED"
+	echo "⚠️ SOME TESTS FAILED"
 fi
 exit "$FAILED"

@@ -3,7 +3,7 @@ param(
     [string]$DeviceSerial = "",
     [string]$DebPath = "",
     [string]$DebUrl = "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb",
-    [string]$ExpectedSha256 = "4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0",
+    [string]$ExpectedSha256 = "6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800",
     [int]$TimeoutMinutes = 45,
     [string]$RemoteDeb = "/sdcard/Download/flutter_ci_input.deb",
     [string]$RemoteScript = "/sdcard/Download/termux_ci_smoke.sh",

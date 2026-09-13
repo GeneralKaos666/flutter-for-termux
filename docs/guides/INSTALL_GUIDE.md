@@ -1,5 +1,3 @@
-**English** | [中文](INSTALL_GUIDE_ZH.md)
-
 # Termux Flutter 3.47.4 Installation Guide
 
 This guide covers `flutter_3.47.4_aarch64.deb`, targeting the following on ARM64 Termux:
@@ -19,8 +17,8 @@ This guide covers `flutter_3.47.4_aarch64.deb`, targeting the following on ARM64
 | Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
 
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
-| deb size | 177,161,976 bytes (about 169 MiB) |
-| SHA256 | `4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0` |
+| deb size | 617,009,288 bytes (about 588 MiB) |
+| SHA256 | `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800` |
 
 ## System Requirements
 
@@ -50,7 +48,7 @@ pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake
 cd ~
 wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
 sha256sum flutter_3.47.4_aarch64.deb
-# Confirm the output matches: 4443a27c2f528cb093fedcdb994e9f3342147669699c5d695fd2da6d553b98e0
+# Confirm the output matches: 6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800
 
 dpkg -i flutter_3.47.4_aarch64.deb
 apt --fix-broken install -y
