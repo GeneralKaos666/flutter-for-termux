@@ -71,9 +71,10 @@ git diff --check
 
 ## CI/CD
 
-Auto on PRs: `ci.yml` (sanity) and `validate.yml` (path-filtered; verify command contract `python3 -m pytest test_build.py -v`, and that `engine.patch` applies to the configured tag via a shallow clone). Everything that actually builds is manual, self-hosted:
+Auto on PRs: `ci.yml` (sanity) and `validate.yml` (path-filtered; verify command contract `python3 -m pytest test_build.py -v`, and that `engine.patch` applies to the configured tag via a shallow clone). Actual builds run on the free GitHub-hosted `ubuntu-latest` runner:
 
-- `build-deb.yml` — manual full `.deb` build + artifact/evidence collection (feeds `device-smoke.yml`). Sole build path since legacy `build.yml` was removed.
+- `build.yml` — GitHub-hosted full `.deb` build (uses the NDK that ships on hosted runners via `ANDROID_NDK` env); auto-triggers on `CI` success on `main` (or manual dispatch) and publishes a release with the deb. This is the sole build path.
+- `build-deb.yml` — self-hosted fallback full `.deb` build + artifact/evidence collection (feeds `device-smoke.yml`) for maintainers without hosted-runner time budget.
 - `device-smoke.yml` — manual Windows+ADB: verifies candidate deb SHA256/commit binding, runs Termux smoke, optionally promotes the release.
 - `autorelease.yml` — nightly: detects latest Flutter stable, bumps `build.toml`, `sed`s the same version strings across docs (incl. this file) and installers, then pushes.
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.

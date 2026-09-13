@@ -183,10 +183,12 @@ explicitly (they are **not** part of the default `build.py` pipeline). See
 
 ## CI/CD
 
-Releases are built and published through a manual evidence-tracked path
-(`build-deb.yml`) and an ADB device smoke gate (`device-smoke.yml`); nightly
-`autorelease.yml` detects new Flutter stable versions, bumps `build.toml`, and
-rewrites version references.
+Releases are built and published automatically by the GitHub-hosted `Build`
+workflow (`build.yml`) on `ubuntu-latest` after `CI` passes on `main`; a
+self-hosted evidence-tracked fallback (`build-deb.yml`) and an ADB device
+smoke gate (`device-smoke.yml`) support manual runs. Nightly `autorelease.yml`
+detects new Flutter stable versions, bumps `build.toml`, and rewrites version
+references.
 See [CI/CD and device lab](docs/CI_CD.md).
 
 ## Documentation

@@ -1,25 +1,28 @@
 # CI/CD and Device Lab
 
-This repository uses two classes of GitHub Actions:
+This repository uses GitHub Actions for both lightweight validation and the full Flutter Engine build:
 
-1. **GitHub-hosted checks** for fast, free, public-repository validation.
-2. **Self-hosted workflows** for the expensive Flutter Engine build and Android tablet smoke tests.
+1. **GitHub-hosted workflows** for fast, free, public-repository validation **and** the full `.deb` build on `ubuntu-latest`.
+2. **Self-hosted workflows** as fallbacks for the expensive build and for Android tablet smoke tests.
 
 The goal is to keep pull requests cheap and safe while still making release builds reproducible.
 
 ## GitHub Actions cost and limits
 
 This is a public open-source repository, so standard GitHub-hosted runner
-minutes are free for the lightweight `CI` and `Release check` workflows. The
-self-hosted build/device workflows also do not consume GitHub-hosted runner
-minutes.
+minutes are free for the lightweight `CI`/`Release check` workflows **and** the
+full `Build` workflow. The self-hosted build/device fallbacks also do not
+consume GitHub-hosted runner minutes.
 
 That does **not** mean Actions are unlimited:
 
 - GitHub still enforces workflow, queue, API, concurrency, cache, and artifact
   limits. For example, GitHub-hosted jobs have a 6-hour execution limit, and
   self-hosted jobs have a 5-day execution limit.
-- Larger GitHub-hosted runners are charged even for public repositories.
+- The full `Build` workflow is a multi-hour, tens-of-GB job; on the 4-vCPU / 14
+  GB standard runner it can approach or exceed the 6-hour cap. If it times
+  out, switch `runs-on` to a larger (paid) runner, or use the self-hosted
+  `Build deb (self-hosted)` fallback.
 - Artifacts and caches should be kept small and short-lived. Large `.deb`
   release payloads belong in GitHub Releases, not as long-retained workflow
   artifacts.
@@ -36,29 +39,39 @@ References:
 | Workflow | File | Runner | Trigger | Purpose |
 |----------|------|--------|---------|---------|
 | CI | `.github/workflows/ci.yml` | `ubuntu-latest` | PR, push to `main`, manual | Python/shell/PowerShell syntax, package/docs/workflow sanity, whitespace checks |
-| Build deb | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing |
+| Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
+| Build deb (self-hosted) | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing (fallback) |
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
 | Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | release publish/edit, manual | Verify release asset name, size, and SHA256 digest |
 
-The legacy `build.yml` (GitHub-hosted build path) was removed: it depended on
-`newkdev/setup-depot-tools@v1.0.1` (unmaintained) and could not obtain an
-Android NDK on GitHub-hosted runners. **Build deb (self-hosted)** is now the
-sole build path.
+The legacy `build.yml` GitHub-hosted build path was restored in favor of a
+modernized version: the old one depended on
+`newkdev/setup-depot-tools@v1.0.1` (unmaintained) — now replaced with an
+inline `depot_tools` clone — and used NDK detection from GitHub-hosted runner
+env (`ANDROID_NDK` / `ANDROID_NDK_LATEST_HOME` / `ANDROID_NDK_HOME`), which
+the ubuntu images do set. **Build (GitHub-hosted)** is thus the primary build
+path, and Build deb (self-hosted) remains as a fallback.
 
 ## Why the split exists
 
-Public repositories can use standard GitHub-hosted runners for free, but this project's full build is not a normal CI job:
+Public repositories can use standard GitHub-hosted runners for free, so the
+full build runs there by default. Still, this project's full build is not a
+normal CI job:
 
 - `gclient sync` downloads tens of GB.
-- Flutter Engine builds can take hours.
-- The build needs the Android NDK pinned in `build.toml` (`[ndk] version`, NDK r29) at `/opt/android-ndk-r29`.
+- Flutter Engine builds can take hours (multi-hour on the 4-vCPU runner).
+- The build needs an Android NDK (hosted images ship one; the env vars
+  `ANDROID_NDK` / `ANDROID_NDK_LATEST_HOME` / `ANDROID_NDK_HOME` point at it).
+  `build.toml [ndk] version` (r29) is used for packaging metadata; self-hosted
+  installs pin it at `/opt/android-ndk-r29`.
 - Real release confidence requires an attached Android/Termux tablet.
 
 Therefore:
 
 - **PR CI must stay lightweight** and never touch self-hosted device hardware.
-- **Full build and device smoke are manual self-hosted gates** run by a maintainer.
-- **Release publishing is manual**, not automatic on every merge to `main`.
+- **The full build is the `ubuntu-latest` `Build` workflow**, auto-triggered on
+  `CI` success on `main` or manual dispatch.
+- **Device smoke is a manual self-hosted gate** run by a maintainer.
 
 ## PR / push CI
 
@@ -83,61 +96,63 @@ git diff --check
 
 ## Full deb build
 
-Manual workflow: **Build deb (self-hosted)**
+Primary workflow: **Build** (`.github/workflows/build.yml`).
 
-Default inputs:
+Runs on `ubuntu-latest` when `CI` succeeds on `main` (or on manual dispatch),
+reusing the NDK that ships on GitHub-hosted runners. It:
 
-```text
-flutter_version: 3.47.4
-arch: arm64
-runner_labels_json: ["self-hosted","linux"]
-publish_release: false
-release_tag: 3.47.4
-```
+1. Installs host deps and bootstraps `depot_tools` (inline clone).
+2. Detects the NDK from the runner env (`ANDROID_NDK` → `ANDROID_NDK_LATEST_HOME` → `ANDROID_NDK_HOME`).
+3. Runs the documented pipeline with the termux patches applied in order:
 
-Required self-hosted environment:
+   ```bash
+   python3 build.py clone
+   python3 build.py sync
+   python3 build.py patch_engine
+   python3 build.py patch_dart
+   python3 build.py patch_skia
+   python3 build.py sysroot --arch=arm64
+   python3 build.py configure --arch=arm64 --mode=debug
+   python3 build.py build    --arch=arm64 --mode=debug
+   python3 build.py debuild  --arch=arm64
+   ```
 
-- Linux or WSL runner with enough disk space (100GB+ recommended)
-- Python 3.12 available through `actions/setup-python`
-- `/opt/android-ndk-r29` (version pinned in `build.toml` `[ndk] version`)
-- `git`, `curl`, `ninja`, `pkg-config`, and normal build dependencies
-- network access for Flutter/Chromium/Termux downloads
+   Patches are applied **after** `sync` (a bare `python3 build.py` would
+   re-run `gclient sync -DR` and wipe them), matching the sequence above.
+4. Publishes a GitHub Release tagged with the Flutter version containing
+   `**/*.deb`.
 
-The workflow bootstraps `depot_tools` if `gclient` is missing, then runs:
+If the hosted runner hits its 6-hour cap (or you want build metadata), fall
+back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 
-```bash
-python3 build.py clone
-python3 build.py sync
-python3 build.py patch --file=./patches/engine.patch
-python3 build.py patch --file=./patches/dart.patch --path=engine/src/flutter/third_party/dart
-python3 build.py patch --file=./patches/skia.patch --path=engine/src/flutter/third_party/skia
-python3 build.py
-```
+- Runs on `${{ inputs.runner_labels_json }}` (default `["self-hosted","linux"]`).
+- Requires `/opt/android-ndk-r29` (or `ANDROID_NDK`/`NDK_PATH` env) and a Linux/WSL runner with 100GB+ disk.
+- Uploads the deb plus `sha256`/`size.txt`, `build_metadata.json`, `build_evidence.json`, and `inventory.txt` as a workflow artifact (feeds `device-smoke.yml`).
 
-It uploads:
+That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
+then runs the same patched pipeline (see above) before uploading:
 
 - `flutter_3.47.4_aarch64.deb`
 - `flutter_3.47.4_aarch64.deb.sha256`
 - `flutter_3.47.4_aarch64.deb.size.txt`
 
-If `publish_release=true`, it creates or updates `release_tag` and uploads the deb with `--clobber`.
-
 ## Release policy
 
- Merging to `main` does **not** publish a GitHub Release. The current release
-flow is intentionally maintainer-triggered:
+Merging to `main` **does** publish a GitHub Release through the auto-triggered
+`Build` workflow: after `CI` passes, a multi-hour engine build runs on
+`ubuntu-latest` and the resulting `.deb` is published under the Flutter
+version tag. This is the intended automation for this public repo.
+
+The release flow:
 
 1. Merge only after PR CI passes.
-2. Trigger **Build deb (self-hosted)** manually on the chosen commit/tag.
-3. Leave `publish_release=false` for a dry build, or set
-   `publish_release=true` only when intentionally publishing.
-4. Run device smoke against the produced or published `.deb`.
-5. Let **Release check** verify the release asset metadata after publish/edit.
+2. **Build** auto-runs on `CI` success (or trigger it manually via
+   `workflow_dispatch` on the chosen commit/tag).
+3. Run device smoke against the produced or published `.deb`.
+4. Let **Release check** verify the release asset metadata after publish/edit.
 
-This avoids accidental multi-hour engine builds and prevents unreviewed merges
-from overwriting a public release asset. A future release pipeline may chain
-build → device smoke → publish, but the current project keeps publish as an
-explicit maintainer action.
+If you need a dry build (no auto publish) or richer build metadata, use the
+self-hosted **Build deb (self-hosted)** workflow instead.
 
 ## Device smoke
 
@@ -207,10 +222,13 @@ This workflow is safe to run on GitHub-hosted runners because it only reads publ
 
 ## Security model
 
-- Fork PRs only get `ci.yml` on GitHub-hosted runners.
-- Self-hosted build/device workflows are `workflow_dispatch` only.
+- Fork PRs only get `ci.yml` on GitHub-hosted runners; `Build`/`Release check`
+  are `workflow_run`-guarded or `workflow_dispatch`-only.
+- Self-hosted `Build deb (self-hosted)`/`Device smoke` workflows are
+  `workflow_dispatch` only.
 - Device smoke does not run untrusted PR code automatically.
-- Release publishing requires `contents: write` and only happens from the manual self-hosted build workflow when `publish_release=true`.
+- Release publishing requires `contents: write`: the GitHub-hosted `Build`
+  workflow publishes automatically after `CI` succeeds on `main`.
 
 ## Branch Protection and Repository Governance
 
