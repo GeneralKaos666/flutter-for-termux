@@ -1,3 +1,14 @@
+"""Contract tests for the build pipeline.
+
+All Flutter/Dart/NDK/Android expectations are derived from ``build.toml`` at
+test time, so these tests survive a version bump without edits. On a Flutter
+release bump (nightly ``autorelease.yml`` rewrites ``build.toml`` and syncs the
+repo), the flutter-version-dependent tests below self-adjust; the patch/hunk
+contract tests are intentionally tag-agnostic and must keep passing. If a
+patch contract intentionally changes, update the assertion deliberately rather
+than pinning a version literal.
+"""
+
 import json
 import os
 import re
@@ -64,7 +75,7 @@ class BuildTest(unittest.TestCase):
     def test_default_build_modes_cover_packaged_variants(self):
         self.assertEqual(self.instance.mode, ['debug'])
 
-    def test_dart_patches_are_kept_in_sync_for_flutter_3_44_0(self):
+    def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
         with open(os.path.join(patch_dir, 'dart.patch'), encoding='utf-8') as f:
             dart_patch = f.read()
