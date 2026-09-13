@@ -15,7 +15,7 @@ version = '29.0.14206865' # r29; r30 (30.0.16248370) blocked upstream on lzhiyon
 
 [build]
 arch = ['arm64']       # arm, arm64, x86, x64
-runtime = ['debug']    # debug, release, profile
+runtime = ['release']  # debug, release, profile; the deb packages only these modes' artifacts
 gclient = './.gclient'
 
 [android]
