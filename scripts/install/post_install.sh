@@ -21,6 +21,20 @@ export PATH="$PREFIX/bin:$PATH"
 PATCH_STATE_FILE="${PATCH_STATE_FILE:-$PREFIX/share/flutter/patch_state.json}"
 BACKUP_DIR="${BACKUP_DIR:-$PREFIX/share/flutter/backups}"
 
+# SDK-level configuration: env override > package manifest > default
+# TERMUX_COMPILE_SDK/TERMUX_TARGET_SDK let users force a specific API level on
+# the device; the shipped manifest (package.yaml) carries the build-time default.
+COMPILE_SDK="${TERMUX_COMPILE_SDK:-36}"
+TARGET_SDK="${TERMUX_TARGET_SDK:-$COMPILE_SDK}"
+if [ -f "$PREFIX/share/flutter/manifest.json" ]; then
+	_m_sdk=$(grep -o '"compile_sdk": *[0-9]*' "$PREFIX/share/flutter/manifest.json" 2>/dev/null | grep -o '[0-9]*' || echo "")
+	_m_tsdk=$(grep -o '"target_sdk": *[0-9]*' "$PREFIX/share/flutter/manifest.json" 2>/dev/null | grep -o '[0-9]*' || echo "")
+	[ -n "$_m_sdk" ] && COMPILE_SDK="$_m_sdk"
+	[ -n "$_m_tsdk" ] && TARGET_SDK="$_m_tsdk"
+	[ -n "${TERMUX_COMPILE_SDK:-}" ] && COMPILE_SDK="$TERMUX_COMPILE_SDK"
+	[ -n "${TERMUX_TARGET_SDK:-}" ] && TARGET_SDK="$TERMUX_TARGET_SDK"
+fi
+
 MODE="${MODE:-apply}"
 if [ "${1:-}" = "--check" ]; then MODE="check"; fi
 if [ "${1:-}" = "--apply" ]; then MODE="apply"; fi
@@ -585,7 +599,12 @@ apply_patches
 # 1.5b. Fix engine.stamp and engine.realm (required for Maven artifact resolution)
 echo "[1.5b/13] Fixing engine.stamp and engine.realm, and injecting framework version tag..."
 mkdir -p "$FLUTTER_ROOT/bin/cache"
-[ -s "$FLUTTER_ROOT/bin/internal/engine.version" ] || echo -n "77e2e94772b6eb43759e34ed1ad7da4674e19cab" >"$FLUTTER_ROOT/bin/internal/engine.version"
+# Fail closed: never inject a stale engine revision fallback; the revision must
+# come from the shipped SDK, not a hardcoded constant.
+if [ ! -s "$FLUTTER_ROOT/bin/internal/engine.version" ]; then
+	echo "Error: $FLUTTER_ROOT/bin/internal/engine.version missing or empty; cannot determine engine revision" >&2
+	exit 1
+fi
 local_eng_ver="$(cat "$FLUTTER_ROOT/bin/internal/engine.version" 2>/dev/null | tr -d '\n\r')"
 echo -n "$local_eng_ver" >"$FLUTTER_ROOT/bin/cache/engine.stamp" 2>/dev/null || true
 echo -n "$local_eng_ver" >"$FLUTTER_ROOT/bin/cache/engine_stamp.stamp" 2>/dev/null || true
@@ -852,8 +871,12 @@ mv -f "$TMP_VER_JSON" "$FLUTTER_ROOT/bin/cache/flutter.version.json"
 chmod 644 "$FLUTTER_ROOT/bin/cache/flutter.version.json"
 echo "  ✓ Canonical flutter.version.json generated ($CANONICAL_FLUTTER_VER stable, framework=$CANONICAL_FRAMEWORK_REV)"
 
-# Get engine version for downloads
-ENGINE_VERSION=$(cat $FLUTTER_ROOT/bin/internal/engine.version 2>/dev/null || echo "77e2e94772b6eb43759e34ed1ad7da4674e19cab")
+# Get engine version for downloads (fail closed; no stale fallback)
+ENGINE_VERSION=$(cat "$FLUTTER_ROOT/bin/internal/engine.version" 2>/dev/null || true)
+if [ -z "$ENGINE_VERSION" ]; then
+	echo "Error: engine revision unavailable ($FLUTTER_ROOT/bin/internal/engine.version); cannot download Dart SDK snapshots" >&2
+	exit 1
+fi
 
 # 0. Download official Dart SDK snapshots (fixes flutter run hot reload)
 echo "[0/13] Downloading official Dart SDK snapshots (for hot reload)..."
@@ -1247,16 +1270,32 @@ fi
 # 12.7c. Create api-level.h for CMake system detection
 # CMake's CMakeDetermineSystem.cmake reads $PREFIX/include/android/api-level.h
 # Without this file, cmake fails with "file failed to open for reading"
+# Derive __ANDROID_API__ from the highest installed SDK platform so api-level.h
+# tracks the on-device android.jar without a hardcoded level. Falls back to 35
+# only when no platform is installed yet.
 echo "[12.7c/13] Creating api-level.h for CMake..."
 mkdir -p "$PREFIX/include/android" 2>/dev/null
 if [ ! -f "$PREFIX/include/android/api-level.h" ]; then
-	cat >"$PREFIX/include/android/api-level.h" <<'HEADER'
+	API_LEVEL=0
+	for platform_dir in "$ANDROID_SDK"/platforms/android-*; do
+		[ -d "$platform_dir" ] || continue
+		api_num="${platform_dir##*android-}"
+		case "$api_num" in
+		'' | *[!0-9]*) continue ;;
+		esac
+		[ "$api_num" -gt "$API_LEVEL" ] && API_LEVEL="$api_num"
+	done
+	if [ "$API_LEVEL" -eq 0 ]; then
+		echo "  ⚠ No Android platform found under $ANDROID_SDK/platforms; defaulting __ANDROID_API__ to 35"
+		API_LEVEL=35
+	fi
+	cat >"$PREFIX/include/android/api-level.h" <<HEADER
 #ifndef __ANDROID_API_LEVEL_H__
 #define __ANDROID_API_LEVEL_H__
-#define __ANDROID_API__ 35
+#define __ANDROID_API__ $API_LEVEL
 #endif
 HEADER
-	echo "  ✓ api-level.h created"
+	echo "  ✓ api-level.h created (__ANDROID_API__=$API_LEVEL)"
 else
 	echo "  ✓ api-level.h already exists"
 fi
@@ -1400,8 +1439,8 @@ echo "  1. Fix gradlew shebang:"
 echo "     sed -i '1s|#!/usr/bin/env bash|#!'"$PREFIX"'/bin/bash|' android/gradlew"
 echo ""
 echo "  2. Edit android/app/build.gradle.kts:"
-echo "     compileSdk = 34"
-echo "     targetSdk = 34"
+echo "     compileSdk = $COMPILE_SDK"
+echo "     targetSdk = $TARGET_SDK"
 echo "     ndk { abiFilters += listOf(\"arm64-v8a\") }"
 echo ""
 echo "  3. Add to android/gradle.properties:"
