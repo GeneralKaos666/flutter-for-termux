@@ -89,6 +89,11 @@ Patches live flat in `patches/` (engine.patch, dart.patch, skia.patch) and are t
 
 **Method A: Try to apply the existing patches**
 
+The `.gclient` `custom_hooks` apply the patches automatically during
+`python3 build.py sync`. If you instead want to test them against a fresh
+checkout, run them manually (reset first if a prior `sync` already applied
+them):
+
 ```bash
 python3 build.py patch --file=./patches/engine.patch
 python3 build.py patch --file=./patches/dart.patch --path=engine/src/flutter/third_party/dart
@@ -157,6 +162,11 @@ so that the default `targetPlatform` is `[arm64]` only (disables arm/x64 gen_sna
 ---
 
 ## Step 5: Apply the Patches
+
+Patches are applied automatically by the `.gclient` `custom_hooks` during
+`python3 build.py sync` — no manual step is needed after a successful sync.
+The command below is only for re-testing a patch against a fresh checkout
+(reset the tree first if the hooks already applied it):
 
 ```bash
 python3 build.py patch --file=./patches/engine.patch

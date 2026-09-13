@@ -17,14 +17,14 @@ ANDROID_NDK=/opt/android-ndk-r29 python3 build.py
 # Individual steps
 python3 build.py tag                                  # prints release tag (Fire exposes the self.tag attribute)
 python3 build.py clone
-python3 build.py sync                                 # copies repo-root .gclient into flutter/ then gclient sync -DR
+python3 build.py sync                                 # copies repo-root .gclient into flutter/ (its custom_hooks apply the patches), then gclient sync -DR
 python3 build.py sysroot --arch=arm64                 # assemble Termux sysroot from apt
 python3 build.py configure --arch=arm64 --mode=debug  # GN configure (is_termux=true)
 python3 build.py build --arch=arm64 --mode=debug      # ninja
 python3 build.py debuild --arch=arm64                 # produce .deb
 ```
 
-**Patches are NOT applied by the default pipeline.** `Build.__call__` (invoked with no args) is config → clone → sync → for each arch: sysroot, configure+build per mode, debuild. Run patches explicitly after sync:
+**Patches are applied by the default pipeline.** `Build.__call__` (invoked with no args) is config → clone → sync → for each arch: sysroot, configure+build per mode, debuild. `sync` copies the repo-root `.gclient` and its `custom_hooks` apply `patches/engine.patch`, `patches/dart.patch`, and `patches/skia.patch` during `gclient sync -DR` — so a bare `python3 build.py` gets them automatically. The `patch_*` helpers are only for manually re-applying / rebasing a patch to a fresh checkout, and must **not** be run right after `sync` (the hooks already applied them; re-application fails with "already exists"):
 
 ```bash
 python3 build.py patch_engine   # engine.patch @ repo root
