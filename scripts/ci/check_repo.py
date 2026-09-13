@@ -14,6 +14,14 @@ from pathlib import Path
 from urllib.parse import unquote
 
 try:
+    import tomllib
+except ImportError:  # Python < 3.11: CI pins 3.12, termux ships 3.14.
+    try:
+        import tomli as tomllib  # type: ignore
+    except ImportError:
+        tomllib = None
+
+try:
     import yaml
 except ImportError:  # pragma: no cover - CI installs requirements.txt first.
     yaml = None
@@ -175,6 +183,7 @@ def check_yaml_files() -> None:
         "executable",
         "profile",
         "stamps",
+        "manifest",
     ):
         if key not in resources:
             fail(f"package.yaml missing resource.{key}")
@@ -208,17 +217,55 @@ def check_post_install_contract() -> None:
             fail(f"post_install.sh missing marker: {marker}")
 
 
+def load_build_config() -> dict[str, object]:
+    """Single source of truth: read all enforced values from build.toml.
+
+    Fails closed (empty dict + error) when the TOML is unreadable or lacks a
+    required key, so a partial config can never silently pass the sanity gate.
+    """
+    path = ROOT / "build.toml"
+    if not path.is_file():
+        fail(f"missing required file: build.toml")
+        return {}
+    if tomllib is None:
+        fail("neither tomllib nor tomli is available to parse build.toml")
+        return {}
+    with open(path, "rb") as f:
+        data = tomllib.load(f)
+
+    out: dict[str, object] = {"__data__": data}
+    flutter = data.get("flutter", {})
+    ndk = data.get("ndk", {})
+    android = data.get("android", {})
+    out["tag"] = flutter.get("tag")
+    out["ndk_version"] = ndk.get("version")
+    out["compile_sdk"] = android.get("compile_sdk")
+    out["target_sdk"] = android.get("target_sdk")
+    if not out["tag"]:
+        fail("build.toml [flutter] missing required 'tag'")
+    return out
+
+
 def check_installer_contract() -> None:
     text = read("install_flutter_complete.sh")
-    # Read expected version from build.toml
-    toml_text = read("build.toml")
-    import re as _re
-    m = _re.search(r"tag\s*=\s*'([^']+)'", toml_text)
-    expected_ver = m.group(1) if m else "3.47.4"
-    if f'FLUTTER_VERSION="{expected_ver}"' not in text:
-        fail(f"install_flutter_complete.sh default Flutter version is not {expected_ver}")
-    if 'NDK_VERSION="29.0.14206865"' not in text:
-        fail("install_flutter_complete.sh default NDK version is not r29")
+    cfg = load_build_config()
+    tag = str(cfg.get("tag") or "")
+    ndk_ver = str(cfg.get("ndk_version") or "")
+    if not tag:
+        return  # build.toml error already reported by load_build_config()
+    if not ndk_ver:
+        fail("build.toml [ndk] missing required 'version'")
+
+    # Installers may hardcode versions in-file or source the shared
+    # scripts/install/versions_common.sh; check the combined view.
+    versions_file = ROOT / "scripts/install" / "versions_common.sh"
+    combined = text
+    if versions_file.is_file():
+        combined += "\n" + versions_file.read_text(encoding="utf-8")
+    if f'FLUTTER_VERSION="{tag}"' not in combined:
+        fail(f"install_flutter_complete.sh/versions_common.sh default Flutter version is not {tag}")
+    if f'NDK_VERSION="{ndk_ver}"' not in combined:
+        fail(f"install_flutter_complete.sh/versions_common.sh default NDK version is not {ndk_ver}")
     if "android-ndk-r27" in text:
         fail("install_flutter_complete.sh still references removed NDK r27 downloads")
 
