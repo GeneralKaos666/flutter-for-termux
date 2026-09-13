@@ -42,7 +42,7 @@ fi
 
 echo -e "${GREEN}[2/${TOTAL_STEPS}]${NC} Installing dependencies..."
 pkg install -y x11-repo
-pkg install -y openjdk-21 openjdk-17 git wget curl unzip android-tools
+pkg install -y "${JAVA_PACKAGE:-openjdk-21}" git wget curl unzip android-tools
 
 echo -e "${GREEN}[3/${TOTAL_STEPS}]${NC} Downloading Flutter SDK..."
 
