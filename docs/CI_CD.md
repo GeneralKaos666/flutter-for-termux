@@ -103,22 +103,22 @@ reusing the NDK that ships on GitHub-hosted runners. It:
 
 1. Installs host deps and bootstraps `depot_tools` (inline clone).
 2. Detects the NDK from the runner env (`ANDROID_NDK` → `ANDROID_NDK_LATEST_HOME` → `ANDROID_NDK_HOME`).
-3. Runs the documented pipeline with the termux patches applied in order:
+3. Runs the documented pipeline. Patches are applied automatically by the
+   `.gclient` `custom_hooks` during `sync`, so no explicit `patch_*` step is
+   needed:
 
    ```bash
    python3 build.py clone
    python3 build.py sync
-   python3 build.py patch_engine
-   python3 build.py patch_dart
-   python3 build.py patch_skia
    python3 build.py sysroot --arch=arm64
    python3 build.py configure --arch=arm64 --mode=debug
    python3 build.py build    --arch=arm64 --mode=debug
    python3 build.py debuild  --arch=arm64
    ```
 
-   Patches are applied **after** `sync` (a bare `python3 build.py` would
-   re-run `gclient sync -DR` and wipe them), matching the sequence above.
+   The `patch_*` helpers are only for manually re-applying / rebasing a patch
+   to a fresh checkout; running them right after `sync` fails with "already
+   exists".
 4. Publishes a GitHub Release tagged with the Flutter version containing
    `**/*.deb`.
 
