@@ -61,8 +61,8 @@ Key details:
 Mirrors `ci.yml`. Run all of these before pushing:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py
-pytest test_build.py        # NB: there is no tests/ dir; pytest.ini (testpaths=tests) is stale, so name the file
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
+pytest test_build.py        # NB: there is no tests/ dir; pytest.ini (testpaths=test_build.py) names the file
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_version_drift.py
 python scripts/ci/check_repo.py
@@ -73,11 +73,10 @@ git diff --check
 
 Auto on PRs: `ci.yml` (sanity) and `validate.yml` (path-filtered; verify command contract `python3 -m pytest test_build.py -v`, and that `engine.patch` applies to the configured tag via a shallow clone). Everything that actually builds is manual, self-hosted:
 
-- `build-deb.yml` — manual full `.deb` build + artifact/evidence collection (feeds `device-smoke.yml`).
+- `build-deb.yml` — manual full `.deb` build + artifact/evidence collection (feeds `device-smoke.yml`). Sole build path since legacy `build.yml` was removed.
 - `device-smoke.yml` — manual Windows+ADB: verifies candidate deb SHA256/commit binding, runs Termux smoke, optionally promotes the release.
 - `autorelease.yml` — nightly: detects latest Flutter stable, bumps `build.toml`, `sed`s the same version strings across docs (incl. this file) and installers, then pushes.
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.
-- `build.yml` — legacy GitHub-hosted path; triggers off CI success on main or manual dispatch.
 
 ## Gotchas
 

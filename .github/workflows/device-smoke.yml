@@ -53,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Download artifact
         shell: pwsh
@@ -191,7 +191,7 @@ jobs:
             -EvidencePath "device_smoke_evidence.json"
 
       - name: Upload evidence artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: device-smoke-evidence

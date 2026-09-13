@@ -40,13 +40,18 @@ References:
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
 | Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | release publish/edit, manual | Verify release asset name, size, and SHA256 digest |
 
+The legacy `build.yml` (GitHub-hosted build path) was removed: it depended on
+`newkdev/setup-depot-tools@v1.0.1` (unmaintained) and could not obtain an
+Android NDK on GitHub-hosted runners. **Build deb (self-hosted)** is now the
+sole build path.
+
 ## Why the split exists
 
 Public repositories can use standard GitHub-hosted runners for free, but this project's full build is not a normal CI job:
 
 - `gclient sync` downloads tens of GB.
 - Flutter Engine builds can take hours.
-- The build needs Android NDK r27d at `/opt/android-ndk-r27d`.
+- The build needs the Android NDK pinned in `build.toml` (`[ndk] version`, NDK r29) at `/opt/android-ndk-r29`.
 - Real release confidence requires an attached Android/Termux tablet.
 
 Therefore:
@@ -60,7 +65,7 @@ Therefore:
 `ci.yml` runs on every PR and push to `main`:
 
 ```text
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
 bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 PowerShell parser check for scripts/device/run_termux_smoke.ps1
 python scripts/ci/check_repo.py
@@ -94,7 +99,7 @@ Required self-hosted environment:
 
 - Linux or WSL runner with enough disk space (100GB+ recommended)
 - Python 3.12 available through `actions/setup-python`
-- `/opt/android-ndk-r27d`
+- `/opt/android-ndk-r29` (version pinned in `build.toml` `[ndk] version`)
 - `git`, `curl`, `ninja`, `pkg-config`, and normal build dependencies
 - network access for Flutter/Chromium/Termux downloads
 
@@ -221,7 +226,7 @@ The repository governance rules for the `main` branch are codified in `.github/r
 Fast local checks:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
 bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
 python scripts/ci/check_version_drift.py
