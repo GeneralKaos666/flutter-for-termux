@@ -228,9 +228,9 @@ rollback_patches() {
 # --- Register Patches ---
 
 patch_compile_sdk() {
-	if grep -F -q "val compileSdkVersion: Int = 34" "$1"; then return 0; fi
+	if grep -F -q "val compileSdkVersion: Int = $COMPILE_SDK" "$1"; then return 0; fi
 	grep -q "val compileSdkVersion: Int =" "$1" || return 1
-	sed -i 's/val compileSdkVersion: Int = [0-9]*/val compileSdkVersion: Int = 34/' "$1"
+	sed -i "s/val compileSdkVersion: Int = [0-9]*/val compileSdkVersion: Int = $COMPILE_SDK/" "$1"
 }
 register_patch "compile_sdk" "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" patch_compile_sdk
 
@@ -928,28 +928,40 @@ else
 	echo "  ⚠ termux-elf-cleaner not found, skipping"
 fi
 
-# 1.5d. Install Android SDK Platform 36 (Flutter 3.44.0 requirement)
-echo "[1.5d/13] Installing Android SDK Platform 36..."
-if [ ! -d "$ANDROID_SDK/platforms/android-36" ]; then
+# 1.5d. Install Android SDK Platform for the configured COMPILE_SDK
+platform_zip_url() {
+	case "$1" in
+	36) printf '%s\n' 'https://dl.google.com/android/repository/platform-36_r01.zip' ;;
+	35) printf '%s\n' 'https://dl.google.com/android/repository/platform-35_r01.zip' ;;
+	34) printf '%s\n' 'https://dl.google.com/android/repository/platform-34-ext7_r02.zip' ;;
+	*) return 1 ;;
+	esac
+}
+
+echo "[1.5d/13] Installing Android SDK Platform $COMPILE_SDK..."
+if [ ! -d "$ANDROID_SDK/platforms/android-$COMPILE_SDK" ]; then
 	mkdir -p $ANDROID_SDK/platforms
 	cd $ANDROID_SDK/platforms
-	(
-		set +e
-		curl -L -o platform-36.zip 'https://dl.google.com/android/repository/platform-36_r01.zip' >/dev/null 2>&1
-	) || true
-	if [ -f platform-36.zip ] && [ -s platform-36.zip ]; then
-		unzip -q platform-36.zip 2>/dev/null || true
-		rm -f platform-36.zip
-		echo "  ✓ Platform 36 installed"
-	else
-		echo "  ⚠ Download skipped/unavailable for Platform 36"
+	PLATFORM_URL="$(platform_zip_url "$COMPILE_SDK" || true)"
+	if [ -n "$PLATFORM_URL" ]; then
+		(
+			set +e
+			curl -L -o platform-$COMPILE_SDK.zip "$PLATFORM_URL" >/dev/null 2>&1
+		) || true
+		if [ -f platform-$COMPILE_SDK.zip ] && [ -s platform-$COMPILE_SDK.zip ]; then
+			unzip -q platform-$COMPILE_SDK.zip 2>/dev/null || true
+			rm -f platform-$COMPILE_SDK.zip
+			echo "  ✓ Platform $COMPILE_SDK installed"
+		else
+			echo "  ⚠ Download skipped/unavailable for Platform $COMPILE_SDK"
+		fi
 	fi
 	# Ensure no fake symlinks remain
-	if [ -L "$ANDROID_SDK/platforms/android-36" ]; then
-		rm -f "$ANDROID_SDK/platforms/android-36"
+	if [ -L "$ANDROID_SDK/platforms/android-$COMPILE_SDK" ]; then
+		rm -f "$ANDROID_SDK/platforms/android-$COMPILE_SDK"
 	fi
 else
-	echo "  ✓ Platform 36 already exists"
+	echo "  ✓ Platform $COMPILE_SDK already exists"
 fi
 
 # Install required Termux build dependencies
@@ -959,6 +971,13 @@ if ! command -v aapt2 &>/dev/null; then
 	echo "  ! Termux aapt2 not found. Installing build dependencies via apt..."
 	apt update >/dev/null 2>&1 || true
 	apt install -y aapt2 libc++ libexpat openssl >/dev/null 2>&1 || true
+fi
+
+# Hold aapt2: it is ABI-sensitive and `apt upgrade` can silently swap in a build
+# that breaks APK linking. Opt out with TERMUX_NO_HOLD_AAPT2=1.
+if [ "${TERMUX_NO_HOLD_AAPT2:-false}" != "true" ] && command -v apt-mark &>/dev/null && command -v aapt2 &>/dev/null; then
+	apt-mark hold aapt2 >/dev/null 2>&1 || true
+	echo "  ✓ aapt2 held (release with: apt-mark unhold aapt2)"
 fi
 
 # Install d8/aidl/apksigner (required by AGP for build-tools validation)
@@ -997,24 +1016,8 @@ if [ ! -f "$PKG_CONFIG" ]; then
 	fi
 fi
 
-# 2. Download and install Android API 34 (aapt2 bug workaround)
-echo "[2/13] Installing Android API 34..."
-if [ ! -d "$ANDROID_SDK/platforms/android-34" ]; then
-	cd $ANDROID_SDK/platforms
-	(
-		set +e
-		curl -L -o platform-34.zip 'https://dl.google.com/android/repository/platform-34-ext7_r02.zip' >/dev/null 2>&1
-	) || true
-	if [ -f platform-34.zip ] && [ -s platform-34.zip ]; then
-		unzip -q platform-34.zip 2>/dev/null || true
-		rm -f platform-34.zip
-		echo "  ✓ API 34 installed"
-	else
-		echo "  ⚠ API 34 download skipped (offline)"
-	fi
-else
-	echo "  ✓ API 34 already exists"
-fi
+# 2. (removed) Android API 34 aapt2 workaround: compileSdk now follows COMPILE_SDK
+#    (see 1.5d), so the forced android-34 platform download is no longer needed.
 
 # Clear stale Gradle included-build outputs after changing the Flutter Gradle plugin.
 # Without this, upgrades can compile FlutterPlugin.kt against an older cached

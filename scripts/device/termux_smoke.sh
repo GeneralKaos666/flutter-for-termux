@@ -243,15 +243,18 @@ if ! grep -q '^org.gradle.jvmargs=' android/gradle.properties; then
 fi
 python - <<'PY'
 from pathlib import Path
+import os
+compile_sdk = os.environ.get('COMPILE_SDK', '36')
+target_sdk = os.environ.get('TARGET_SDK', '36')
 p = Path('android/app/build.gradle.kts')
 if p.exists():
     s = p.read_text()
-    s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 34')
-    s = s.replace('compileSdk = flutter.compileSdkVersion.toInteger()', 'compileSdk = 34')
-    s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 34')
-    s = s.replace('targetSdk = flutter.targetSdkVersion.toInteger()', 'targetSdk = 34')
+    s = s.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = ' + compile_sdk)
+    s = s.replace('compileSdk = flutter.compileSdkVersion.toInteger()', 'compileSdk = ' + compile_sdk)
+    s = s.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = ' + target_sdk)
+    s = s.replace('targetSdk = flutter.targetSdkVersion.toInteger()', 'targetSdk = ' + target_sdk)
     if 'abiFilters += listOf("arm64-v8a")' not in s:
-        s = s.replace('targetSdk = 34\n', 'targetSdk = 34\n        ndk { abiFilters += listOf("arm64-v8a") }\n')
+        s = s.replace('targetSdk = ' + target_sdk + '\n', 'targetSdk = ' + target_sdk + '\n        ndk { abiFilters += listOf("arm64-v8a") }\n')
     if 'isMinifyEnabled = false' not in s:
         if 'getByName("release") {' in s:
             s = s.replace('getByName("release") {', 'getByName("release") {\n            isMinifyEnabled = false\n            isShrinkResources = false')
@@ -265,9 +268,10 @@ if p.exists():
         p.write_text('set(CMAKE_SYSTEM_NAME Linux)\n' + s)
 PY
 
-# Verify compileSdk 34 and aapt2FromMavenOverride
+# Verify compileSdk and aapt2FromMavenOverride
+COMPILE_SDK="${COMPILE_SDK:-${TERMUX_COMPILE_SDK:-36}}"
 HAS_SDK34=0
-if grep -q 'compileSdk.*34' android/app/build.gradle.kts 2>/dev/null || grep -q 'compileSdk.*34' android/app/build.gradle 2>/dev/null; then
+if grep -q "compileSdk.*$COMPILE_SDK" android/app/build.gradle.kts 2>/dev/null || grep -q "compileSdk.*$COMPILE_SDK" android/app/build.gradle 2>/dev/null; then
     HAS_SDK34=1
 fi
 HAS_AAPT2=0
@@ -276,7 +280,7 @@ if grep -q 'android.aapt2FromMavenOverride' android/gradle.properties 2>/dev/nul
 fi
 
 if [ "$HAS_SDK34" -eq 1 ] && [ "$HAS_AAPT2" -eq 1 ]; then
-    echo "CONFIG_VERIFY_SUCCESS: compileSdk 34 and aapt2FromMavenOverride verified"
+    echo "CONFIG_VERIFY_SUCCESS: compileSdk $COMPILE_SDK and aapt2FromMavenOverride verified"
     record_status CONFIG_VERIFY_STATUS 0
 else
     echo "CONFIG_VERIFY_FAILED: HAS_SDK34=$HAS_SDK34 HAS_AAPT2=$HAS_AAPT2"
