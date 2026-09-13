@@ -53,11 +53,17 @@ cd ~/projects/termux-flutter
 # Clone Flutter (if this is a new environment)
 python3 build.py clone
 
-# Sync dependencies (~30GB, takes several hours)
+# Sync dependencies (~30GB, takes several hours). This also applies the
+# patches via the .gclient custom_hooks; no separate patch step is needed.
 python3 build.py sync
 ```
 
-### Stage 2: Apply Patches
+### Stage 2: Patches
+
+Patches are applied automatically during `sync` (see above) via the `.gclient`
+`custom_hooks`. Applying them manually is only needed to re-test or rebase a
+patch against a fresh checkout — and only after a `git checkout` / fresh
+`gclient sync -D` if the hook already applied them:
 
 ```bash
 # Apply Termux adaptation patches
@@ -306,10 +312,14 @@ tag = "3.36.0"  # new version number
 ### 2. Sync Source Code
 
 ```bash
-python3 build.py sync
+python3 build.py sync  # The .gclient custom_hooks try to apply the patches
 ```
 
-### 3. Re-apply Patches
+### 3. Re-check Patches
+
+The `sync` above already applied the patches via the `.gclient` `custom_hooks`
+(or failed loudly if they no longer apply). To re-test a specific patch on a
+clean tree (reset first — the hooks may have applied it), run:
 
 ```bash
 # You may need to update the patches to adapt to the new version

@@ -76,33 +76,7 @@ jobs:
           echo "ANDROID_NDK=$NDK_DIR" >> "$GITHUB_ENV"
 
       - name: build flutter/toolchain + package deb
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          python build.py clone
-          python build.py sync
-
-          python build.py patch_engine
-          python build.py patch_dart
-          python build.py patch_skia
-
-          mapfile -t ARCHES < <(python -c "import tomllib; print(*tomllib.load(open('build.toml','rb'))['build']['arch'])")
-          mapfile -t MODES < <(python -c "import tomllib; print(*tomllib.load(open('build.toml','rb'))['build']['runtime'])")
-
-          if [ "${#ARCHES[@]}" -eq 0 ] || [ "${#MODES[@]}" -eq 0 ]; then
-            echo "Error: build.toml [build] arch/runtime must not be empty" >&2
-            exit 1
-          fi
-
-          for ARCH in "${ARCHES[@]}"; do
-            python build.py sysroot --arch="$ARCH"
-            for MODE in "${MODES[@]}"; do
-              python build.py configure --arch="$ARCH" --mode="$MODE"
-              python build.py build --arch="$ARCH" --mode="$MODE"
-            done
-            python build.py debuild --arch="$ARCH"
-          done
+        run: python build.py
 
       - name: parse tag
         id: parser

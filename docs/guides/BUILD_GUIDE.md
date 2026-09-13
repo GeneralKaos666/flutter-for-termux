@@ -151,25 +151,19 @@ cd termux-flutter
 
 ```bash
 python3 build.py clone   # Clone Flutter
-python3 build.py sync    # Sync dependencies (about 30GB, takes several hours)
+python3 build.py sync    # Sync dependencies; the .gclient custom_hooks apply
+                         # patches/engine.patch, dart.patch, and skia.patch
+                         # automatically. Takes several hours (~30GB).
 ```
 
-### 5. Apply Patches
+### 5. One-Command Build (recommended)
+
+Patches are applied during `sync` — no explicit `patch_*` step is needed.
+Running one right after `sync` fails with "already exists". The `patch` helper
+is only for re-applying a patch to a fresh checkout, e.g. when rebasing on a
+new Flutter version. To build everything, just run:
 
 ```bash
-python3 build.py patch --file=./patches/engine.patch
-```
-
-### 6. Build Sysroot
-
-```bash
-python3 build.py sysroot --arch=arm64
-```
-
-### 7. One-Command Build (recommended)
-
-```bash
-# New: build all components with a single command
 python3 build.py
 ```
 
@@ -710,12 +704,19 @@ When Flutter releases a new version, upgrade with the following steps:
 
 ### 1. Rebase the patches
 
+Patches live flat in `patches/` (engine.patch, dart.patch, skia.patch). After
+`clone` + `sync` the `.gclient` `custom_hooks` try to apply them automatically.
+To test whether they still apply cleanly against the new tag, run the apply
+helpers manually on a fresh checkout (skip if `sync` already applied them):
+
 ```bash
-# Patches live flat in patches/ (engine.patch, dart.patch, skia.patch)
 python3 build.py patch --file=./patches/engine.patch
 python3 build.py patch --file=./patches/dart.patch --path=engine/src/flutter/third_party/dart
 python3 build.py patch --file=./patches/skia.patch --path=engine/src/flutter/third_party/skia
 ```
+
+> Re-applying right after a `sync` that already applied them fails with
+> "already exists"; use `gclient sync -D` or reset the checkout first.
 
 ### 2. Update build.toml
 
@@ -728,10 +729,16 @@ tag = '<NEW_TAG>'  # Update the version number
 
 ```bash
 python3 build.py clone
-python3 build.py sync  # This downloads the new version's engine
+python3 build.py sync  # Downloads the new version's engine; the .gclient
+                       # custom_hooks try to apply the rebased patches
 ```
 
-### 4. Try applying the patches
+### 4. Confirm the patches applied
+
+The `sync` above already attempted the patches via the `.gclient`
+`custom_hooks`. To re-check a specific one on a clean tree (e.g. after fixing
+a conflict), apply it manually — but only if the hook did not already apply it
+(a fresh `git checkout` / `gclient sync -D` first):
 
 ```bash
 python3 build.py patch --file=./patches/engine.patch

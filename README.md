@@ -168,9 +168,6 @@ export ANDROID_NDK=/opt/android-ndk-r29
 
 python3 build.py clone
 python3 build.py sync
-python3 build.py patch_engine
-python3 build.py patch_dart
-python3 build.py patch_skia
 python3 build.py sysroot --arch=arm64
 python3 build.py configure --arch=arm64 --mode=debug
 python3 build.py build --arch=arm64 --mode=debug
@@ -178,8 +175,10 @@ python3 build.py debuild --arch=arm64
 ```
 
 A full run takes roughly 2-4 hours on 24 threads. Patches are applied
-explicitly (they are **not** part of the default `build.py` pipeline). See
-[Build guide](docs/guides/BUILD_GUIDE.md) for details and troubleshooting.
+automatically during `sync` via the `.gclient` `custom_hooks`, so no explicit
+`patch_*` step is needed (running one right after `sync` fails with "already
+exists"). See [Build guide](docs/guides/BUILD_GUIDE.md) for details and
+troubleshooting.
 
 ## CI/CD
 
