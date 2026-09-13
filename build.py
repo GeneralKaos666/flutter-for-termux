@@ -72,6 +72,9 @@ class Build:
         self.framework_revision = cfg['flutter'].get('framework_revision') or ''
         self.framework_commit_date = cfg['flutter'].get('framework_commit_date') or ''
         self.devtools_version = cfg['flutter'].get('devtools_version') or ''
+        self.ndk_version = cfg['ndk'].get('version') or ''
+        self.compile_sdk = cfg['android'].get('compile_sdk')
+        self.target_sdk = cfg['android'].get('target_sdk')
         self.api = api or 26
         self.conf = conf
         # TODO: detect host
@@ -231,6 +234,9 @@ class Build:
             framework_revision=self.framework_revision,
             framework_commit_date=self.framework_commit_date,
             devtools_version=self.devtools_version,
+            ndk_version=self.ndk_version,
+            compile_sdk=self.compile_sdk,
+            target_sdk=self.target_sdk,
             **conf)
         pkg.debuild(output=output)
 

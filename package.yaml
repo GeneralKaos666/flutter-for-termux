@@ -166,7 +166,10 @@ resource:
         "framework_commit_date": "$framework_commit_date",
         "engine_revision": "$version",
         "dart_version": "$dart_version",
-        "devtools_version": "$devtools_version"
+        "devtools_version": "$devtools_version",
+        "ndk_version": "$ndk_version",
+        "compile_sdk": $compile_sdk,
+        "target_sdk": $target_sdk
       }
     output:
       - $prefix/share/flutter/manifest.json
