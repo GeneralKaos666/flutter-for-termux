@@ -9,6 +9,7 @@ devtools_version = '2.60.0'
 
 [ndk]
 api = 26 # >=26
+version = '29.0.14206865' # r29; r30 (30.0.16248370) blocked upstream on lzhiyong/termux-ndk
 # unset to use ANDROID_NDK from env
 # path = 'path/to/ndk'
 
@@ -16,6 +17,14 @@ api = 26 # >=26
 arch = ['arm64']       # arm, arm64, x86, x64
 runtime = ['debug']    # debug, release, profile
 gclient = './.gclient'
+
+[android]
+compile_sdk = 36   # Stage-B ladder: 36 > 35 > 34; TERMUX_COMPILE_SDK overrides at runtime on-device
+target_sdk  = 36
+
+[installer]
+java     = 'openjdk-21'  # single JDK; openjdk-25 available as future bump
+zip_tool = '7zip'        # 26.03 (was p7zip)
 
 [patch.engine]
 file = './patches/engine.patch'
