@@ -1,10 +1,3 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Flutter Termux" width="60%"/>
-</p>
-
-![GitHub Release](https://img.shields.io/github/v/release/GeneralKaos666/flutter-for-termux)
-![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/GeneralKaos666/flutter-for-termux/latest/total)
-
 # Flutter Termux
 
 Run the Flutter SDK on [Termux](https://termux.dev) (Android / Bionic ARM64).
