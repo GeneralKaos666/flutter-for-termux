@@ -2,6 +2,7 @@ import json
 import os
 import re
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -134,7 +135,15 @@ class BuildTest(unittest.TestCase):
 
 
 class PackageManifestTest(unittest.TestCase):
+    def setUp(self):
+        with open(Path(__file__).parent / 'build.toml', 'rb') as f:
+            self.cfg = tomllib.load(f)
+
     def test_manifest_resource_generates_ship_manifest(self):
+        flutter = self.cfg['flutter']
+        android = self.cfg['android']
+        ndk = self.cfg['ndk']
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
             release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
@@ -144,16 +153,19 @@ class PackageManifestTest(unittest.TestCase):
                 src = yaml.safe_load(f)
 
             with (
-                patch('package.utils.flutter_tag', return_value='3.47.3'),
-                patch('package.utils.engine_version', return_value='06a2e2a110089dff50fe635cffd2a61e1b24fbcd'),
+                patch('package.utils.flutter_tag', return_value=flutter['tag']),
+                patch('package.utils.engine_version', return_value='engine_revision_mock'),
             ):
                 pkg = package.Package(
                     root=str(root),
                     arch='arm64',
-                    dart_version='3.13.3',
-                    framework_revision='e8113bf45620cbeb8aff64947ee4c93e16adb4cf',
-                    framework_commit_date='2026-09-04 13:20:08 -0700',
-                    devtools_version='2.60.0',
+                    dart_version=flutter['dart_version'],
+                    framework_revision=flutter['framework_revision'],
+                    framework_commit_date=flutter['framework_commit_date'],
+                    devtools_version=flutter['devtools_version'],
+                    ndk_version=ndk.get('version', ''),
+                    compile_sdk=android['compile_sdk'],
+                    target_sdk=android['target_sdk'],
                     **src,
                 )
 
@@ -169,12 +181,15 @@ class PackageManifestTest(unittest.TestCase):
             self.assertEqual(
                 manifest,
                 {
-                    'flutter_version': '3.47.3',
-                    'framework_revision': 'e8113bf45620cbeb8aff64947ee4c93e16adb4cf',
-                    'framework_commit_date': '2026-09-04 13:20:08 -0700',
-                    'engine_revision': '06a2e2a110089dff50fe635cffd2a61e1b24fbcd',
-                    'dart_version': '3.13.3',
-                    'devtools_version': '2.60.0',
+                    'flutter_version': flutter['tag'],
+                    'framework_revision': flutter['framework_revision'],
+                    'framework_commit_date': flutter['framework_commit_date'],
+                    'engine_revision': 'engine_revision_mock',
+                    'dart_version': flutter['dart_version'],
+                    'devtools_version': flutter['devtools_version'],
+                    'ndk_version': ndk.get('version', ''),
+                    'compile_sdk': android['compile_sdk'],
+                    'target_sdk': android['target_sdk'],
                 },
             )
 
