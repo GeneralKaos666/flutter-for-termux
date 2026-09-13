@@ -154,8 +154,9 @@ def check_build_py(cfg: dict[str, str], root_path: Path | None = None) -> None:
     sync_match = re.search(r"def sync\(.*?\):(.*?)(?=\n    def |\Z)", text, re.DOTALL)
     if sync_match:
         sync_text = sync_match.group(1)
-        if "'3.12.0'" in sync_text or '"3.12.0"' in sync_text:
-            fail("build.py sync() contains hardcoded '3.12.0' Dart SDK version string; should use self.dart_version")
+        hardcoded = re.findall(rf'["\']{SEMVER_PATTERN}["\']', sync_text)
+        if hardcoded:
+            fail(f"build.py sync() contains hardcoded Dart SDK version literal(s) {sorted(set(hardcoded))}; should use self.dart_version")
     else:
         fail("build.py missing sync() method")
 
@@ -169,12 +170,14 @@ def check_package_yaml(cfg: dict[str, str], root_path: Path | None = None) -> No
     if "Version: $package_version" not in text and "Version: $tag" not in text:
         fail("package.yaml control block must specify 'Version: $package_version' or 'Version: $tag'")
     manifest_keys = ("flutter_version", "framework_revision", "framework_commit_date",
-                     "engine_revision", "dart_version", "devtools_version")
+                     "engine_revision", "dart_version", "devtools_version",
+                     "ndk_version", "compile_sdk", "target_sdk")
     for key in manifest_keys:
         if f'"{key}"' not in text:
             fail(f"package.yaml: manifest resource missing JSON key '{key}'")
     for var in ("$tag", "$framework_revision", "$framework_commit_date",
-                "$version", "$dart_version", "$devtools_version"):
+                "$version", "$dart_version", "$devtools_version",
+                "$ndk_version", "$compile_sdk", "$target_sdk"):
         if var not in text:
             fail(f"package.yaml: manifest resource missing template var '{var}'")
     if "FLUTTER_PREBUILT_ENGINE_VERSION=" in text:
@@ -204,9 +207,12 @@ def check_markdown_docs(cfg: dict[str, str], root_path: Path | None = None) -> N
             if found_tag != release_tag:
                 fail(f"{rel_path}: download URL tag mismatch: found '{found_tag}', expected '{release_tag}'")
 
-        # Check dart version in shields or table if present
-        if "3.12.0" in text and dart_version != "3.12.0":
-            fail(f"{rel_path}: Contains hardcoded '3.12.0' but expected '{dart_version}'")
+        # Check current Dart version reference in README (release notes legitimately
+        # reference historical dart versions, so they are not scanned here)
+        if rel_path == "README.md":
+            for dart_match in re.finditer(rf"Dart\s+({SEMVER_PATTERN})", text):
+                if dart_match.group(1) != dart_version:
+                    fail(f"{rel_path}: Dart version reference mismatch: found '{dart_match.group(1)}', expected '{dart_version}'")
 
         # Check package size if present
         if cfg.get("size") and "Size |" in text:
