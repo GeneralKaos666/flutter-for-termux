@@ -1,6 +1,7 @@
-aiohttp==3.11.14
-fire==0.7.0
+aiohttp==3.14.3
+fire==0.7.1
 loguru==0.7.3
-PyYAML==6.0.2
-GitPython==3.1.44
-requests==2.32.3
+PyYAML==6.0.3
+GitPython==3.1.62
+requests==2.34.2
+pytest==9.1.1
