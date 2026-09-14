@@ -397,6 +397,19 @@ patch_shebang_tool_backend() {
 	sed -i "1s|#!/usr/bin/env bash|#!${PREFIX:-/data/data/com.termux/files/usr}/bin/bash|" "$1"
 }
 
+patch_channel_stable() {
+	# Flutter derives `channel` from the local git branch (version.dart
+	# getBranchName). On a Termux install that branch is not an official
+	# channel, so flutter.version.json ends up with "[user-branch]" or the
+	# raw branch name instead of "stable". Pin it to stable; the recompiled
+	# flutter_tools.snapshot (step 13) then bakes this in permanently.
+	if grep -F -q "Termux: force stable channel" "$1"; then return 0; fi
+	grep -q "getBranchName(redactUnknownBranches: true)" "$1" || return 1
+	sed -i "s/final String channel = getBranchName(redactUnknownBranches: true);/final String channel = 'stable' \/* Termux: force stable channel *\/;/" "$1"
+}
+
+register_patch "channel_stable" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/version.dart" patch_channel_stable
+
 register_patch "shebang_flutter" "$FLUTTER_ROOT/bin/flutter" patch_shebang_flutter
 register_patch "shebang_dart" "$FLUTTER_ROOT/bin/dart" patch_shebang_dart
 register_patch "shebang_shared" "$FLUTTER_ROOT/bin/internal/shared.sh" patch_shebang_shared
