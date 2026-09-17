@@ -1264,17 +1264,34 @@ else
 	echo "  ✓ VM snapshots present"
 fi
 
-# 12. Create linux-x64 -> linux-arm64 symlinks for host platform detection
-# Flutter's getCurrentHostPlatform() in build_info.dart doesn't recognize
-# Termux as Linux (Platform.operatingSystem returns 'android'), so it falls
-# back to HostPlatform.linux_x64, causing gen_snapshot lookup to search
-# linux-x64/ instead of linux-arm64/. Create symlinks to resolve this.
+# 12.5. Provision linux-arm64 gen_snapshot for Android release/profile builds
+# flutter_tools resolves the AOT gen_snapshot for android targets to
+# <engine>/android-arm64-{release,profile}/linux-arm64/gen_snapshot
+# (getCurrentHostPlatform() returns linux_arm64 on Termux, see the
+# "Termux: Android host uses Linux artifacts" patch in build_info.dart).
+# Upstream only ships a linux-x64/ (x86_64, unrunnable on ARM64 Termux)
+# subdir there, so every release/profile APK build fails. Reuse the
+# self-built linux-arm64/gen_snapshot shipped in the deb (see BUILD_GUIDE:
+# Android gen_snapshot) by symlinking it in. Idempotent and re-runnable
+# (also repairs state after `flutter precache --android` re-downloads).
 echo "[12.5/13] Creating host platform symlinks..."
 ENG_ART=$FLUTTER_ROOT/bin/cache/artifacts/engine
 for dir in android-arm64-release android-arm64-profile; do
-	if [ -d "$ENG_ART/$dir/linux-arm64" ] && [ ! -e "$ENG_ART/$dir/linux-x64" ]; then
-		ln -sf linux-arm64 "$ENG_ART/$dir/linux-x64"
-		echo "  ✓ $dir/linux-x64 -> linux-arm64"
+	if [ ! -d "$ENG_ART/$dir" ]; then
+		echo "  ⚠ $dir missing (run flutter precache --android?), skipping"
+		continue
+	fi
+	if [ ! -f "$ENG_ART/linux-arm64/gen_snapshot" ]; then
+		echo "  ⚠ linux-arm64/gen_snapshot missing, skipping $dir"
+		continue
+	fi
+	if [ -e "$ENG_ART/$dir/linux-arm64" ] && [ ! -L "$ENG_ART/$dir/linux-arm64" ]; then
+		echo "  ⚠ $dir/linux-arm64 exists as a real directory, leaving untouched"
+	elif [ ! -e "$ENG_ART/$dir/linux-arm64" ]; then
+		ln -sf ../linux-arm64 "$ENG_ART/$dir/linux-arm64"
+		echo "  ✓ $dir/linux-arm64 -> ../linux-arm64"
+	else
+		echo "  ✓ $dir/linux-arm64 already present"
 	fi
 done
 # Also create top-level linux-x64 -> linux-arm64 symlink for general artifacts
