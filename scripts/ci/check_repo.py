@@ -6,6 +6,7 @@ GitHub-hosted runners for every PR. They guard the release/docs/scripts
 contracts that matter for this Termux Flutter build without attempting the
 multi-hour engine build.
 """
+
 from __future__ import annotations
 
 import re
@@ -63,7 +64,20 @@ def require_file(path: str) -> None:
 
 def check_markdown_fences() -> None:
     for path in sorted(ROOT.glob("**/*.md")):
-        if any(part in {".git", "flutter", "sysroot", "reference_termux_flutter", ".omx", ".omc", ".agents", "scratch"} for part in path.parts):
+        if any(
+            part
+            in {
+                ".git",
+                "flutter",
+                "sysroot",
+                "reference_termux_flutter",
+                ".omx",
+                ".omc",
+                ".agents",
+                "scratch",
+            }
+            for part in path.parts
+        ):
             continue
         if not path.is_file():
             continue
@@ -77,7 +91,20 @@ def check_markdown_fences() -> None:
 
 def check_markdown_no_control_characters() -> None:
     for path in sorted(ROOT.glob("**/*.md")):
-        if any(part in {".git", "flutter", "sysroot", "reference_termux_flutter", ".omx", ".omc", ".agents", "scratch"} for part in path.parts):
+        if any(
+            part
+            in {
+                ".git",
+                "flutter",
+                "sysroot",
+                "reference_termux_flutter",
+                ".omx",
+                ".omc",
+                ".agents",
+                "scratch",
+            }
+            for part in path.parts
+        ):
             continue
         if not path.is_file():
             continue
@@ -90,13 +117,28 @@ def check_markdown_no_control_characters() -> None:
             if ch == "\n":
                 line_no += 1
             elif ord(ch) < 32 and ch not in "\r\t":
-                fail(f"{path.relative_to(ROOT)}:L{line_no}: forbidden control character U+{ord(ch):04X}")
+                fail(
+                    f"{path.relative_to(ROOT)}:L{line_no}: forbidden control character U+{ord(ch):04X}"
+                )
 
 
 def check_markdown_links() -> None:
     link_pattern = re.compile(r"\[[^\]]+\]\(([^)\s]+\.md(?:#[^)]+)?)\)")
     for path in sorted(ROOT.glob("**/*.md")):
-        if any(part in {".git", "flutter", "sysroot", "reference_termux_flutter", ".omx", ".omc", ".agents", "scratch"} for part in path.parts):
+        if any(
+            part
+            in {
+                ".git",
+                "flutter",
+                "sysroot",
+                "reference_termux_flutter",
+                ".omx",
+                ".omc",
+                ".agents",
+                "scratch",
+            }
+            for part in path.parts
+        ):
             continue
         if not path.is_file():
             continue
@@ -108,7 +150,9 @@ def check_markdown_links() -> None:
             target = unquote(match.group(1).split("#", 1)[0])
             if "://" in target or target.startswith("#"):
                 continue
-            resolved = ((ROOT if target.startswith("/") else path.parent) / target.lstrip("/")).resolve()
+            resolved = (
+                (ROOT if target.startswith("/") else path.parent) / target.lstrip("/")
+            ).resolve()
             if not resolved.is_file():
                 try:
                     rel_path = path.relative_to(ROOT)
@@ -166,7 +210,9 @@ def check_yaml_files() -> None:
             fail(f"workflow has no jobs: {path.relative_to(ROOT)}")
         text = path.read_text(encoding="utf-8")
         if "self-hosted" in text and re.search(r"(?m)^\s*pull_request\s*:", text):
-            fail(f"self-hosted workflow must not run automatically on pull_request: {path.relative_to(ROOT)}")
+            fail(
+                f"self-hosted workflow must not run automatically on pull_request: {path.relative_to(ROOT)}"
+            )
 
     package = ROOT / "package.yaml"
     data = yaml.safe_load(package.read_text(encoding="utf-8"))
@@ -304,6 +350,7 @@ def check_sysroot_lock_contract() -> None:
         return
     try:
         import json
+
         data = json.loads(lock_file.read_text(encoding="utf-8"))
         arch_entry = data.get("aarch64") or data.get("arm64")
         if not isinstance(arch_entry, dict):
@@ -320,7 +367,16 @@ def check_sysroot_lock_contract() -> None:
             if not isinstance(pkg_info, dict):
                 fail(f"sysroot.lock.json package '{pkg_name}' is invalid")
                 continue
-            for field in ("name", "version", "url", "sha256", "size", "archive_path", "repo", "dist"):
+            for field in (
+                "name",
+                "version",
+                "url",
+                "sha256",
+                "size",
+                "archive_path",
+                "repo",
+                "dist",
+            ):
                 if field not in pkg_info:
                     fail(f"sysroot.lock.json package '{pkg_name}' missing required field '{field}'")
     except Exception as e:
@@ -344,6 +400,7 @@ def check_script_headers() -> None:
         "scripts/ci/check_repo.py",
         "scripts/ci/check_version_drift.py",
         "scripts/ci/verify_release_asset.py",
+        "scripts/ci/generate_versions.py",
     ]
     for py_rel in py_entrypoints:
         py_path = ROOT / py_rel
@@ -376,6 +433,7 @@ def check_test_modules_and_ci_steps() -> None:
 def check_repository_hygiene() -> None:
     """Ensure no scratch artifacts, test caches, backups, or receipts leak into the repository."""
     import subprocess
+
     gitignore = ROOT / ".gitignore"
     if not gitignore.is_file():
         fail("Missing .gitignore file")
