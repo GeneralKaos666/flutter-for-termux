@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 
 import ast
-import io
-import utils
-import string
 import base64
-import requests
-import tarfile
-import zipfile
 import hashlib
-import tempfile
+import io
+import string
 import subprocess
-from git import Repo
-from loguru import logger
+import tarfile
+import tempfile
+import zipfile
 from pathlib import Path
 
+import requests
+from git import Repo
+from loguru import logger
+
+import utils
 
 # Restricted expression evaluator for package.yaml `define:` values.
 # Replaces bare eval() to close the code-injection surface while keeping
@@ -269,7 +270,7 @@ def download(url, out, timeout=(10, 60)):
         return None
 
 
-class Output(object):
+class Output:
     def __init__(self, root, arch):
         self.any = None
         for it in utils.__MODE__:
@@ -282,7 +283,7 @@ class Output(object):
 
 
 @utils.record
-class Package(object):
+class Package:
     def __init__(self, root, arch, control, resource, define=None, **extra):
         root = Path(root).resolve()
         assert root.is_dir(), f'bad flutter root path: "{root}"'

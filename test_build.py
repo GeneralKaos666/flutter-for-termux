@@ -18,9 +18,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 import build
 import package
-import yaml
 
 
 class BuildTest(unittest.TestCase):

@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-import io
-import os
-import sys
-import json
-import re
 import datetime
+import hashlib
+import io
+import json
+import os
+import re
+import sys
 import tarfile
-import zipfile
 import tempfile
 import urllib.request
-import hashlib
+import zipfile
 from pathlib import Path
-
-
 
 SHA256_HEX_REGEX = re.compile(r"^[0-9a-fA-F]{64}$")
 INVENTORY_LINE_REGEX = re.compile(
@@ -153,12 +151,12 @@ def extract_deb_member_paths(deb_path, first_inventory_time: str | None = None) 
                 time_fmt = "%Y-%m-%d %H:%M:%S" if len(parts[1]) == 8 else "%Y-%m-%d %H:%M"
                 has_seconds = (len(parts[1]) == 8)
                 try:
-                    inv_dt = datetime.datetime.strptime(first_inventory_time, time_fmt).replace(tzinfo=datetime.timezone.utc)
+                    inv_dt = datetime.datetime.strptime(first_inventory_time, time_fmt).replace(tzinfo=datetime.UTC)
                     inv_epoch = int(inv_dt.timestamp())
                 except ValueError:
                     inv_epoch = None
 
-        tz = datetime.timezone.utc
+        tz = datetime.UTC
         tz_set = False
         time_fmt = "%Y-%m-%d %H:%M:%S" if has_seconds else "%Y-%m-%d %H:%M"
 
@@ -191,9 +189,9 @@ def extract_deb_member_paths(deb_path, first_inventory_time: str | None = None) 
                                 if -86400 < tz_seconds < 86400:
                                     tz = datetime.timezone(datetime.timedelta(seconds=tz_seconds))
                                 else:
-                                    tz = datetime.timezone.utc
+                                    tz = datetime.UTC
                             else:
-                                tz = datetime.timezone.utc
+                                tz = datetime.UTC
 
                         mtype = tar_member_type(member)
                         perm_str = format_tar_permissions(member.mode)
@@ -312,7 +310,7 @@ def main():
     target_tag = expected_tag
 
     if event_name == "release" and event_path and Path(event_path).exists():
-        with open(event_path, "r", encoding="utf-8") as f:
+        with open(event_path, encoding="utf-8") as f:
             event_data = json.load(f)
         release_tag = event_data.get("release", {}).get("tag_name")
         if release_tag and release_tag != expected_tag:
@@ -416,8 +414,6 @@ def main():
         download_path = Path(runner_temp) / expected_asset
         print(f"Downloading {asset_url} to {download_path}...")
         try:
-            import ssl
-            ctx = ssl.create_default_context()
             urllib.request.urlretrieve(asset_url, download_path)
         except Exception as e:
             print(f"Error: Failed to download asset: {e}")
@@ -906,8 +902,6 @@ def main():
 
     print(f"Downloading {asset_url} to {download_path}...")
     try:
-        import ssl
-        ctx = ssl.create_default_context()
         urllib.request.urlretrieve(asset_url, download_path)
     except Exception as e:
         print(f"Error: Failed to download asset: {e}")

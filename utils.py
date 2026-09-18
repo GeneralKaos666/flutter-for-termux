@@ -1,8 +1,9 @@
-import os
-import git
 import inspect
-from loguru import logger
+import os
 from functools import wraps
+
+import git
+from loguru import logger
 
 __ARCH__ = dict(arm='arm', arm64='aarch64', x64='x86_64', x86='i686')
 __MODE__ = ('release', 'debug', 'profile')

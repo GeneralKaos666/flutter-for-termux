@@ -271,7 +271,7 @@ def load_build_config() -> dict[str, object]:
     """
     path = ROOT / "build.toml"
     if not path.is_file():
-        fail(f"missing required file: build.toml")
+        fail("missing required file: build.toml")
         return {}
     if tomllib is None:
         fail("neither tomllib nor tomli is available to parse build.toml")

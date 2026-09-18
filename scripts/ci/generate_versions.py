@@ -49,19 +49,19 @@ def replacements(cfg: dict) -> list[tuple[str, str]]:
         (r'^export NDK_VERSION="[^"]*"', f'export NDK_VERSION="{ndk.get("version", "")}"'),
         (
             r'^export COMPILE_SDK="\$\{TERMUX_COMPILE_SDK:-[^}]*\}"',
-            'export COMPILE_SDK="${TERMUX_COMPILE_SDK:-%s}"' % android.get("compile_sdk", 36),
+            f'export COMPILE_SDK="${{TERMUX_COMPILE_SDK:-{android.get("compile_sdk", 36)}}}"',
         ),
         (
             r'^export TARGET_SDK="\$\{TERMUX_TARGET_SDK:-[^}]*\}"',
-            'export TARGET_SDK="${TERMUX_TARGET_SDK:-%s}"' % android.get("target_sdk", 36),
+            f'export TARGET_SDK="${{TERMUX_TARGET_SDK:-{android.get("target_sdk", 36)}}}"',
         ),
         (
             r'^export JAVA_PACKAGE="\$\{JAVA_PACKAGE:-[^}]*\}"',
-            'export JAVA_PACKAGE="${JAVA_PACKAGE:-%s}"' % installer.get("java", "openjdk-21"),
+            f'export JAVA_PACKAGE="${{JAVA_PACKAGE:-{installer.get("java", "openjdk-21")}}}"',
         ),
         (
             r'^export ZIP_TOOL="\$\{ZIP_TOOL:-[^}]*\}"',
-            'export ZIP_TOOL="${ZIP_TOOL:-%s}"' % installer.get("zip_tool", "7zip"),
+            f'export ZIP_TOOL="${{ZIP_TOOL:-{installer.get("zip_tool", "7zip")}}}"',
         ),
     ]
 
