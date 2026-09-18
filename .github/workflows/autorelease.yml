@@ -154,8 +154,11 @@ jobs:
             if [ -z "$old" ] || [ -z "$new" ] || [ "$old" = "$new" ]; then
               return
             fi
+            # Escape sed regex chars in $old (dots in versions, etc.)
+            local old_esc
+            old_esc=$(printf '%s' "$old" | sed -e 's/[][\/.^$*+?{}()|]/\\&/g')
             for f in "${FILES[@]}"; do
-              [ -f "$f" ] && sed -i "s/${old}/${new}/g" "$f"
+              [ -f "$f" ] && sed -i "s/${old_esc}/${new}/g" "$f"
             done
             [ -n "$field" ] && sed -i "s/^${field} = .*/${field} = '${new}'/" build.toml
           }
@@ -164,6 +167,7 @@ jobs:
           bump "$OLD_REV" "$NEW_REV" framework_revision
           bump "$OLD_DATE" "$NEW_DATE" framework_commit_date
           git diff --stat
+          git diff --check
 
       - name: Verify version sync before pushing
         if: steps.check.outputs.should_release == 'true'
@@ -173,6 +177,7 @@ jobs:
           python3 scripts/ci/check_version_drift.py --fix
           python3 scripts/ci/check_repo.py
           git diff --stat
+          git diff --check
 
       - name: Commit and push bump
         if: steps.check.outputs.should_release == 'true'
