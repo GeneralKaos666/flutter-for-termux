@@ -31,13 +31,13 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - name: Install Python requirements
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements.txt
 
       - name: Run unit tests
         run: python3 -m pytest test_build.py -v
 
   test-patch:
-    name: Verify engine patch applies to Flutter tag
+    name: Verify patches apply to Flutter tag
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -45,6 +45,15 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.12'
+
+      - name: Verify dart/skia patch syntax + symlink
+        run: |
+          set -euo pipefail
+          test -L patches/dart.new.patch
+          test "$(readlink patches/dart.new.patch)" = "dart.patch"
+          git apply --check patches/dart.patch
+          git apply --check patches/skia.patch
+          echo "dart/skia patches are valid; dart.new.patch symlink OK"
 
       - name: Read Flutter tag from build.toml
         id: tag

@@ -31,13 +31,23 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt pytest
+        run: python -m pip install -r requirements.txt
 
       - name: Python compile check
-        run: python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
+        run: |
+          set -euo pipefail
+          mapfile -t PY_FILES < <(git ls-files '*.py' ':!:flutter/*' ':!:sysroot/*')
+          python -m py_compile "${PY_FILES[@]}"
 
       - name: Run pytest unit tests
         run: pytest test_build.py
+
+      - name: Ruff lint Python
+        run: |
+          set -euo pipefail
+          pip install -q ruff==0.14.13
+          ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/
+          ruff format --check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ || true
 
       - name: Shell syntax check
         shell: bash
