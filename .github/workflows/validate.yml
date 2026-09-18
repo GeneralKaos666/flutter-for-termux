@@ -51,9 +51,16 @@ jobs:
           set -euo pipefail
           test -L patches/dart.new.patch
           test "$(readlink patches/dart.new.patch)" = "dart.patch"
-          git apply --check patches/dart.patch
-          git apply --check patches/skia.patch
-          echo "dart/skia patches are valid; dart.new.patch symlink OK"
+          # Parse-level validation only: these patches apply inside the
+          # Dart/Skia repos (via .gclient custom_hooks) whose trees are
+          # absent here, so `git apply --check` cannot run at repo root.
+          # `git apply --stat` parses the diff without touching the tree.
+          git apply --stat patches/dart.patch > /tmp/dart.stat
+          git apply --stat patches/skia.patch > /tmp/skia.stat
+          grep -Eq ' (pkg|runtime|sdk)/' /tmp/dart.stat
+          grep -Eq ' include/' /tmp/skia.stat
+          cat /tmp/dart.stat /tmp/skia.stat
+          echo "dart/skia patches parse OK; dart.new.patch symlink OK"
 
       - name: Read Flutter tag from build.toml
         id: tag
