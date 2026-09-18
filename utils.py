@@ -1,5 +1,4 @@
 import os
-import sys
 import git
 import inspect
 from loguru import logger
@@ -73,9 +72,9 @@ def recordm(func):
         logger.debug(f'{method}({logged_args})')
         try:
             return func(*args, **kwargs)
-        except Exception as e:
-            logger.exception(e)
-            sys.exit(1)
+        except Exception:
+            logger.exception(f'{method} failed')
+            raise
     return wrapper
 
 
