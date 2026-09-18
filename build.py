@@ -37,6 +37,12 @@ def gn_list(items):
     return f'[{quoted}]'
 
 
+def require_tools(*names):
+    missing = [n for n in names if shutil.which(n) is None]
+    if missing:
+        raise RuntimeError(f'missing required tools: {", ".join(missing)}')
+
+
 @utils.record
 class Build:
     @utils.recordm
@@ -55,8 +61,8 @@ class Build:
         arch = cfg['build'].get('arch')
         mode = cfg['build'].get('runtime')
         gclient = cfg['build'].get('gclient')
-        sysroot = cfg['sysroot']
-        syspath = sysroot.pop('path')
+        sysroot_cfg = dict(cfg['sysroot'])
+        syspath = sysroot_cfg.pop('path')
         package = cfg['package'].get('conf')
         release = cfg['package'].get('path')
         patches = cfg.get('patch')
@@ -82,7 +88,7 @@ class Build:
         self.repo = repo or 'https://github.com/flutter/flutter'
         self.arch = arch or 'arm64'
         self.mode = mode or 'debug'
-        self.sysroot = Sysroot(path=path/syspath, **sysroot)
+        self.sysroot = Sysroot(path=path/syspath, **sysroot_cfg)
         self.root = path/root
         self.gclient = path/gclient
         self.release = path/release
@@ -97,31 +103,34 @@ class Build:
         if isinstance(patches, dict):
             self.patches = {}
 
-            def patch(key):
-                return lambda: self.patch(**self.patches[key])
+            def patch(key, **kwargs):
+                return self.patch(**{**self.patches[key], **kwargs})
 
             for k, v in patches.items():
                 self.patches[k] = {
                     'file': path/v['file'],
                     'path': self.root/v['path']}
-                self.__dict__[f'patch_{k}'] = patch(k)
+                self.__dict__[f'patch_{k}'] = lambda k=k, **kw: patch(k, **kw)
 
     def config(self):
         info = (f'{k}\t: {v}' for k, v in self.__dict__.items() if k != 'package')
         logger.info('\n'+'\n'.join(info))
 
-    def clone(self, *, url: str = None, tag: str = None, out: str = None):
+    def clone(self, *, url: str = None, tag: str = None, out: str = None, force: bool = False):
         url = url or self.repo
         out = out or self.root
         tag = tag or self.tag
         progress = GitProgress()
 
-        if utils.flutter_tag(out) == tag:
+        if utils.flutter_tag(out) == tag and not force:
             logger.info('flutter exists, skip.')
             return
         elif os.path.isdir(out):
-            logger.info(f'moving {out} to {out}.old ...')
-            os.rename(out, f'{out}.old')
+            import datetime
+            stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+            backup = f'{out}.old.{stamp}'
+            logger.info(f'moving {out} to {backup} ...')
+            os.rename(out, backup)
 
         try:
             git.Repo.clone_from(
@@ -138,7 +147,8 @@ class Build:
 
         shutil.copy(cfg, os.path.join(src, '.gclient'))
         cmd = ['gclient', 'sync', '-DR', '--no-history']
-        subprocess.run(cmd, cwd=src, check=True, stdout=True, stderr=True)
+        logger.info(f'running: {" ".join(cmd)} (cwd={src})')
+        subprocess.run(cmd, cwd=src, check=True)
 
     def patch(self, *, file, path):
         repo = git.Repo(path)
@@ -205,7 +215,8 @@ class Build:
             '--gn-args',
             f'extra_cflags_cc={gn_list([f"-I{vulkan}", f"-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__", "-Wno-newline-eof"])}',
         ]
-        subprocess.run(cmd, cwd=root, check=True, stdout=True, stderr=True)
+        logger.info(f'running gn configure: arch={arch} mode={mode}')
+        subprocess.run(cmd, cwd=root, check=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
         root = root or self.root
@@ -220,7 +231,8 @@ class Build:
         ]
         if jobs:
             cmd.append(f'-j{jobs}')
-        subprocess.run(cmd, check=True, stdout=True, stderr=True)
+        logger.info(f'running: {" ".join(cmd)}')
+        subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
         conf = conf or self.package
@@ -249,6 +261,7 @@ class Build:
 
     # TODO: check gclient and ninja existence
     def __call__(self):
+        require_tools('gclient', 'ninja')
         self.config()
         self.clone()
         self.sync()

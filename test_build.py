@@ -79,9 +79,15 @@ class BuildTest(unittest.TestCase):
 
     def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
-        with open(os.path.join(patch_dir, 'dart.patch'), encoding='utf-8') as f:
+        dart_path = os.path.join(patch_dir, 'dart.patch')
+        new_path = os.path.join(patch_dir, 'dart.new.patch')
+        # dart.new.patch is a symlink to dart.patch (approved); accept both
+        # a real symlink and a plain duplicate for Windows-checkout compat.
+        if os.path.islink(new_path):
+            self.assertEqual(os.readlink(new_path), 'dart.patch')
+        with open(dart_path, encoding='utf-8') as f:
             dart_patch = f.read()
-        with open(os.path.join(patch_dir, 'dart.new.patch'), encoding='utf-8') as f:
+        with open(new_path, encoding='utf-8') as f:
             dart_new_patch = f.read()
 
         self.assertEqual(dart_patch, dart_new_patch)
@@ -205,6 +211,75 @@ class PackageManifestTest(unittest.TestCase):
                     'target_sdk': android['target_sdk'],
                 },
             )
+
+
+class SafeEvalTest(unittest.TestCase):
+    def test_legit_expressions_resolve(self):
+        from package import safe_eval
+
+        class Out:
+            any = '/tmp/any'
+            debug = '/tmp/debug'
+
+        g = {'version': 'abc123', 'output': Out(), 'distro': '/opt/flutter'}
+        self.assertEqual(safe_eval('"plain"', g), 'plain')
+        self.assertEqual(safe_eval('f\'https://x/{version}\'', g), 'https://x/abc123')
+        self.assertEqual(safe_eval('output.any', g), '/tmp/any')
+        self.assertEqual(safe_eval('f\'{distro}/bin/cache\'', g), '/opt/flutter/bin/cache')
+
+    def test_malicious_expressions_rejected(self):
+        from package import safe_eval
+
+        g = {'version': 'abc123'}
+        for expr in (
+            "__import__('os').system('id')",
+            "open('/etc/passwd').read()",
+            "(lambda: 1)()",
+            "[x for x in range(3)]",
+            "version.__class__",
+        ):
+            with self.assertRaises(ValueError, msg=expr):
+                safe_eval(expr, g)
+
+
+class RecordDecoratorTest(unittest.TestCase):
+    def test_record_reraises_instead_of_exit(self):
+        import utils
+
+        @utils.recordm
+        def boom():
+            raise RuntimeError('kaput')
+
+        with self.assertRaises(RuntimeError):
+            boom()
+
+
+class SysrootLockTest(unittest.TestCase):
+    def test_write_lock_schema(self):
+        import sysroot
+
+        metas = [{
+            'name': 'glib',
+            'version': '2.0',
+            'url': 'https://example.com/glib.deb',
+            'sha256': '0' * 64,
+            'size': 123,
+            'archive_path': 'pool/glib.deb',
+            'repo': 'https://example.com/',
+            'dist': 'stable',
+        }]
+        with tempfile.TemporaryDirectory() as tmp:
+            lock = Path(tmp, 'sysroot.lock.json')
+            sysroot._write_lock(lock, 'aarch64', metas, 'deadbeef')
+            data = json.loads(lock.read_text(encoding='utf-8'))
+            for key in ('aarch64', 'arm64'):
+                self.assertIn(key, data)
+                entry = data[key]
+                for req in ('arch', 'created_at', 'tree_hash', 'packages'):
+                    self.assertIn(req, entry)
+                pkg = entry['packages']['glib']
+                for field in ('name', 'version', 'url', 'sha256', 'size', 'archive_path', 'repo', 'dist'):
+                    self.assertIn(field, pkg)
 
 
 if __name__ == '__main__':

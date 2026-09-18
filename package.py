@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import ast
 import io
 import utils
 import string
@@ -13,6 +14,76 @@ import subprocess
 from git import Repo
 from loguru import logger
 from pathlib import Path
+
+
+# Restricted expression evaluator for package.yaml `define:` values.
+# Replaces bare eval() to close the code-injection surface while keeping
+# the existing template contract (string literals, f-strings, attribute
+# access such as output.any, and plain names from globals/defines).
+_SAFE_NODES = (
+    ast.Expression,
+    ast.Constant,
+    ast.Name,
+    ast.Load,
+    ast.Attribute,
+    ast.JoinedStr,
+    ast.FormattedValue,
+    ast.BinOp,
+    ast.Add,
+    ast.Mod,
+    ast.Mult,
+    ast.UnaryOp,
+    ast.UAdd,
+    ast.USub,
+    ast.BoolOp,
+    ast.And,
+    ast.Or,
+    ast.IfExp,
+    ast.Compare,
+    ast.Eq,
+    ast.NotEq,
+    ast.Tuple,
+    ast.List,
+    ast.Dict,
+    ast.Subscript,
+    ast.Slice,
+)
+
+
+def safe_eval(expr: str, globals_dict: dict, locals_dict: dict | None = None):
+    """Evaluate a package.yaml define expression with a constrained AST.
+
+    Allows literals, names, attribute access, f-strings, and simple
+    container/operator expressions. Rejects calls, imports, lambdas,
+    comprehensions, and dunder access.
+    """
+    if not isinstance(expr, str):
+        raise ValueError(f'bad define expression type: "{type(expr)}"')
+    try:
+        tree = ast.parse(expr, mode='eval')
+    except SyntaxError as e:
+        raise ValueError(f'bad define expression: "{expr}": {e}') from e
+    allowed = dict(globals_dict)
+    if locals_dict:
+        allowed.update(locals_dict)
+    for node in ast.walk(tree):
+        if not isinstance(node, _SAFE_NODES):
+            raise ValueError(
+                f'forbidden expression in define: "{expr}": {type(node).__name__}'
+            )
+        if isinstance(node, ast.Name) and node.id.startswith('__'):
+            raise ValueError(f'forbidden name in define: "{expr}": {node.id}')
+        if isinstance(node, ast.Attribute) and node.attr.startswith('__'):
+            raise ValueError(f'forbidden attribute in define: "{expr}": {node.attr}')
+        if isinstance(node, ast.Name) and node.id not in allowed and node.id not in (
+            'True', 'False', 'None',
+        ):
+            raise ValueError(f'unknown name in define: "{expr}": {node.id}')
+    return eval(  # noqa: S307 - AST allowlisted above, no builtins exposed
+        compile(tree, '<package-define>', 'eval'),
+        {'__builtins__': {}},
+        allowed,
+    )
 
 
 def explore_file(src: Path):
@@ -154,28 +225,48 @@ def base64_md5_file(path):
     return base64.b64encode(md5.digest()).decode('utf8')
 
 
-def download(url, out):
+def download(url, out, timeout=(10, 60)):
     assert url, 'bad url'
     assert out, 'bad out'
 
-    with requests.get(url, allow_redirects=True, stream=True) as resp:
-        if resp.status_code != 200:
-            return None
-        if hash := resp.headers.get('x-goog-hash'):
-            hash = dict([it.strip().split('=', 1) for it in hash.split(',')])
-        if (dst := Path(out)) and dst.is_dir():
-            dst = dst/url.split('?')[0].split('/')[-1]
-        if dst.is_file() and hash and (md5 := base64_md5_file(dst)):
-            if md5 == hash.get('md5'):
+    if (dst := Path(out)) and dst.is_dir():
+        dst = dst/url.split('?')[0].split('/')[-1]
+    try:
+        with requests.get(url, allow_redirects=True, stream=True, timeout=timeout) as resp:
+            if resp.status_code != 200:
+                logger.warning(f'download failed ({resp.status_code}): "{url}"')
+                return None
+            expected_md5 = None
+            if goog_hash := resp.headers.get('x-goog-hash'):
+                try:
+                    expected_md5 = dict(
+                        it.strip().split('=', 1) for it in goog_hash.split(',')
+                    ).get('md5')
+                except ValueError:
+                    expected_md5 = None
+            if dst.is_file() and expected_md5 and base64_md5_file(dst) == expected_md5:
+                logger.info(f'download cached: "{dst}"')
                 return dst
-        resp = requests.get(url)
-        # TODO: check md5
-        with open(dst, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                if not chunk:
-                    continue
-                f.write(chunk)
-        return dst
+            md5 = hashlib.md5()
+            with open(dst, 'wb') as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    md5.update(chunk)
+                    f.write(chunk)
+            if expected_md5:
+                actual_md5 = base64.b64encode(md5.digest()).decode('utf8')
+                if actual_md5 != expected_md5:
+                    logger.error(f'md5 mismatch for "{url}"')
+                    try:
+                        dst.unlink()
+                    except OSError:
+                        pass
+                    return None
+            return dst
+    except requests.RequestException as e:
+        logger.warning(f'download failed: "{url}": {e}')
+        return None
 
 
 class Output(object):
@@ -205,8 +296,8 @@ class Package(object):
         }
         self.globals.update(extra)
         self.defines = {
-            k: eval(v, self.globals) for k, v in define.items()
-        }
+            k: safe_eval(v, self.globals) for k, v in define.items()
+        } if define else {}
         self.control = control
         self.resource = resource
         self.__dict__.update(self.globals)
@@ -249,7 +340,7 @@ class Package(object):
         ext = {}
 
         for k, v in dep.items():
-            dep[k] = eval(v, self.globals, self.defines)
+            dep[k] = safe_eval(v, self.globals, self.defines)
 
         # expect None, str, int
         if isinstance(mod, str):
@@ -278,29 +369,31 @@ class Package(object):
             for it in emit(out, src, git):
                 yield it | ext
 
-    def test_resource(self, name=None):
+    def test_resource(self, name=None, dest_dir=None):
         if isinstance(name, str):
-            yield self.test_resource_internal(name)
+            yield self.test_resource_internal(name, dest_dir=dest_dir)
         elif isinstance(name, list):
             for it in name:
-                yield self.test_resource_internal(it)
+                yield self.test_resource_internal(it, dest_dir=dest_dir)
         elif not name:
             for it in self.resource.keys():
-                yield self.test_resource_internal(it)
+                yield self.test_resource_internal(it, dest_dir=dest_dir)
         else:
             raise ValueError(f'bad name: "{name}"')
 
-    def test_resource_internal(self, name):
+    def test_resource_internal(self, name, dest_dir=None):
         if not (data := self.resource.get(name)):
             raise ValueError(f'unknown resource name: "{name}"')
 
         if not (test := data.get('test', {})):
             return None
         deps = data.get('define', {}).items()
-        deps = {k: eval(v, self.globals, self.defines) for k, v in deps}
+        deps = {k: safe_eval(v, self.globals, self.defines) for k, v in deps}
         file = self.__format__(test['file'], **deps)
         path = self.__format__(test['path'], **deps)
-        if not (dest := download(file, Path('~/storage/downloads/1DMP/General').expanduser())):
+        dest_dir = Path(dest_dir).expanduser() if dest_dir else Path(tempfile.gettempdir())
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        if not (dest := download(file, dest_dir)):
             logger.warning(f'test file not found: "{file}"')
             return None
 
@@ -329,9 +422,7 @@ class Package(object):
 
             subprocess.run(
                     ['ar', 'rc', output, info, ctrl, data],
-                    check=True,
-                    stderr=True,
-                    stdout=True)
+                    check=True)
 
         logger.info(f'✓ package built: {output}')
 
