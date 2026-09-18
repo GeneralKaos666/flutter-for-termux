@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 
-import os
-import utils
-import json
-import hashlib
-import pathlib
 import asyncio
-import aiohttp
-import tempfile
-import subprocess
-import urllib.parse
 import datetime
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import tempfile
+import urllib.parse
+
+import aiohttp
 from loguru import logger
+
+import utils
 
 MAX_CONCURRENT_DOWNLOADS = 8
 DOWNLOAD_RETRIES = 3
@@ -175,7 +177,7 @@ def _write_lock(lock_path, arch, metas, tree_hash):
         }
     entry = {
         'arch': arch,
-        'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'created_at': datetime.datetime.now(datetime.UTC).isoformat(),
         'tree_hash': tree_hash,
         'packages': packages,
     }
@@ -246,8 +248,9 @@ class Sysroot:
 
 
 if __name__ == '__main__':
-    import fire
     import tomllib
+
+    import fire
 
     with open('build.toml', 'rb') as f:
         src = tomllib.load(f)
