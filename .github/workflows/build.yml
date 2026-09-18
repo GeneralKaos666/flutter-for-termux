@@ -2,6 +2,11 @@ name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      no-sccache:
+        description: 'Disable sccache (cache-poison escape hatch)'
+        required: false
+        default: 'false'
   workflow_run:
     workflows: ['CI']
     types: [completed]
@@ -43,6 +48,12 @@ jobs:
       - name: install python requirements
         run: python -m pip install -r requirements.txt
 
+      - name: Set up sccache
+        if: github.event.inputs.no-sccache != 'true'
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: 'v0.10.0'
+
       - name: Ensure depot_tools is available
         shell: bash
         run: |
@@ -76,7 +87,30 @@ jobs:
           echo "ANDROID_NDK=$NDK_DIR" >> "$GITHUB_ENV"
 
       - name: build flutter/toolchain + package deb
-        run: python build.py
+        env:
+          SCCACHE_GHA_ENABLED: 'true'
+          CMAKE_C_COMPILER_LAUNCHER: sccache
+          CMAKE_CXX_COMPILER_LAUNCHER: sccache
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.no-sccache }}" != "true" ]; then
+            sccache --show-stats || true
+          fi
+          python build.py
+          if [ "${{ github.event.inputs.no-sccache }}" != "true" ]; then
+            sccache --show-stats || true
+          fi
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: engine-build-logs
+          path: |
+            flutter/engine/src/out/**/*.log
+            **/*.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: parse tag
         id: parser
@@ -92,6 +126,13 @@ jobs:
           echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
           echo "$MSG" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release asset before publish
+        env:
+          LIGHTWEIGHT_CHECK: '1'
+        run: |
+          set -euo pipefail
+          python scripts/ci/verify_release_asset.py
 
       - name: release
         uses: softprops/action-gh-release@v2
