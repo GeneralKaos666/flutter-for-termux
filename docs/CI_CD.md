@@ -91,7 +91,7 @@ git diff --check
 - self-hosted workflows are not triggered by `pull_request`
 - `package.yaml` still packages `dart`, `dartvm`, `dartaotruntime`, and `post_install`
 - `post_install.sh` still contains the Flutter 3.44 `PLATFORM_ABI_LIST` and Android-host patches
-- installer defaults remain on Flutter 3.47.4 and NDK r29 for Termux installs
+- installer defaults remain on Flutter 3.47.5 and NDK r29 for Termux installs
 - release/download docs do not regress to stale 3.41.5 commands
 
 ## Full deb build
@@ -132,9 +132,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.47.4_aarch64.deb`
-- `flutter_3.47.4_aarch64.deb.sha256`
-- `flutter_3.47.4_aarch64.deb.size.txt`
+- `flutter_3.47.5_aarch64.deb`
+- `flutter_3.47.5_aarch64.deb.sha256`
+- `flutter_3.47.5_aarch64.deb.size.txt`
 
 ## Release policy
 
@@ -158,10 +158,10 @@ self-hosted **Build deb (self-hosted)** workflow instead.
 
 Manual workflow: **Device smoke (self-hosted)**
 
-Default input tests the published 3.47.4 release asset:
+Default input tests the published 3.47.5 release asset:
 
 ```text
-deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
+deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb
 expected_sha256: 6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800
 ```
 
@@ -262,5 +262,5 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb"
+  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb"
 ```

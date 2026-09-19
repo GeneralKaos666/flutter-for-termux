@@ -6,8 +6,8 @@
 # with build.toml when cutting a release.
 
 # Flutter release (matches [flutter] tag in build.toml)
-export FLUTTER_VERSION="3.47.4"
-export RELEASE_TAG="3.47.4"
+export FLUTTER_VERSION="3.47.5"
+export RELEASE_TAG="3.47.5"
 export EXPECTED_SHA256="6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800"
 
 # Android SDK (mumumusuc/termux-android-sdk apt package, release tag below)

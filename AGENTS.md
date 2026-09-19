@@ -83,7 +83,7 @@ git diff --check
 
 ## Gotchas
 
-1. **Version drift is enforced.** `scripts/ci/check_version_drift.py` and `check_repo.py` scan AGENTS.md, guides, installers, and post_install.sh — every `3.47.4` / `flutter_3.47.4_aarch64.deb` / patch path must match `build.toml [flutter] tag` or CI fails. `autorelease.yml` rewrites these files automatically on a bump, so don't fight the sed format. Use `check_version_drift.py --fix` to auto-rewrite from `build.toml`.
+1. **Version drift is enforced.** `scripts/ci/check_version_drift.py` and `check_repo.py` scan AGENTS.md, guides, installers, and post_install.sh — every `3.47.5` / `flutter_3.47.5_aarch64.deb` / patch path must match `build.toml [flutter] tag` or CI fails. `autorelease.yml` rewrites these files automatically on a bump, so don't fight the sed format. Use `check_version_drift.py --fix` to auto-rewrite from `build.toml`.
 2. **Only ARM64 works** for APK gen_snapshot. `arm` fails (32-bit BoringSSL shift overflow), `x64` fails (sysroot mismatch). Packaging is ARM64-only.
 3. **`utils.__MODE__ = ('release', 'debug', 'profile')`** — release first. `Output.any` picks the first existing `flutter/engine/src/out/linux_*_*` dir; it drives which dart-sdk snapshots get packaged. `debuild` asserts at least one output dir exists — build before you package.
 4. **`package.yaml` variables resolve with `safe_eval()`** (package.py) using constrained globals (`root`, `arch`, `output`, `version`, substitution defines). It allowlists literals, names, attribute access, and f-strings — keep template expressions constrained. `$version` is the engine revision from `bin/internal/engine.version`. Don't drop resource keys (`flutter`, `dart_sdk`, `artifacts`, `flutter_linux_gtk_*`, `flutter_patched_sdk*`, `executable`, `profile`, `stamps`, `manifest`) — `check_repo.py` asserts them.
@@ -117,6 +117,6 @@ flutter/engine/src/out/
 ## Environment
 
 - Host: Linux x86-64 (WSL2 Ubuntu locally, `ubuntu-latest` in CI), NDK r29, API 26
-- Target: aarch64, Flutter 3.47.4 (`build.toml [flutter] tag`)
+- Target: aarch64, Flutter 3.47.5 (`build.toml [flutter] tag`)
 - `flutter/` and `sysroot/` are gitignored build trees — never commit them
 - Use PowerShell (not Git Bash) for `adb push` to avoid path mangling

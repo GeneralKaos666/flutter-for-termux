@@ -1,6 +1,6 @@
-# Termux Flutter 3.47.4 Installation Guide
+# Termux Flutter 3.47.5 Installation Guide
 
-This guide covers `flutter_3.47.4_aarch64.deb`, targeting the following on ARM64 Termux:
+This guide covers `flutter_3.47.5_aarch64.deb`, targeting the following on ARM64 Termux:
 
 - `flutter doctor -v`
 - `flutter create`
@@ -12,9 +12,9 @@ This guide covers `flutter_3.47.4_aarch64.deb`, targeting the following on ARM64
 
 | Item | Value |
 |------|-------|
-| Flutter | 3.47.4 |
-| Flutter Tools Dart | 3.13.3 |
-| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.3 (`android_arm64`) |
+| Flutter | 3.47.5 |
+| Flutter Tools Dart | 3.13.4 |
+| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.4 (`android_arm64`) |
 
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
 | deb size | 617,009,288 bytes (about 588 MiB) |
@@ -46,11 +46,11 @@ pkg update -y
 pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
 
 cd ~
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
-sha256sum flutter_3.47.4_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb
+sha256sum flutter_3.47.5_aarch64.deb
 # Confirm the output matches: 6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800
 
-dpkg -i flutter_3.47.4_aarch64.deb
+dpkg -i flutter_3.47.5_aarch64.deb
 apt --fix-broken install -y
 
 # Required: dpkg only installs files; this step patches the Termux runtime.
@@ -94,7 +94,7 @@ flutter doctor -v
 
 Expected highlights:
 
-- `flutter --version` shows Flutter 3.47.4.
+- `flutter --version` shows Flutter 3.47.5.
 - `dart --version` shows `android_arm64` (Termux JIT Dart).
 - `dartvm --version` shows `linux_arm64` (engine VM).
 
@@ -182,7 +182,7 @@ If `flutter doctor` shows no connected device, it only means ADB is not connecte
 
 ### `PLATFORM_ABI_LIST` unresolved
 
-This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.4 deb, run:
+This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.5 deb, run:
 
 ```bash
 bash $PREFIX/share/flutter/post_install.sh

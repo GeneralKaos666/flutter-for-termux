@@ -1,10 +1,10 @@
 [flutter]
-tag = '3.47.4'
+tag = '3.47.5'
 repo = 'https://github.com/flutter/flutter'
 path = './flutter'
-dart_version = '3.13.3'
-framework_revision = '9584c6713b324636289d067944a46fd6b49df14b'
-framework_commit_date = '2026-09-10 15:25:10 -0700'
+dart_version = '3.13.4'
+framework_revision = '6a19cca56475dbfba1478ee68d7bd0c2ef891da1'
+framework_commit_date = '2026-09-17 11:13:22 -0700'
 devtools_version = '2.60.0'
 
 [ndk]
