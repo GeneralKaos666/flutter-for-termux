@@ -10,12 +10,12 @@ installs directly into a Termux `$PREFIX` and enables `flutter run`,
 
 | Component | Version |
 |-----------|---------|
-| Flutter   | 3.47.4 (stable) |
-| Dart      | 3.13.3 |
+| Flutter   | 3.47.5 (stable) |
+| Dart      | 3.13.4 |
 | Architecture | aarch64 (ARM64) only |
-| Package   | `flutter_3.47.4_aarch64.deb` |
+| Package   | `flutter_3.47.5_aarch64.deb` |
 
-Release asset: `flutter_3.47.4_aarch64.deb`
+Release asset: `flutter_3.47.5_aarch64.deb`
 
 - Size: **617,009,288 bytes (~588 MiB)**
 - SHA256: `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800`
@@ -23,8 +23,8 @@ Release asset: `flutter_3.47.4_aarch64.deb`
 Download:
 
 ```bash
-curl -fSL -o flutter_3.47.4_aarch64.deb \
-  https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
+curl -fSL -o flutter_3.47.5_aarch64.deb \
+  https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb
 ```
 
 ## Install
@@ -53,14 +53,14 @@ This installs the release package plus the on-device Android SDK/toolchain
 ### Manual install
 
 ```bash
-curl -fSL -o flutter_3.47.4_aarch64.deb \
-  https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.4/flutter_3.47.4_aarch64.deb
+curl -fSL -o flutter_3.47.5_aarch64.deb \
+  https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb
 
 # verify integrity
-sha256sum flutter_3.47.4_aarch64.deb
+sha256sum flutter_3.47.5_aarch64.deb
 # expected: 6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800
 
-apt install ./flutter_3.47.4_aarch64.deb
+apt install ./flutter_3.47.5_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 ```
 

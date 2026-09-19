@@ -110,7 +110,7 @@ python3 build.py build --arch=arm64 --mode=debug --jobs=24
 python3 build.py debuild --arch=arm64
 ```
 
-Output: `release/flutter_3.47.4_aarch64.deb`
+Output: `release/flutter_3.47.5_aarch64.deb`
 
 ---
 
@@ -231,11 +231,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.47.4_aarch64.deb /sdcard/Download/
+adb push flutter_3.47.5_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.47.4_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.47.5_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -280,13 +280,13 @@ Confirm that the version numbers in the following files are consistent:
 
 ```bash
 # Final artifact location
-release/flutter_3.47.4_aarch64.deb
+release/flutter_3.47.5_aarch64.deb
 ```
 
 ### 3. Upload to GitHub Releases
 
-1. Create a new Release: `3.47.4`
-2. Upload the deb file: `flutter_3.47.4_aarch64.deb`
+1. Create a new Release: `3.47.5`
+2. Upload the deb file: `flutter_3.47.5_aarch64.deb`
 3. Fill in the Release Notes
 
 ### 4. Verify the One-Click Install Script
@@ -363,7 +363,7 @@ flutter-for-termux/
 ## Update Log
 
 ### 2026-06-01
-- Updated this document to the Flutter 3.47.4 / Dart 3.13.3 state
+- Updated this document to the Flutter 3.47.5 / Dart 3.13.4 state
 - Added `scripts/ci`, `scripts/device`, GitHub Actions and release metadata check
 - Changed the testing process to ARM64 APK + Linux release smoke
 
