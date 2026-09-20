@@ -222,8 +222,9 @@ def check_markdown_docs(cfg: dict[str, str], root_path: Path | None = None) -> N
 
         # Check for release download URLs tag consistency
         url_matches = re.findall(r"releases/download/([^/]+)/", text)
+        allowed_tag_vars = {"${TAG}", "$TAG", "${RELEASE_TAG}", "$RELEASE_TAG"}
         for found_tag in url_matches:
-            if found_tag != release_tag:
+            if found_tag != release_tag and found_tag not in allowed_tag_vars:
                 fail(f"{rel_path}: download URL tag mismatch: found '{found_tag}', expected '{release_tag}'")
 
         # Check current Dart version reference in README (release notes legitimately

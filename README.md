@@ -27,7 +27,7 @@ Download:
 TAG=3.47.5
 PKG_REL=1
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
-BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/"
+BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
 curl -fSL -o "$DEB" "${BASE_URL}${DEB}"
 curl -fSL -o "${DEB}.sha256" "${BASE_URL}${DEB}.sha256"
@@ -63,7 +63,7 @@ This installs the release package plus the on-device Android SDK/toolchain
 TAG=3.47.5
 PKG_REL=1
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
-BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/"
+BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
 curl -fSL -o "$DEB" "${BASE_URL}${DEB}"
 curl -fSL -o "${DEB}.sha256" "${BASE_URL}${DEB}.sha256"

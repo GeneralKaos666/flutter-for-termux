@@ -131,9 +131,11 @@ jobs:
         run: |
           # Artifact path derived from build output
           DEB=$(python -c "import build; print(build.Build().output('$ARCH'))")
+          PACKAGE_VERSION=$(python -c "import build; print(build.Build().package_version)")
           test -f "$DEB"
           sha256sum "$DEB" | tee "${DEB}.sha256"
           stat -c '%s' "$DEB" | tee "${DEB}.size.txt"
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
 
       - name: Generate build metadata
@@ -154,7 +156,7 @@ jobs:
 
           cat <<EOF > "$METADATA_FILE"
           {
-            "version": "${FLUTTER_VERSION}",
+            "version": "${{ steps.artifact.outputs.package_version }}",
             "arch": "${ARCH}",
             "run_id": "${{ github.run_id }}",
             "build_number": "${{ github.run_number }}",
@@ -170,7 +172,7 @@ jobs:
           cat <<EOF > "$EVIDENCE_FILE"
           {
             "type": "build_evidence",
-            "version": "${FLUTTER_VERSION}",
+            "version": "${{ steps.artifact.outputs.package_version }}",
             "arch": "${ARCH}",
             "run_id": "${{ github.run_id }}",
             "build_number": "${{ github.run_number }}",
@@ -200,4 +202,3 @@ jobs:
             build_evidence.json
           retention-days: 90
           if-no-files-found: error
-

@@ -126,6 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           DEB=$(python -c "import build; print(build.Build().output('arm64'))")
+          PACKAGE_VERSION=$(python -c "import build; print(build.Build().package_version)")
           test -f "$DEB"
           sha256sum "$DEB" | tee "${DEB}.sha256"
           stat -c '%s' "$DEB" | tee "${DEB}.size.txt"
@@ -134,35 +135,59 @@ jobs:
           NOW_EPOCH=$(date +%s)
           START_EPOCH="${BUILD_START_EPOCH:-$NOW_EPOCH}"
           BUILD_DURATION=$((NOW_EPOCH - START_EPOCH))
-          cat <<EOF > build_metadata.json
-          {
-            "version": "${{ steps.parser.outputs.TAG }}",
-            "arch": "arm64",
-            "run_id": "${{ github.run_id }}",
-            "build_number": "${{ github.run_number }}",
-            "source_commit": "${{ github.sha }}",
-            "tree_sha": "${TREE_SHA}",
-            "sha256": "$(awk '{print $1}' "${DEB}.sha256")",
-            "size_bytes": $(cat "${DEB}.size.txt"),
-            "build_duration_seconds": ${BUILD_DURATION}
-          }
-          EOF
+          DEB_SHA=$(awk '{print $1}' "${DEB}.sha256")
+          DEB_SIZE=$(cat "${DEB}.size.txt")
           INVENTORY_COUNT=$(wc -l < inventory.txt)
-          cat <<EOF > build_evidence.json
-          {
-            "type": "build_evidence",
-            "version": "${{ steps.parser.outputs.TAG }}",
-            "arch": "arm64",
-            "run_id": "${{ github.run_id }}",
-            "build_number": "${{ github.run_number }}",
-            "source_commit": "${{ github.sha }}",
-            "tree_sha": "${TREE_SHA}",
-            "deb_sha256": "$(awk '{print $1}' "${DEB}.sha256")",
-            "deb_size_bytes": $(cat "${DEB}.size.txt"),
-            "inventory_file_count": ${INVENTORY_COUNT},
-            "build_duration_seconds": ${BUILD_DURATION}
+          export TAG="${{ steps.parser.outputs.TAG }}"
+          export PACKAGE_VERSION
+          export RUN_ID="${{ github.run_id }}"
+          export BUILD_NUMBER="${{ github.run_number }}"
+          export SOURCE_COMMIT="${{ github.sha }}"
+          export TREE_SHA DEB_SHA DEB_SIZE BUILD_DURATION INVENTORY_COUNT
+          python - <<'PY'
+          import json
+          import os
+
+          package_version = os.environ["PACKAGE_VERSION"]
+          run_id = os.environ["RUN_ID"]
+          build_number = os.environ["BUILD_NUMBER"]
+          source_commit = os.environ["SOURCE_COMMIT"]
+          tree_sha = os.environ["TREE_SHA"]
+          deb_sha = os.environ["DEB_SHA"]
+          deb_size = int(os.environ["DEB_SIZE"])
+          build_duration = int(os.environ["BUILD_DURATION"])
+          inventory_count = int(os.environ["INVENTORY_COUNT"])
+
+          metadata = {
+              "version": package_version,
+              "arch": "arm64",
+              "run_id": run_id,
+              "build_number": build_number,
+              "source_commit": source_commit,
+              "tree_sha": tree_sha,
+              "sha256": deb_sha,
+              "size_bytes": deb_size,
+              "build_duration_seconds": build_duration,
           }
-          EOF
+          evidence = {
+              "type": "build_evidence",
+              "version": package_version,
+              "arch": "arm64",
+              "run_id": run_id,
+              "build_number": build_number,
+              "source_commit": source_commit,
+              "tree_sha": tree_sha,
+              "deb_sha256": deb_sha,
+              "deb_size_bytes": deb_size,
+              "inventory_file_count": inventory_count,
+              "build_duration_seconds": build_duration,
+          }
+
+          with open("build_metadata.json", "w", encoding="utf-8") as f:
+              json.dump(metadata, f, indent=2)
+          with open("build_evidence.json", "w", encoding="utf-8") as f:
+              json.dump(evidence, f, indent=2)
+          PY
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
 
       - name: last commit message
@@ -180,7 +205,59 @@ jobs:
           set -euo pipefail
           python scripts/ci/verify_release_asset.py
 
+      - name: Check release asset immutability
+        id: release_guard
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export TAG="${{ steps.parser.outputs.TAG }}"
+          export REPOSITORY="${{ github.repository }}"
+          export DEB_NAME="$(basename '${{ steps.artifact.outputs.deb }}')"
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ["REPOSITORY"]
+          tag = os.environ["TAG"]
+          deb_name = os.environ["DEB_NAME"]
+          token = os.environ.get("GITHUB_TOKEN", "")
+          out_file = os.environ["GITHUB_OUTPUT"]
+          url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          if token:
+              headers["Authorization"] = "Bearer " + token
+
+          req = urllib.request.Request(url, headers=headers)
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  release = json.loads(resp.read().decode("utf-8"))
+          except urllib.error.HTTPError as e:
+              if e.code == 404:
+                  with open(out_file, "a", encoding="utf-8") as f:
+                      f.write("should_publish=true\n")
+                  print("No existing release found for tag; publish is allowed.")
+                  raise SystemExit(0)
+              raise
+
+          assets = {asset.get("name", "") for asset in release.get("assets", [])}
+          should_publish = deb_name not in assets
+          with open(out_file, "a", encoding="utf-8") as f:
+              f.write(f"should_publish={'true' if should_publish else 'false'}\n")
+          if should_publish:
+              print(f"Release exists but primary asset '{deb_name}' is absent; publish is allowed.")
+          else:
+              print(f"Primary asset '{deb_name}' already exists on release tag {tag}; skipping publish to preserve immutability.")
+          PY
+
       - name: release
+        if: steps.release_guard.outputs.should_publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.parser.outputs.TAG }}
