@@ -270,8 +270,15 @@ def main():
         config = tomllib.load(f)
 
     flutter_cfg = config.get("flutter", {})
+    package_cfg = config.get("package", {})
     expected_tag = flutter_cfg.get("release_tag") or flutter_cfg.get("tag")
-    expected_asset = flutter_cfg.get("asset_name") or (f"flutter_{expected_tag}_aarch64.deb" if expected_tag else None)
+    pkg_rel = str(package_cfg.get("pkg_rel") or "").strip()
+    expected_package_version = None
+    default_asset = None
+    if expected_tag:
+        expected_package_version = f"{expected_tag}-{pkg_rel}" if pkg_rel else str(expected_tag)
+        default_asset = f"flutter_{expected_package_version}_aarch64.deb"
+    expected_asset = flutter_cfg.get("asset_name") or default_asset
     expected_sha256 = flutter_cfg.get("sha256")
     expected_size = flutter_cfg.get("size")
 
@@ -566,10 +573,14 @@ def main():
                     s = s[:-len("-termux")]
                 return s
 
-            expected_ver = _normalize_ver(expected_tag)
+            expected_ver = _normalize_ver(expected_package_version or expected_tag)
+            expected_legacy_ver = _normalize_ver(expected_tag)
             meta_ver = _normalize_ver(meta_data["version"])
-            if meta_ver != expected_ver:
-                print(f"Error: build_metadata.json version mismatch! Expected {expected_ver}, got {meta_ver}")
+            if meta_ver not in (expected_ver, expected_legacy_ver):
+                print(
+                    "Error: build_metadata.json version mismatch! "
+                    f"Expected {expected_ver} (or legacy {expected_legacy_ver}), got {meta_ver}"
+                )
                 sys.exit(1)
 
             # Validate arch
@@ -777,8 +788,11 @@ def main():
                 print(f"Error: build_evidence.json type mismatch! Expected 'build_evidence', got '{b_ev_data.get('type')}'")
                 sys.exit(1)
             b_ev_ver = _normalize_ver(b_ev_data.get("version", ""))
-            if b_ev_ver != expected_ver:
-                print(f"Error: build_evidence.json version mismatch! Expected {expected_ver}, got {b_ev_ver}")
+            if b_ev_ver not in (expected_ver, expected_legacy_ver):
+                print(
+                    "Error: build_evidence.json version mismatch! "
+                    f"Expected {expected_ver} (or legacy {expected_legacy_ver}), got {b_ev_ver}"
+                )
                 sys.exit(1)
             b_ev_arch = str(b_ev_data.get("arch", "")).lower()
             if b_ev_arch not in ("arm64", "aarch64") or b_ev_arch != meta_arch:

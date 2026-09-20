@@ -78,6 +78,12 @@ class BuildTest(unittest.TestCase):
             runtime = tomllib.load(f)['build'].get('runtime')
         self.assertEqual(self.instance.mode, runtime or ['debug'])
 
+    def test_output_uses_package_version_suffix(self):
+        pkg_rel = str(self.instance.pkg_rel or '').strip()
+        expected_version = f'{self.instance.tag}-{pkg_rel}' if pkg_rel else self.instance.tag
+        output_name = Path(self.instance.output('arm64')).name
+        self.assertEqual(output_name, f'flutter_{expected_version}_aarch64.deb')
+
     def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
         dart_path = os.path.join(patch_dir, 'dart.patch')
@@ -212,6 +218,34 @@ class PackageManifestTest(unittest.TestCase):
                     'target_sdk': android['target_sdk'],
                 },
             )
+
+    def test_control_version_uses_package_revision(self):
+        flutter = self.cfg['flutter']
+        package_cfg = self.cfg.get('package', {})
+        pkg_rel = str(package_cfg.get('pkg_rel') or '').strip()
+        package_version = f"{flutter['tag']}-{pkg_rel}" if pkg_rel else flutter['tag']
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
+            release_out.mkdir(parents=True)
+
+            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+                src = yaml.safe_load(f)
+
+            with (
+                patch('package.utils.flutter_tag', return_value=flutter['tag']),
+                patch('package.utils.engine_version', return_value='engine_revision_mock'),
+            ):
+                pkg = package.Package(
+                    root=str(root),
+                    arch='arm64',
+                    package_version=package_version,
+                    **src,
+                )
+
+            control = pkg.gen_control()['src'].decode('utf-8')
+            self.assertIn(f'Version: {package_version}', control)
 
 
 class SafeEvalTest(unittest.TestCase):

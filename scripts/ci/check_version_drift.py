@@ -41,6 +41,7 @@ INSTALLER_SCRIPTS = [
     "scripts/test/gh_e2e_test.sh",
 ]
 SEMVER_PATTERN = r"\d+\.\d+\.\d+"
+DEB_NAME_PATTERN = rf"flutter_{SEMVER_PATTERN}(?:-[^/\s`\"']+)?_aarch64\.deb"
 
 
 def fail(msg: str) -> None:
@@ -57,6 +58,18 @@ def replace_line_value(text: str, key: str, value: str) -> tuple[str, int]:
 
 def replace_default_var_value(text: str, key: str, value: str) -> tuple[str, int]:
     return re.subn(rf'(\$\{{\s*{re.escape(key)}\s*:-){SEMVER_PATTERN}(}})', rf'\g<1>{value}\g<2>', text)
+
+
+def replace_line_int_value(text: str, key: str, value: str) -> tuple[str, int]:
+    return re.subn(
+        rf'(?m)^(\s*{re.escape(key)}\s*=\s*["\']?)\d+(["\']?)',
+        rf'\g<1>{value}\g<2>',
+        text,
+    )
+
+
+def replace_default_var_int_value(text: str, key: str, value: str) -> tuple[str, int]:
+    return re.subn(rf'(\$\{{\s*{re.escape(key)}\s*:-)\d+(}})', rf'\g<1>{value}\g<2>', text)
 
 
 def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) -> list[str]:
@@ -82,14 +95,16 @@ def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) ->
             rf"\g<1>{release_tag}\g<2>",
             text,
         )
-        text = re.sub(rf"flutter_{SEMVER_PATTERN}_aarch64\.deb", asset_name, text)
+        text = re.sub(DEB_NAME_PATTERN, asset_name, text)
         text = re.sub(rf"patches/{SEMVER_PATTERN}/", f"patches/{tag}/", text)
         text = re.sub(r"Target:\s*aarch64,\s*Flutter\s+[0-9.]+", f"Target: aarch64, Flutter {tag}", text)
         text = re.sub(r"(?m)^(\|\s*Flutter tag\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{tag}\g<2>", text)
         text = re.sub(r"(?m)^(\|\s*Package\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{asset_name}\g<2>", text)
         text = replace_line_value(text, "FLUTTER_VERSION", tag)[0]
+        text = replace_line_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
         text = replace_line_value(text, "RELEASE_TAG", release_tag)[0]
         text = replace_default_var_value(text, "FLUTTER_VERSION", tag)[0]
+        text = replace_default_var_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
         text = replace_default_var_value(text, "RELEASE_TAG", release_tag)[0]
         text = replace_line_value(text, "CANONICAL_FLUTTER_VER", tag)[0]
         text = replace_line_value(text, "EXP_VER", tag)[0]
@@ -126,6 +141,8 @@ def load_build_config(root_path: Path | None = None) -> dict[str, str]:
     sha256 = flutter_cfg.get("sha256", "")
     size = flutter_cfg.get("size", "")
     asset_name = flutter_cfg.get("asset_name", "")
+    package_cfg = data.get("package", {})
+    pkg_rel = str(package_cfg.get("pkg_rel", "") or "")
 
     if not tag:
         fail("build.toml [flutter] missing 'tag'")
@@ -140,7 +157,8 @@ def load_build_config(root_path: Path | None = None) -> dict[str, str]:
         "devtools_version": str(devtools_version),
         "sha256": str(sha256),
         "size": str(size) if size else "",
-        "asset_name": str(asset_name) or f"flutter_{tag}_aarch64.deb",
+        "pkg_rel": pkg_rel,
+        "asset_name": str(asset_name) or (f"flutter_{tag}-{pkg_rel}_aarch64.deb" if pkg_rel else f"flutter_{tag}_aarch64.deb"),
     }
 
 
@@ -204,8 +222,9 @@ def check_markdown_docs(cfg: dict[str, str], root_path: Path | None = None) -> N
 
         # Check for release download URLs tag consistency
         url_matches = re.findall(r"releases/download/([^/]+)/", text)
+        allowed_tag_vars = {"${TAG}", "$TAG", "${RELEASE_TAG}", "$RELEASE_TAG"}
         for found_tag in url_matches:
-            if found_tag != release_tag:
+            if found_tag != release_tag and found_tag not in allowed_tag_vars:
                 fail(f"{rel_path}: download URL tag mismatch: found '{found_tag}', expected '{release_tag}'")
 
         # Check current Dart version reference in README (release notes legitimately
