@@ -8,7 +8,7 @@ This document explains how to build a Flutter deb package that includes Android 
 |------|----|
 | Flutter tag | `3.47.5` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
-| Package | `flutter_3.47.5_aarch64.deb` |
+| Package | `flutter_3.47.5-1_aarch64.deb` |
 | Package size | 617,009,288 bytes (about 588 MiB) |
 | SHA256 | `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
@@ -192,7 +192,7 @@ python3 build.py debuild --arch=arm64
 
 After the build completes, the deb package is located at:
 ```
-release/flutter_3.47.5_aarch64.deb
+release/flutter_3.47.5-1_aarch64.deb
 ```
 
 ## deb Package Contents
@@ -274,7 +274,7 @@ The Flutter Engine source is about 30GB and the build output about 20GB, so you 
 After installing the deb, run the following in Termux:
 
 ```bash
-dpkg -i flutter_3.47.5_aarch64.deb
+dpkg -i flutter_3.47.5-1_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
