@@ -20,7 +20,7 @@ source "$(dirname "$0")/lib_common.sh" || {
 parse_installer_args "$@"
 
 trap print_summary EXIT
-FLUTTER_DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/flutter_${FLUTTER_VERSION}_aarch64.deb"
+FLUTTER_DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${FLUTTER_DEB_NAME}"
 
 echo -e "${BLUE}"
 echo "╔═══════════════════════════════════════════════════════════╗"
@@ -49,7 +49,7 @@ echo -e "${GREEN}[3/${TOTAL_STEPS}]${NC} Downloading Flutter SDK..."
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"; print_summary' EXIT
 cd "$WORK_DIR"
-FLUTTER_DEB="$WORK_DIR/flutter_${FLUTTER_VERSION}_aarch64.deb"
+FLUTTER_DEB="$WORK_DIR/${FLUTTER_DEB_NAME}"
 if [ ! -f "$FLUTTER_DEB" ]; then
 	wget -q --show-progress "$FLUTTER_DEB_URL" -O "$FLUTTER_DEB" || {
 		record_stage download failed

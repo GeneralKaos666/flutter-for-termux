@@ -270,8 +270,14 @@ def main():
         config = tomllib.load(f)
 
     flutter_cfg = config.get("flutter", {})
+    package_cfg = config.get("package", {})
     expected_tag = flutter_cfg.get("release_tag") or flutter_cfg.get("tag")
-    expected_asset = flutter_cfg.get("asset_name") or (f"flutter_{expected_tag}_aarch64.deb" if expected_tag else None)
+    pkg_rel = str(package_cfg.get("pkg_rel") or "").strip()
+    default_asset = None
+    if expected_tag:
+        package_version = f"{expected_tag}-{pkg_rel}" if pkg_rel else str(expected_tag)
+        default_asset = f"flutter_{package_version}_aarch64.deb"
+    expected_asset = flutter_cfg.get("asset_name") or default_asset
     expected_sha256 = flutter_cfg.get("sha256")
     expected_size = flutter_cfg.get("size")
 

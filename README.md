@@ -13,18 +13,25 @@ installs directly into a Termux `$PREFIX` and enables `flutter run`,
 | Flutter   | 3.47.5 (stable) |
 | Dart      | 3.13.4 |
 | Architecture | aarch64 (ARM64) only |
-| Package   | `flutter_3.47.5_aarch64.deb` |
+| Package   | `flutter_3.47.5-1_aarch64.deb` |
 
-Release asset: `flutter_3.47.5_aarch64.deb`
-
-- Size: **617,009,288 bytes (~588 MiB)**
-- SHA256: `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800`
+Release assets include:
+- `flutter_<tag>-<pkg_rel>_aarch64.deb`
+- `flutter_<tag>-<pkg_rel>_aarch64.deb.sha256`
+- `flutter_<tag>-<pkg_rel>_aarch64.deb.size.txt`
+- `inventory.txt`, `build_metadata.json`, `build_evidence.json`
 
 Download:
 
 ```bash
-curl -fSL -o flutter_3.47.5_aarch64.deb \
-  https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb
+TAG=3.47.5
+PKG_REL=1
+DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
+BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/"
+
+curl -fSL -o "$DEB" "${BASE_URL}${DEB}"
+curl -fSL -o "${DEB}.sha256" "${BASE_URL}${DEB}.sha256"
+sha256sum -c "${DEB}.sha256"
 ```
 
 ## Install
@@ -53,14 +60,20 @@ This installs the release package plus the on-device Android SDK/toolchain
 ### Manual install
 
 ```bash
-curl -fSL -o flutter_3.47.5_aarch64.deb \
-  https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/flutter_3.47.5_aarch64.deb
+TAG=3.47.5
+PKG_REL=1
+DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
+BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.5/"
+
+curl -fSL -o "$DEB" "${BASE_URL}${DEB}"
+curl -fSL -o "${DEB}.sha256" "${BASE_URL}${DEB}.sha256"
+curl -fSL -o "${DEB}.size.txt" "${BASE_URL}${DEB}.size.txt"
 
 # verify integrity
-sha256sum flutter_3.47.5_aarch64.deb
-# expected: 6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800
+sha256sum -c "${DEB}.sha256"
+test "$(cat "${DEB}.size.txt")" = "$(stat -c '%s' "$DEB")"
 
-apt install ./flutter_3.47.5_aarch64.deb
+apt install "./${DEB}"
 bash $PREFIX/share/flutter/post_install.sh
 ```
 

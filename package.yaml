@@ -9,7 +9,7 @@ define:
 
 control:
   Package: flutter
-  Version: $tag
+  Version: $package_version
   Architecture: $architecture
   Maintainer: mumumusuc <mumumusuc@gmail.com>
   Pre-Depends: x11-repo

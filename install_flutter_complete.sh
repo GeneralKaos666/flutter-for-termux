@@ -452,7 +452,7 @@ mkdir -p "$WORK_DIR/apt_staging"
 
 # Pre-download and verify all packages (Staging Phase)
 echo "Pre-downloading and verifying all packages..."
-FLUTTER_DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/flutter_${FLUTTER_VERSION}_aarch64.deb"
+FLUTTER_DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${FLUTTER_DEB_NAME}"
 
 
 # Snapshot existing package state for rollback
@@ -520,7 +520,7 @@ if [ "$ANDROID_SDK_WAS_INSTALLED" = true ]; then
 	fi
 fi
 
-FLUTTER_DEB="$WORK_DIR/flutter_${FLUTTER_VERSION}_aarch64.deb"
+FLUTTER_DEB="$WORK_DIR/${FLUTTER_DEB_NAME}"
 ANDROID_SDK_DEB="$WORK_DIR/android-sdk_35.0.0_aarch64.deb"
 NDK_ARCHIVE="$WORK_DIR/android-ndk-r29-aarch64.tar.xz"
 
@@ -620,7 +620,7 @@ FLUTTER_ROOT="$PREFIX/opt/flutter"
 DART_SDK=$FLUTTER_ROOT/bin/cache/dart-sdk
 if [ ! -x "$DART_SDK/bin/dartvm" ]; then
 	echo -e "${RED}ERROR: Dart VM binary missing: $DART_SDK/bin/dartvm${NC}"
-	echo "Dart 3.10+ requires dartvm next to dart. Re-download the fixed flutter_${FLUTTER_VERSION}_aarch64.deb release."
+	echo "Dart 3.10+ requires dartvm next to dart. Re-download the fixed ${FLUTTER_DEB_NAME} release."
 	INSTALL_FAILED=true
 	record_stage integrity failed
 	exit 30

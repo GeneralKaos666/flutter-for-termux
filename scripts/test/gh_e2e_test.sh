@@ -12,8 +12,9 @@ export HOME=/data/data/com.termux/files/home
 export TMPDIR=$PREFIX/tmp
 export RELEASE_TAG=${RELEASE_TAG:-3.47.5}
 export FLUTTER_VERSION=${FLUTTER_VERSION:-3.47.5}
+export FLUTTER_PKG_REL=${FLUTTER_PKG_REL:-1}
 export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800}}
-export DEB_NAME="flutter_${FLUTTER_VERSION}_aarch64.deb"
+export DEB_NAME=${DEB_NAME:-"flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL}_aarch64.deb"}
 export DEB_URL=${DEB_URL:-"https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${DEB_NAME}"}
 
 source "$(dirname "$0")/../install/lib_common.sh" || {

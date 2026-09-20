@@ -67,6 +67,7 @@ class Build:
         syspath = sysroot_cfg.pop('path')
         package = cfg['package'].get('conf')
         release = cfg['package'].get('path')
+        pkg_rel = str(cfg['package'].get('pkg_rel') or '').strip()
         patches = cfg.get('patch')
 
         if not ndk:
@@ -76,6 +77,8 @@ class Build:
 
         # TODO: check parameters
         self.tag = tag
+        self.pkg_rel = pkg_rel
+        self.package_version = f'{self.tag}-{self.pkg_rel}' if self.pkg_rel else self.tag
         self.dart_version = cfg['flutter'].get('dart_version') or ''
         self.framework_revision = cfg['flutter'].get('framework_revision') or ''
         self.framework_commit_date = cfg['flutter'].get('framework_commit_date') or ''
@@ -251,12 +254,13 @@ class Build:
             ndk_version=self.ndk_version,
             compile_sdk=self.compile_sdk,
             target_sdk=self.target_sdk,
+            package_version=self.package_version,
             **conf)
         pkg.debuild(output=output)
 
     def output(self, arch: str):
         if self.release.is_dir():
-            name = f'flutter_{self.tag}_{utils.termux_arch(arch)}.deb'
+            name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
             return self.release/name
         else:
             return self.release
