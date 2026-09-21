@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Added (CI/CD and repository hygiene)
 - Lifted `compileSdk`/`targetSdk` default from 34 to 36 (fail-closed ladder 36→35→34) using Termux aapt2 16.0.0.4 (Android Build-Tools), driven by `build.toml` `[android]` and applied per-project by `post_install.sh`/`flutter_project_config.sh`.
 - Centralized installer version/package metadata in `scripts/install/versions_common.sh`, sourced by `lib_common.sh` and drift-verified against `build.toml`.
 - Modernized packages: single JDK (`openjdk-21`), `7zip`, dynamic NDK clang detection, and an `apt-mark hold aapt2` hardening with a `TERMUX_NO_HOLD_AAPT2` opt-out.
@@ -135,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical Details
 - Cross-compiled from x86_64 Linux (WSL) to ARM64 Bionic
-- Uses NDK r27d with API level 35
+- Uses NDK r27d with API level 35 (historical for this 3.35.0 release; current build baseline is NDK r29, API 26)
 - Patches applied to Flutter Engine, Dart VM, and Skia
 - TLS alignment fixed for Bionic linker compatibility
 
