@@ -6,6 +6,8 @@ This project cross-compiles the upstream Flutter SDK into a `.deb` package that
 installs directly into a Termux `$PREFIX` and enables `flutter run`,
 `flutter build apk`, and `flutter build linux` on-device.
 
+> You want main-channel builds? Grab them in [prerelease-flutter-for-termux](https://github.com/GeneralKaos666/prerelease-flutter-for-termux). Stay here for stable.
+
 ## Version
 
 | Component | Version |
