@@ -695,11 +695,11 @@ if ! [ -x "$GIT_BIN" ] && ! command -v "$GIT_BIN" >/dev/null 2>&1; then
 fi
 
 # Load canonical metadata from packaged manifest or embedded source-of-truth constants
-CANONICAL_FLUTTER_VER="3.47.5"
-CANONICAL_FRAMEWORK_REV="6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
-CANONICAL_FRAMEWORK_DATE="2026-09-17 11:13:22 -0700"
+CANONICAL_FLUTTER_VER="3.47.6"
+CANONICAL_FRAMEWORK_REV="5fc346839b5d0eef006ed8404392afb4dfae428d"
+CANONICAL_FRAMEWORK_DATE="2026-09-30 15:02:49 -0700"
 CANONICAL_ENGINE_REV="$local_eng_ver"
-CANONICAL_DART_VER="3.13.4"
+CANONICAL_DART_VER="3.13.5"
 CANONICAL_DEVTOOLS_VER="2.60.0"
 CANONICAL_CHANNEL="stable"
 CANONICAL_REPO_URL="https://github.com/flutter/flutter.git"
