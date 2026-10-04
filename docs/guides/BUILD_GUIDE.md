@@ -9,8 +9,8 @@ This document explains how to build a Flutter deb package that includes Android 
 | Flutter tag | `3.47.6` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
 | Package | `flutter_3.47.6-1_aarch64.deb` |
-| Package size | 617,009,288 bytes (about 588 MiB) |
-| SHA256 | `6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800` |
+| Package size | 610,124,104 bytes (about 582 MiB) |
+| SHA256 | `d08202aa6da9f90b47ecec36a284b53d5a255b0b310c708afacefb92a70df866` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
 3.47.6 introduces three new points that require special attention:
@@ -27,7 +27,7 @@ The full engine build runs on the free GitHub-hosted `ubuntu-latest` runner
 (`build.yml`); PRs run lightweight checks first:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
 git diff --check
@@ -36,7 +36,7 @@ git diff --check
 GitHub Actions is currently split into these tracks:
 
 - `.github/workflows/ci.yml`: GitHub-hosted sanity checks for PRs/pushes.
-- `.github/workflows/build.yml`: GitHub-hosted full `.deb` build, auto-triggered on CI success on `main` (or manual), publishes a release.
+- `.github/workflows/build.yml`: GitHub-hosted full `.deb` build, auto-triggered on CI success on `main` (or manual); a `gate` job skips the build unless the `build.toml` tag is unreleased (version bump), publishes a release.
 - `.github/workflows/build-deb.yml`: self-hosted fallback full `.deb` build with evidence/artifact collection.
 - `.github/workflows/device-smoke.yml`: manual self-hosted Windows + ADB tablet smoke test.
 - `.github/workflows/release-check.yml`: Release asset metadata / SHA256 checks.
