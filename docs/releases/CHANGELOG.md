@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `build.yml` runs a `gate` job first and skips the multi-hour engine build unless the `build.toml` tag has no published release yet (version bump); manual dispatches always build. The workflow was restored from the legacy path with an inline `depot_tools` bootstrap (no unmaintained setup action) with the engine/dart/skia patches applied; `build-deb.yml` remains as the self-hosted fallback.
 - Release descriptions are taken from this changelog — the section matching the tag, else the current `Unreleased` history, else the last commit message (`scripts/ci/extract_release_notes.py`).
 - Each `autorelease` bump records a pointer to the upstream Flutter stable notes for that series (`docs.flutter.dev`) under `Unreleased` (`scripts/ci/import_upstream_notes.py`), so this changelog follows upstream.
+- After each published release, `build.yml` syncs the installer `EXPECTED_SHA256` defaults and doc size/hash tables to the published asset (`scripts/ci/sync_release_pins.py`), so pins stay current without manual refreshes.
 - `test_build.py` version expectations are now fully derived from `build.toml` at test time (bump-agnostic).
 
 ### Changed

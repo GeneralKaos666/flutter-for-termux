@@ -80,7 +80,7 @@ Therefore:
 `ci.yml` runs on every PR and push to `main`:
 
 ```text
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
 bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 PowerShell parser check for scripts/device/run_termux_smoke.ps1
 python scripts/ci/check_repo.py
@@ -164,8 +164,13 @@ The release flow:
    `autorelease` bump also records a pointer to the upstream Flutter
    stable notes for that series under `Unreleased`, so this changelog
    follows upstream.
-4. Run device smoke against the produced or published `.deb`.
-5. Let **Release check** verify the release asset metadata after publish/edit.
+4. After publishing, **Build** syncs the installer pins (`EXPECTED_SHA256`
+   defaults, doc size/hash tables) to the published asset via
+   `scripts/ci/sync_release_pins.py` and pushes a `chore(release)` commit,
+   so pins stay current without manual refreshes. That commit re-triggers
+   CI, but the `gate` skips the rebuild.
+5. Run device smoke against the produced or published `.deb`.
+6. Let **Release check** verify the release asset metadata after publish/edit.
 
 If you need a dry build (no auto publish) or richer build metadata, use the
 self-hosted **Build deb (self-hosted)** workflow instead.
@@ -260,7 +265,7 @@ The repository governance rules for the `main` branch are codified in `.github/r
 Fast local checks:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
 bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
 python scripts/ci/check_version_drift.py
