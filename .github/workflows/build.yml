@@ -265,12 +265,19 @@ jobs:
           PY
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
 
-      - name: last commit message
-        id: commitmsg
+      - name: release notes
+        id: notes
         run: |
-          MSG=$(git log -1 --format=%B)
+          set -euo pipefail
+          # Release body follows the changelog: the section matching this
+          # tag (or whatever history is current under Unreleased), falling
+          # back to the last commit message when the changelog has nothing.
+          NOTES="$(python scripts/ci/extract_release_notes.py --tag '${{ steps.parser.outputs.TAG }}' || true)"
+          if [ -z "$NOTES" ]; then
+            NOTES="$(git log -1 --format=%B)"
+          fi
           echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$MSG" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Verify release asset before publish
@@ -337,7 +344,7 @@ jobs:
         with:
           tag_name: ${{ steps.parser.outputs.TAG }}
           name: ${{ steps.parser.outputs.TITLE }}
-          body: ${{ steps.commitmsg.outputs.BODY }}
+          body: ${{ steps.notes.outputs.BODY }}
           files: |
             ${{ steps.artifact.outputs.deb }}
             ${{ steps.artifact.outputs.deb }}.sha256

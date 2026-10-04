@@ -37,7 +37,7 @@ or `python3 build.py patch --file=./patches/<name>.patch --path=<repo path>`. Sk
 Key details:
 
 - Modes come from `build.toml [build] runtime` — currently `['release']` only. To also build debug/profile you must rebuild those steps with `--mode=debug|profile`.
-- `tag` is the release version (no `v` prefix). Release asset is `flutter_<tag>_aarch64.deb`.
+- `tag` is the release version (no `v` prefix). Release asset is `flutter_<tag>-<pkg_rel>_aarch64.deb` (e.g. `flutter_3.47.6-1_aarch64.deb`).
 - Prefix `NO_RECORD=1` to bypass the `@utils.record` debug-logging wrapper (it logs and re-raises; bypass reduces log noise, used by CI for `python3 build.py tag`).
 - NDK discovery: build.py reads `[ndk] path` from build.toml, else the `ANDROID_NDK` env var. Workflows translate `NDK_PATH`/`ANDROID_NDK_HOME` → `ANDROID_NDK`.
 - Host must have `dpkg` (sysroot.py runs `dpkg -x`) and `ar` (package.py runs `ar rc`).
@@ -62,7 +62,7 @@ Key details:
 Mirrors `ci.yml`. Run all of these before pushing:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/generate_versions.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/generate_versions.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py
 pytest test_build.py        # NB: there is no tests/ dir; pytest.ini (testpaths=test_build.py) names the file
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/generate_versions.py --check
@@ -75,7 +75,7 @@ git diff --check
 
 `ci.yml` runs on PRs, pushes to `main`, and manual dispatch (compile + pytest + shellcheck + actionlint + build.toml schema + version-drift + repo-contract + whitespace). `validate.yml` is path-filtered (patches/build.py/build.toml/test_build.py/utils.py/stubs/requirements) and checks the `pytest` command contract plus that `engine.patch` applies to the configured tag via a shallow clone. Actual builds:
 
-- `build.yml` — GitHub-hosted full `.deb` build (uses the NDK that ships on hosted runners via `ANDROID_NDK` env); auto-triggers on `CI` success on `main` (or manual dispatch) and publishes a release with the deb. This is the sole build path.
+- `build.yml` — GitHub-hosted full `.deb` build (uses the NDK that ships on hosted runners via `ANDROID_NDK` env); auto-triggers on `CI` success on `main` (or manual dispatch), but a `gate` job skips the build unless the `build.toml` tag has no published release yet (i.e. the version was bumped), then publishes a release with the deb. This is the sole build path.
 - `build-deb.yml` — self-hosted fallback full `.deb` build + artifact/evidence collection (feeds `device-smoke.yml`) for maintainers without hosted-runner time budget.
 - `device-smoke.yml` — manual Windows+ADB: verifies candidate deb SHA256/commit binding, runs Termux smoke, optionally promotes the release.
 - `autorelease.yml` — nightly: detects latest Flutter stable, bumps `build.toml`, `sed`s the same version strings across docs (incl. this file) and installers, then pushes.

@@ -39,7 +39,7 @@ References:
 | Workflow | File | Runner | Trigger | Purpose |
 |----------|------|--------|---------|---------|
 | CI | `.github/workflows/ci.yml` | `ubuntu-latest` | PR, push to `main`, manual | Python/shell/PowerShell syntax, package/docs/workflow sanity, whitespace checks |
-| Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
+| Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` + `gate` (builds only when the `build.toml` tag has no published release yet) | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
 | Build deb (self-hosted) | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing (fallback) |
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
 | Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | release publish/edit, manual | Verify release asset name, size, and SHA256 digest |
@@ -69,8 +69,10 @@ normal CI job:
 Therefore:
 
 - **PR CI must stay lightweight** and never touch self-hosted device hardware.
-- **The full build is the `ubuntu-latest` `Build` workflow**, auto-triggered on
-  `CI` success on `main` or manual dispatch.
+- **The full build is the `ubuntu-latest` `Build` workflow**, triggered on
+  `CI` success on `main` or manual dispatch — but a `gate` job skips the
+  multi-hour build unless the `build.toml` tag has no published release
+  yet (i.e. the version was bumped).
 - **Device smoke is a manual self-hosted gate** run by a maintainer.
 
 ## PR / push CI
@@ -78,7 +80,7 @@ Therefore:
 `ci.yml` runs on every PR and push to `main`:
 
 ```text
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py
 bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 PowerShell parser check for scripts/device/run_termux_smoke.ps1
 python scripts/ci/check_repo.py
@@ -99,7 +101,10 @@ git diff --check
 Primary workflow: **Build** (`.github/workflows/build.yml`).
 
 Runs on `ubuntu-latest` when `CI` succeeds on `main` (or on manual dispatch),
-reusing the NDK that ships on GitHub-hosted runners. It:
+reusing the NDK that ships on GitHub-hosted runners. A `gate` job runs
+first and skips the build when the `build.toml` tag already has a
+published release with the expected `.deb` — so only version bumps (and
+manual dispatches) trigger the multi-hour pipeline. It:
 
 1. Installs host deps and bootstraps `depot_tools` (inline clone).
 2. Detects the NDK from the runner env (`ANDROID_NDK` → `ANDROID_NDK_LATEST_HOME` → `ANDROID_NDK_HOME`).
@@ -132,24 +137,35 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.47.6_aarch64.deb`
-- `flutter_3.47.6_aarch64.deb.sha256`
-- `flutter_3.47.6_aarch64.deb.size.txt`
+- `flutter_3.47.6-1_aarch64.deb`
+- `flutter_3.47.6-1_aarch64.deb.sha256`
+- `flutter_3.47.6-1_aarch64.deb.size.txt`
 
 ## Release policy
 
-Merging to `main` **does** publish a GitHub Release through the auto-triggered
-`Build` workflow: after `CI` passes, a multi-hour engine build runs on
-`ubuntu-latest` and the resulting `.deb` is published under the Flutter
-version tag. This is the intended automation for this public repo.
+Merging to `main` publishes a GitHub Release through the `Build` workflow
+**only when the version was bumped**: after `CI` passes, the `gate` job
+checks whether the `build.toml` tag already has a published release with
+the expected `.deb`. If it does, the build is skipped; otherwise a
+multi-hour engine build runs on `ubuntu-latest` and the resulting `.deb`
+is published under the Flutter version tag. This is the intended
+automation for this public repo.
 
 The release flow:
 
 1. Merge only after PR CI passes.
-2. **Build** auto-runs on `CI` success (or trigger it manually via
-   `workflow_dispatch` on the chosen commit/tag).
-3. Run device smoke against the produced or published `.deb`.
-4. Let **Release check** verify the release asset metadata after publish/edit.
+2. **Build** runs on `CI` success, but its `gate` job skips everything
+   unless the `build.toml` tag is unreleased — i.e. only version bumps
+   (or a manual `workflow_dispatch` on the chosen commit/tag) trigger a
+   real build.
+3. The release description is taken from `docs/releases/CHANGELOG.md`:
+   the section matching the tag (or whatever history is current under
+   `Unreleased`), falling back to the last commit message. Each
+   `autorelease` bump also records a pointer to the upstream Flutter
+   stable notes for that series under `Unreleased`, so this changelog
+   follows upstream.
+4. Run device smoke against the produced or published `.deb`.
+5. Let **Release check** verify the release asset metadata after publish/edit.
 
 If you need a dry build (no auto publish) or richer build metadata, use the
 self-hosted **Build deb (self-hosted)** workflow instead.
@@ -161,8 +177,8 @@ Manual workflow: **Device smoke (self-hosted)**
 Default input tests the published 3.47.6 release asset:
 
 ```text
-deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.6/flutter_3.47.6_aarch64.deb
-expected_sha256: 6994580359002c6e0f6eb074d17a8ab3f9578e480e2aad83aa443474da3c9800
+deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.6/flutter_3.47.6-1_aarch64.deb
+expected_sha256: d08202aa6da9f90b47ecec36a284b53d5a255b0b310c708afacefb92a70df866
 ```
 
 Required self-hosted environment:
@@ -244,7 +260,7 @@ The repository governance rules for the `main` branch are codified in `.github/r
 Fast local checks:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py
 bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
 python scripts/ci/check_version_drift.py
@@ -262,5 +278,5 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.6/flutter_3.47.6_aarch64.deb"
+  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.6/flutter_3.47.6-1_aarch64.deb"
 ```
