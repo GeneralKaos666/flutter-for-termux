@@ -402,7 +402,7 @@ patch_channel_stable() {
 	# getBranchName). On a Termux install that branch is not an official
 	# channel, so flutter.version.json ends up with "[user-branch]" or the
 	# raw branch name instead of "stable". Pin it to stable; the recompiled
-	# flutter_tools.snapshot (step 13) then bakes this in permanently.
+	# flutter_tools.snapshot (step 17) then bakes this in permanently.
 	if grep -F -q "Termux: force stable channel" "$1"; then return 0; fi
 	grep -q "getBranchName(redactUnknownBranches: true)" "$1" || return 1
 	sed -i "s/final String channel = getBranchName(redactUnknownBranches: true);/final String channel = 'stable' \/* Termux: force stable channel *\/;/" "$1"
@@ -609,8 +609,8 @@ fi
 # Run apply_patches for --apply
 apply_patches
 
-# 1.5b. Fix engine.stamp and engine.realm (required for Maven artifact resolution)
-echo "[1.5b/13] Fixing engine.stamp and engine.realm, and injecting framework version tag..."
+# 1. Fix engine.stamp and engine.realm (required for Maven artifact resolution)
+echo "[1/17] Fixing engine.stamp and engine.realm, and injecting framework version tag..."
 mkdir -p "$FLUTTER_ROOT/bin/cache"
 # Fail closed: never inject a stale engine revision fallback; the revision must
 # come from the shipped SDK, not a hardcoded constant.
@@ -891,8 +891,8 @@ if [ -z "$ENGINE_VERSION" ]; then
 	exit 1
 fi
 
-# 0. Download official Dart SDK snapshots (fixes flutter run hot reload)
-echo "[0/13] Downloading official Dart SDK snapshots (for hot reload)..."
+# 2. Download official Dart SDK snapshots (fixes flutter run hot reload)
+echo "[2/17] Downloading official Dart SDK snapshots (for hot reload)..."
 SNAPSHOTS_URL="https://storage.googleapis.com/flutter_infra_release/flutter/${ENGINE_VERSION}/dart-sdk-linux-arm64.zip"
 SNAPSHOTS_DIR=$DART_SDK/bin/snapshots
 
@@ -919,8 +919,8 @@ else
 	echo "  ✓ Dart SDK snapshots already exist"
 fi
 
-# 1. Clean DT_RPATH from ELF binaries (fixes flutter run crash)
-echo "[1/13] Cleaning ELF binaries (fix flutter run)..."
+# 3. Clean DT_RPATH from ELF binaries (fixes flutter run crash)
+echo "[3/17] Cleaning ELF binaries (fix flutter run)..."
 if ! command -v termux-elf-cleaner &>/dev/null; then
 	(
 		set +e
@@ -941,7 +941,7 @@ else
 	echo "  ⚠ termux-elf-cleaner not found, skipping"
 fi
 
-# 1.5d. Install Android SDK Platform for the configured COMPILE_SDK
+# 4. Install Android SDK Platform for the configured COMPILE_SDK
 platform_zip_url() {
 	case "$1" in
 	36) printf '%s\n' 'https://dl.google.com/android/repository/platform-36_r01.zip' ;;
@@ -951,7 +951,7 @@ platform_zip_url() {
 	esac
 }
 
-echo "[1.5d/13] Installing Android SDK Platform $COMPILE_SDK..."
+echo "[4/17] Installing Android SDK Platform $COMPILE_SDK..."
 if [ ! -d "$ANDROID_SDK/platforms/android-$COMPILE_SDK" ]; then
 	mkdir -p $ANDROID_SDK/platforms
 	cd $ANDROID_SDK/platforms
@@ -977,8 +977,8 @@ else
 	echo "  ✓ Platform $COMPILE_SDK already exists"
 fi
 
-# Install required Termux build dependencies
-echo "[1.5e/13] Checking and installing Termux build dependencies..."
+# 5. Install required Termux build dependencies
+echo "[5/17] Checking and installing Termux build dependencies..."
 
 if ! command -v aapt2 &>/dev/null; then
 	echo "  ! Termux aapt2 not found. Installing build dependencies via apt..."
@@ -1001,10 +1001,10 @@ for tool in d8 dx aidl apksigner zipalign; do
 	fi
 done
 
-# Generate package_config.json for flutter_tools
+# 6. Generate package_config.json for flutter_tools
 # The flutter CLI runs flutter_tools.dart in JIT mode (see shared.sh line ~200)
 # and requires .dart_tool/package_config.json from pub get.
-echo "[1.5f/13] Generating flutter_tools package_config.json..."
+echo "[6/17] Generating flutter_tools package_config.json..."
 FLUTTER_TOOLS_DIR=$FLUTTER_ROOT/packages/flutter_tools
 PKG_CONFIG=$FLUTTER_TOOLS_DIR/.dart_tool/package_config.json
 
@@ -1029,20 +1029,20 @@ if [ ! -f "$PKG_CONFIG" ]; then
 	fi
 fi
 
-# 2. (removed) Android API 34 aapt2 workaround: compileSdk now follows COMPILE_SDK
-#    (see 1.5d), so the forced android-34 platform download is no longer needed.
+# (removed; former step 2) Android API 34 aapt2 workaround: compileSdk now follows COMPILE_SDK
+#    (see step 4), so the forced android-34 platform download is no longer needed.
 
-# Clear stale Gradle included-build outputs after changing the Flutter Gradle plugin.
+# 7. Clear stale Gradle included-build outputs after changing the Flutter Gradle plugin.
 # Without this, upgrades can compile FlutterPlugin.kt against an older cached
 # FlutterPluginConstants.kt and fail with unresolved PLATFORM_ABI_LIST.
-echo "  Clearing Flutter Gradle plugin build cache..."
+echo "[7/17] Clearing Flutter Gradle plugin build cache..."
 rm -rf "$FLUTTER_ROOT/packages/flutter_tools/gradle/.gradle" \
 	"$FLUTTER_ROOT/packages/flutter_tools/gradle/build" \
 	"$FLUTTER_ROOT/packages/flutter_tools/gradle/bin" 2>/dev/null || true
 echo "  ✓ Flutter Gradle plugin cache cleared"
 
-# 3. Create NDK clang wrappers (handles all installed NDK versions)
-echo "[4/13] Creating NDK clang wrappers..."
+# 8. Create NDK clang wrappers (handles all installed NDK versions)
+echo "[8/17] Creating NDK clang wrappers..."
 
 NDK_DIR="$ANDROID_SDK/ndk"
 if [ -d "$NDK_DIR" ]; then
@@ -1112,8 +1112,8 @@ SPLITEOF
 	echo "    ✓ build-tools $BT_NAME configured"
 }
 
-# 7. Create build-tools symlinks (for all versions)
-echo "[8/13] Creating build-tools symlinks..."
+# 9. Create build-tools symlinks (for all versions)
+echo "[9/17] Creating build-tools symlinks..."
 BT_DIR=$ANDROID_SDK/build-tools
 mkdir -p "$BT_DIR"
 
@@ -1204,8 +1204,8 @@ done
 
 echo "  ✓ Build-tools symlinks created"
 
-# 8. Install cmdline-tools (so flutter can detect Android devices)
-echo "[9/13] Installing cmdline-tools..."
+# 10. Install cmdline-tools (so flutter can detect Android devices)
+echo "[10/17] Installing cmdline-tools..."
 if [ ! -d "$ANDROID_SDK/cmdline-tools/latest" ]; then
 	mkdir -p $ANDROID_SDK/cmdline-tools
 	cd $ANDROID_SDK/cmdline-tools
@@ -1218,9 +1218,9 @@ else
 	echo "  ✓ cmdline-tools already exists"
 fi
 
-# 9. Create platform-tools symlinks (adb)
+# 11. Create platform-tools symlinks (adb)
 # Note: Gradle may download x86_64 platform-tools, so we force overwrite
-echo "[10/13] Creating platform-tools symlinks..."
+echo "[11/17] Creating platform-tools symlinks..."
 mkdir -p "$ANDROID_SDK/platform-tools"
 # Remove any x86_64 binaries Gradle may have downloaded
 rm -f "$ANDROID_SDK/platform-tools/adb" "$ANDROID_SDK/platform-tools/fastboot" 2>/dev/null || true
@@ -1228,15 +1228,15 @@ ln -sf "$PREFIX/bin/adb" "$ANDROID_SDK/platform-tools/adb" 2>/dev/null || true
 ln -sf "$PREFIX/bin/fastboot" "$ANDROID_SDK/platform-tools/fastboot" 2>/dev/null || true
 echo "  ✓ platform-tools symlinks created"
 
-# 10. Accept Android licenses
-echo "[11/13] Accepting Android licenses..."
+# 12. Accept Android licenses
+echo "[12/17] Accepting Android licenses..."
 mkdir -p $ANDROID_SDK/licenses
 echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" >$ANDROID_SDK/licenses/android-sdk-license
 echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" >$ANDROID_SDK/licenses/android-sdk-preview-license
 echo "  ✓ Android licenses accepted"
 
-# 10.5. Configure ANDROID_HOME in flutter config
-echo "[11.5/13] Setting Android SDK path in Flutter config..."
+# 13. Configure ANDROID_HOME in flutter config
+echo "[13/17] Setting Android SDK path in Flutter config..."
 mkdir -p "$HOME" 2>/dev/null || true
 if [ -f "$HOME/.flutter_settings" ]; then
 	grep -v '"android-sdk"' "$HOME/.flutter_settings" 2>/dev/null | grep -v '^[[:space:]]*}$' >"$HOME/.flutter_settings.tmp" 2>/dev/null || true
@@ -1253,8 +1253,8 @@ SETTINGS
 fi
 echo "  ✓ ANDROID_HOME=$ANDROID_SDK"
 
-# 11. Copy VM snapshots (for debug mode)
-echo "[12/13] Checking engine artifacts..."
+# 14. Copy VM snapshots (for debug mode)
+echo "[14/17] Checking engine artifacts..."
 ENGINE_DIR=$FLUTTER_ROOT/bin/cache/artifacts/engine/linux-arm64
 
 if [ ! -f "$ENGINE_DIR/vm_isolate_snapshot.bin" ]; then
@@ -1264,7 +1264,7 @@ else
 	echo "  ✓ VM snapshots present"
 fi
 
-# 12.5. Provision linux-arm64 gen_snapshot for Android release/profile builds
+# 15. Provision linux-arm64 gen_snapshot for Android release/profile builds
 # flutter_tools resolves the AOT gen_snapshot for android targets to
 # <engine>/android-arm64-{release,profile}/linux-arm64/gen_snapshot
 # (getCurrentHostPlatform() returns linux_arm64 on Termux, see the
@@ -1274,7 +1274,7 @@ fi
 # self-built linux-arm64/gen_snapshot shipped in the deb (see BUILD_GUIDE:
 # Android gen_snapshot) by symlinking it in. Idempotent and re-runnable
 # (also repairs state after `flutter precache --android` re-downloads).
-echo "[12.5/13] Creating host platform symlinks..."
+echo "[15/17] Creating host platform symlinks..."
 ENG_ART=$FLUTTER_ROOT/bin/cache/artifacts/engine
 for dir in android-arm64-release android-arm64-profile; do
 	if [ ! -d "$ENG_ART/$dir" ]; then
@@ -1300,13 +1300,13 @@ if [ -d "$ENG_ART/linux-arm64" ] && [ ! -e "$ENG_ART/linux-x64" ]; then
 	echo "  ✓ linux-x64 -> linux-arm64"
 fi
 
-# 12.7c. Create api-level.h for CMake system detection
+# 16. Create api-level.h for CMake system detection
 # CMake's CMakeDetermineSystem.cmake reads $PREFIX/include/android/api-level.h
 # Without this file, cmake fails with "file failed to open for reading"
 # Derive __ANDROID_API__ from the highest installed SDK platform so api-level.h
 # tracks the on-device android.jar without a hardcoded level. Falls back to 35
 # only when no platform is installed yet.
-echo "[12.7c/13] Creating api-level.h for CMake..."
+echo "[16/17] Creating api-level.h for CMake..."
 mkdir -p "$PREFIX/include/android" 2>/dev/null
 if [ ! -f "$PREFIX/include/android/api-level.h" ]; then
 	API_LEVEL=0
@@ -1333,9 +1333,9 @@ else
 	echo "  ✓ api-level.h already exists"
 fi
 
-# 13. Recompile flutter_tools.snapshot and stamp to guarantee offline flutter CLI execution
+# 17. Recompile flutter_tools.snapshot and stamp to guarantee offline flutter CLI execution
 finalize_flutter_tools_cache() {
-	echo "[13/13] Finalizing flutter_tools.snapshot and stamp..."
+	echo "[17/17] Finalizing flutter_tools.snapshot and stamp..."
 	local FLUTTER_TOOLS_DIR="$FLUTTER_ROOT/packages/flutter_tools"
 	local SNAPSHOT_PATH="$FLUTTER_ROOT/bin/cache/flutter_tools.snapshot"
 	local STAMP_PATH="$FLUTTER_ROOT/bin/cache/flutter_tools.stamp"
