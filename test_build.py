@@ -9,6 +9,7 @@ patch contract intentionally changes, update the assertion deliberately rather
 than pinning a version literal.
 """
 
+import importlib.util
 import json
 import os
 import re
@@ -22,6 +23,14 @@ import yaml
 
 import build
 import package
+
+
+def _load_ci_script(name):
+    path = Path(__file__).parent / 'scripts' / 'ci' / name
+    spec = importlib.util.spec_from_file_location(name.removesuffix('.py'), path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class BuildTest(unittest.TestCase):
@@ -287,6 +296,62 @@ class RecordDecoratorTest(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             boom()
+
+
+class ReleaseNotesTest(unittest.TestCase):
+    def setUp(self):
+        self.extract = _load_ci_script('extract_release_notes.py')
+        self.upstream = _load_ci_script('import_upstream_notes.py')
+
+    def test_prefers_exact_tag_section(self):
+        text = (
+            '# Changelog\n\n'
+            '## [Unreleased]\n\n- wip\n\n'
+            '## [3.47.6-termux] - 2026-10-04\n\n- tagged notes\n'
+        )
+        self.assertEqual(self.extract.extract_notes('3.47.6', text), '- tagged notes')
+
+    def test_plain_tag_section_beats_unreleased(self):
+        text = '## [Unreleased]\n\n- wip\n\n## [3.47.6]\n\n- plain\n'
+        self.assertEqual(self.extract.extract_notes('3.47.6', text), '- plain')
+
+    def test_falls_back_to_unreleased(self):
+        text = '## [Unreleased]\n\n- wip\n\n## [3.44.9-termux] - 2026-07-04\n\n- old\n'
+        self.assertEqual(self.extract.extract_notes('3.47.6', text), '- wip')
+
+    def test_empty_when_nothing_applies(self):
+        text = '## [3.44.9-termux] - 2026-07-04\n\n- old\n'
+        self.assertEqual(self.extract.extract_notes('3.47.6', text), '')
+
+    def test_upstream_pointer_keyed_by_series(self):
+        text = '## [Unreleased]\n\n- wip\n'
+        new_text, outcome = self.upstream.import_pointer(
+            '3.47.7', text, notes_available=True, today='2026-10-04'
+        )
+        self.assertEqual(outcome, 'added')
+        self.assertIn('### Upstream Flutter 3.47', new_text)
+        self.assertIn('release-notes-3.47.0', new_text)
+        # A patch bump in the same series must not duplicate the entry.
+        _, again = self.upstream.import_pointer(
+            '3.47.7', new_text, notes_available=True, today='2026-10-04'
+        )
+        self.assertEqual(again, 'already-present')
+
+    def test_upstream_pointer_records_unpublished_page(self):
+        text = '## [Unreleased]\n\n- wip\n'
+        new_text, outcome = self.upstream.import_pointer(
+            '3.48.0', text, notes_available=False, today='2026-10-04'
+        )
+        self.assertEqual(outcome, 'added')
+        self.assertIn('page not yet published', new_text)
+
+    def test_real_changelog_resolves_current_tag(self):
+        changelog = Path(__file__).parent / 'docs' / 'releases' / 'CHANGELOG.md'
+        text = changelog.read_text(encoding='utf-8')
+        with open(Path(__file__).parent / 'build.toml', 'rb') as f:
+            tag = tomllib.load(f)['flutter']['tag']
+        # Whatever history is current must yield something usable as a body.
+        self.assertTrue(self.extract.extract_notes(tag, text))
 
 
 class SysrootLockTest(unittest.TestCase):

@@ -169,6 +169,26 @@ jobs:
           git diff --stat
           git diff --check
 
+      - name: Point CHANGELOG at upstream stable notes
+        if: steps.check.outputs.should_release == 'true'
+        env:
+          NEW_TAG: ${{ steps.detect.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          # The changelog follows Flutter's stable notes per major.minor
+          # series (docs.flutter.dev). Record a pointer under Unreleased so
+          # it flows into future release descriptions; never fail the bump
+          # when the upstream page is not published yet.
+          SERIES="$(echo "$NEW_TAG" | grep -oE '^[0-9]+\.[0-9]+')"
+          AVAIL="no"
+          if curl -fsSL -o /dev/null "https://docs.flutter.dev/release/release-notes/release-notes-${SERIES}.0" 2>/dev/null; then
+            AVAIL="yes"
+          fi
+          python3 scripts/ci/import_upstream_notes.py \
+            --tag "$NEW_TAG" \
+            --notes-available "$AVAIL" || true
+          git diff --check
+
       - name: Verify version sync before pushing
         if: steps.check.outputs.should_release == 'true'
         run: |
