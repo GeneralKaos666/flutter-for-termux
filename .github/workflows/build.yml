@@ -355,3 +355,37 @@ jobs:
           overwrite_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync installer pins to published asset
+        # Keeps EXPECTED_SHA256 defaults and doc size/hash tables tracking
+        # the published deb so they never go stale. Best-effort: never fail
+        # a successful build over this. The follow-up commit re-triggers CI,
+        # but the gate skips the rebuild (release already exists).
+        if: steps.release_guard.outputs.should_publish == 'true'
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          DEB='${{ steps.artifact.outputs.deb }}'
+          DEB_SHA="$(awk '{print $1}' "${DEB}.sha256")"
+          DEB_SIZE="$(cat "${DEB}.size.txt")"
+          python scripts/ci/sync_release_pins.py \
+            --sha256 "$DEB_SHA" --size "$DEB_SIZE" \
+            --tag '${{ steps.parser.outputs.TAG }}' || true
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Pins already in sync."
+            exit 0
+          fi
+          if [ -z "${BOT_TOKEN:-}" ]; then
+            echo "BOT_TOKEN not set; pins updated in workspace only." >&2
+            git diff --stat >&2 || true
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scripts/install/versions_common.sh scripts/install/lib_common.sh \
+            scripts/test/gh_e2e_test.sh scripts/device/run_termux_smoke.ps1 \
+            docs/guides/BUILD_GUIDE.md docs/guides/INSTALL_GUIDE.md \
+            docs/releases/RELEASE_NOTES.md docs/CI_CD.md
+          git commit -m "chore(release): sync installer pins to ${{ steps.parser.outputs.TAG }}"
+          git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main

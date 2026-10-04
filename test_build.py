@@ -354,6 +354,59 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertTrue(self.extract.extract_notes(tag, text))
 
 
+class ReleasePinSyncTest(unittest.TestCase):
+    def setUp(self):
+        self.sync = _load_ci_script('sync_release_pins.py')
+
+    def _tree(self, tmp, files):
+        root = Path(tmp)
+        for rel, content in files.items():
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding='utf-8')
+        return root
+
+    def test_syncs_all_pin_formats(self):
+        sha = 'd' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            zeros = '0' * 64
+            root = self._tree(tmp, {
+                'scripts/install/versions_common.sh': 'export EXPECTED_SHA256="' + zeros + '"\n',
+                'scripts/install/lib_common.sh': 'export EXPECTED_SHA256="${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-' + zeros + '}}"',
+                'scripts/test/gh_e2e_test.sh': 'export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-' + zeros + '}}',
+                'scripts/device/run_termux_smoke.ps1': '[string]$ExpectedSha256 = "' + zeros + '",',
+                'docs/guides/BUILD_GUIDE.md': '| SHA256 | `' + zeros + '`\n\n617,009,288 bytes (about 588 MiB)\n',
+            })
+            changed = self.sync.sync_pins(root, sha, 610124104, '3.47.6', '1')
+            self.assertEqual(len(changed), 5)
+            self.assertIn('d' * 64, (root / 'scripts/install/versions_common.sh').read_text())
+            guide = (root / 'docs/guides/BUILD_GUIDE.md').read_text()
+            self.assertIn('610,124,104 bytes (about 582 MiB)', guide)
+            # Second run is a no-op.
+            self.assertEqual(self.sync.sync_pins(root, sha, 610124104, '3.47.6', '1'), [])
+
+    def test_leaves_other_hashes_alone(self):
+        other = 'a' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, {
+                'scripts/install/versions_common.sh': (
+                    'export EXPECTED_SHA256="' + '0' * 64 + '"\n'
+                    'export ANDROID_SDK_EXPECTED_SHA256="' + other + '"\n'
+                ),
+            })
+            self.sync.sync_pins(root, 'd' * 64, 610124104, '3.47.6', '1')
+            text = (root / 'scripts/install/versions_common.sh').read_text()
+            self.assertIn(other, text)
+
+    def test_rejects_malformed_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaises(SystemExit):
+                self.sync.sync_pins(root, 'not-a-hash', 610124104, '3.47.6', '1')
+            with self.assertRaises(SystemExit):
+                self.sync.sync_pins(root, 'd' * 64, 0, '3.47.6', '1')
+
+
 class SysrootLockTest(unittest.TestCase):
     def test_write_lock_schema(self):
         import sysroot
