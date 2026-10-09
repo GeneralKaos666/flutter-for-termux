@@ -183,7 +183,7 @@ Default input tests the published 3.47.7 release asset:
 
 ```text
 deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-1_aarch64.deb
-expected_sha256: d08202aa6da9f90b47ecec36a284b53d5a255b0b310c708afacefb92a70df866
+expected_sha256: c2f1b8cc2c9065ff8b96addb6c9d76d3aecb3205465fb211674d5a213ed6de85
 ```
 
 Required self-hosted environment:
