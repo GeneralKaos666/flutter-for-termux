@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Upstream Flutter 3.47
+- Stable release notes: https://docs.flutter.dev/release/release-notes/release-notes-3.47.0 (imported 2026-10-09; source verified).
+
 ### Infrastructure & CI
 - Lifted `compileSdk`/`targetSdk` default from 34 to 36 (fail-closed ladder 36→35→34) using Termux aapt2 16.0.0.4 (Android Build-Tools), driven by `build.toml` `[android]` and applied per-project by `post_install.sh`/`flutter_project_config.sh`.
 - Centralized installer version/package metadata in `scripts/install/versions_common.sh`, sourced by `lib_common.sh` and drift-verified against `build.toml`.

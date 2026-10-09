@@ -1,17 +1,17 @@
-# Flutter 3.47.6 for Termux ARM64
+# Flutter 3.47.7 for Termux ARM64
 
-**Flutter 3.47.6 / Dart 3.13.5 for Android-bionic ARM64 hosts.**
+**Flutter 3.47.7 / Dart 3.13.5 for Android-bionic ARM64 hosts.**
 
-This release updates the Termux Flutter SDK package to Flutter 3.47.6. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
+This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
 
 ## Package
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.6-1_aarch64.deb` |
+| Package | `flutter_3.47.7-1_aarch64.deb` |
 | Size | 610,124,104 bytes (~582 MiB) |
 | SHA256 | `d08202aa6da9f90b47ecec36a284b53d5a255b0b310c708afacefb92a70df866` |
-| Flutter | 3.47.6 |
+| Flutter | 3.47.7 |
 | Flutter Tools Dart | 3.13.5 |
 | Dart VM | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |
 | Target host | Termux / Android bionic / ARM64 |
@@ -21,8 +21,8 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.6. It incorp
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.6/flutter_3.47.6-1_aarch64.deb
-dpkg -i flutter_3.47.6-1_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-1_aarch64.deb
+dpkg -i flutter_3.47.7-1_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -35,7 +35,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 | Command | Result |
 |---------|--------|
-| `flutter --version` | ✅ Flutter 3.47.6 |
+| `flutter --version` | ✅ Flutter 3.47.7 |
 | `dart --version` | ✅ Dart 3.13.5 on `android_arm64` |
 | `dartvm --version` | ✅ Dart 3.13.5 on `linux_arm64` |
 | `flutter doctor -v` | ✅ completes; unknown channel / no connected device are expected warnings |
@@ -46,9 +46,9 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 ## Highlights
 
-### Flutter 3.47.6 update
+### Flutter 3.47.7 update
 
-- Updated package metadata, NDK configurations, and patches to target Flutter 3.47.6 (Dart 3.13.5).
+- Updated package metadata, NDK configurations, and patches to target Flutter 3.47.7 (Dart 3.13.5).
 - Keeps Flutter CLI on Termux JIT Dart while preserving engine VM tools for snapshots.
 
 ### Installer & Environment Hardening

@@ -1,6 +1,6 @@
-# Termux Flutter 3.47.6 Installation Guide
+# Termux Flutter 3.47.7 Installation Guide
 
-This guide covers `flutter_3.47.6-1_aarch64.deb`, targeting the following on ARM64 Termux:
+This guide covers `flutter_3.47.7-1_aarch64.deb`, targeting the following on ARM64 Termux:
 
 - `flutter doctor -v`
 - `flutter create`
@@ -12,7 +12,7 @@ This guide covers `flutter_3.47.6-1_aarch64.deb`, targeting the following on ARM
 
 | Item | Value |
 |------|-------|
-| Flutter | 3.47.6 |
+| Flutter | 3.47.7 |
 | Flutter Tools Dart | 3.13.5 |
 | Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |
 
@@ -46,11 +46,11 @@ pkg update -y
 pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
 
 cd ~
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.6/flutter_3.47.6-1_aarch64.deb
-sha256sum flutter_3.47.6-1_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-1_aarch64.deb
+sha256sum flutter_3.47.7-1_aarch64.deb
 # Confirm the output matches: d08202aa6da9f90b47ecec36a284b53d5a255b0b310c708afacefb92a70df866
 
-dpkg -i flutter_3.47.6-1_aarch64.deb
+dpkg -i flutter_3.47.7-1_aarch64.deb
 apt --fix-broken install -y
 
 # Required: dpkg only installs files; this step patches the Termux runtime.
@@ -94,7 +94,7 @@ flutter doctor -v
 
 Expected highlights:
 
-- `flutter --version` shows Flutter 3.47.6.
+- `flutter --version` shows Flutter 3.47.7.
 - `dart --version` shows `android_arm64` (Termux JIT Dart).
 - `dartvm --version` shows `linux_arm64` (engine VM).
 
@@ -182,7 +182,7 @@ If `flutter doctor` shows no connected device, it only means ADB is not connecte
 
 ### `PLATFORM_ABI_LIST` unresolved
 
-This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.6 deb, run:
+This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.7 deb, run:
 
 ```bash
 bash $PREFIX/share/flutter/post_install.sh
