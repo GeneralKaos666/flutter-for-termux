@@ -175,3 +175,10 @@ resource:
       - $prefix/share/flutter/manifest.json
     binary: true
     mode: 0o644
+
+  post_install:
+    # Ships the on-device configuration script so the documented
+    # `bash $PREFIX/share/flutter/post_install.sh` flow works after install.
+    source: scripts/install/post_install.sh
+    output: $prefix/share/flutter/post_install.sh
+    mode: 0o755

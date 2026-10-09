@@ -230,6 +230,7 @@ def check_yaml_files() -> None:
         "profile",
         "stamps",
         "manifest",
+        "post_install",
     ):
         if key not in resources:
             fail(f"package.yaml missing resource.{key}")
