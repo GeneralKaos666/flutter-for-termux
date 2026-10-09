@@ -91,7 +91,7 @@ git diff --check
 
 - workflow YAML parses
 - self-hosted workflows are not triggered by `pull_request`
-- `package.yaml` still packages `dart`, `dartvm`, `dartaotruntime`, and `post_install`
+- `package.yaml` still ships the required runtime resources, including `post_install`
 - `post_install.sh` still contains the Flutter 3.44 `PLATFORM_ABI_LIST` and Android-host patches
 - installer defaults remain on Flutter 3.47.7 and NDK r29 for Termux installs
 - release/download docs do not regress to stale 3.41.5 commands
