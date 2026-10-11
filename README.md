@@ -27,7 +27,7 @@ Download:
 
 ```bash
 TAG=3.47.7
-PKG_REL=1
+PKG_REL=2
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
@@ -63,7 +63,7 @@ This installs the release package plus the on-device Android SDK/toolchain
 
 ```bash
 TAG=3.47.7
-PKG_REL=1
+PKG_REL=2
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
