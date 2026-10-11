@@ -133,7 +133,7 @@ jobs:
           DEB=$(python -c "import build; print(build.Build().output('$ARCH'))")
           PACKAGE_VERSION=$(python -c "import build; print(build.Build().package_version)")
           test -f "$DEB"
-          sha256sum "$DEB" | tee "${DEB}.sha256"
+          (cd "$(dirname "$DEB")" && sha256sum "$(basename "$DEB")") | tee "${DEB}.sha256"
           stat -c '%s' "$DEB" | tee "${DEB}.size.txt"
           echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
