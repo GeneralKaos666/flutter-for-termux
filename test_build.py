@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import re
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -272,6 +273,65 @@ class PackageManifestTest(unittest.TestCase):
             Path(__file__).parent / 'scripts' / 'install' / 'post_install.sh'
         ).read_bytes()
         self.assertEqual(Path(item['src']).read_bytes(), expected)
+
+    def test_tar_ships_ancestor_dirs_for_file_outputs(self):
+        """dpkg does not create missing parent dirs, so the data tar must
+        carry explicit directory entries for share/flutter (issue #26)."""
+        flutter = self.cfg['flutter']
+        android = self.cfg['android']
+        ndk = self.cfg['ndk']
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
+            release_out.mkdir(parents=True)
+
+            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+                src = yaml.safe_load(f)
+
+            with (
+                patch('package.utils.flutter_tag', return_value=flutter['tag']),
+                patch('package.utils.engine_version', return_value='engine_revision_mock'),
+            ):
+                pkg = package.Package(
+                    root=str(root),
+                    arch='arm64',
+                    dart_version=flutter['dart_version'],
+                    framework_revision=flutter['framework_revision'],
+                    framework_commit_date=flutter['framework_commit_date'],
+                    devtools_version=flutter['devtools_version'],
+                    ndk_version=ndk.get('version', ''),
+                    compile_sdk=android['compile_sdk'],
+                    target_sdk=android['target_sdk'],
+                    **src,
+                )
+
+            items = list(pkg.gen_resource(['manifest', 'post_install']))
+            data_tar = Path(tmp, 'data.tar.xz')
+            package.tar(data_tar, items)
+
+            with tarfile.open(data_tar) as tar:
+                members = tar.getmembers()
+
+        names = [m.name for m in members]
+        parents = (
+            'data/data/com.termux/files/usr/share',
+            'data/data/com.termux/files/usr/share/flutter',
+        )
+        for leaf in (
+            'data/data/com.termux/files/usr/share/flutter/manifest.json',
+            'data/data/com.termux/files/usr/share/flutter/post_install.sh',
+        ):
+            self.assertIn(leaf, names)
+            leaf_index = names.index(leaf)
+            for parent in parents:
+                self.assertIn(parent, names, f'missing dir entry {parent} for {leaf}')
+                self.assertTrue(members[names.index(parent)].isdir())
+                self.assertLess(
+                    names.index(parent),
+                    leaf_index,
+                    f'{parent} must precede {leaf}',
+                )
 
     def test_control_version_uses_package_revision(self):
         flutter = self.cfg['flutter']
