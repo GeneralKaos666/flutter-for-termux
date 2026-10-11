@@ -407,7 +407,7 @@ if [[ $REPLY =~ ^[Nn]$ ]]; then
 	exit 0
 fi
 
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 
 # Allocate WORK_DIR early for all staging and downloads (#55)
 WORK_DIR=$(mktemp -d "${TMPDIR:-$PREFIX/tmp}/flutter_install.XXXXXX" 2>/dev/null || mktemp -d 2>/dev/null || mktemp -d -t flutter_install.XXXXXX)
@@ -428,7 +428,7 @@ if [ "${DO_UPGRADE:-false}" = true ]; then pkg upgrade -y; fi
 # Step 2: Install Flutter
 # ========================================
 echo ""
-echo -e "${GREEN}[2/${TOTAL_STEPS}]${NC} Installing Flutter SDK..."
+echo -e "${GREEN}[2/${TOTAL_STEPS}]${NC} Installing dependencies and downloading packages..."
 
 # Install dependencies
 pkg install -y x11-repo
@@ -588,7 +588,7 @@ MUTATION_STARTED=true
 # Step 2: Install Android SDK (install-first, never purge-first)
 # ========================================
 echo ""
-echo -e "${GREEN}[2/${TOTAL_STEPS}]${NC} Installing Android SDK..."
+echo -e "${GREEN}[3/${TOTAL_STEPS}]${NC} Installing Android SDK..."
 
 # Transactional: install new package directly (dpkg handles upgrade)
 echo "Installing Android SDK..."
@@ -603,7 +603,7 @@ echo "  ✓ Android SDK installed"
 # Step 3: Install Flutter SDK
 # ========================================
 echo ""
-echo -e "${GREEN}[3/${TOTAL_STEPS}]${NC} Installing Flutter SDK..."
+echo -e "${GREEN}[4/${TOTAL_STEPS}]${NC} Installing Flutter SDK..."
 
 echo "Installing Flutter SDK..."
 apt-get install -f -y "$FLUTTER_DEB" || {
@@ -683,7 +683,7 @@ fi
 # Step 4: Install ARM64 NDK
 # ========================================
 echo ""
-echo -e "${GREEN}[4/${TOTAL_STEPS}]${NC} Installing ARM64 NDK..."
+echo -e "${GREEN}[5/${TOTAL_STEPS}]${NC} Installing ARM64 NDK..."
 
 if [ -d "$NDK_PATH" ]; then
 	echo "  ✓ NDK installed"
@@ -770,7 +770,7 @@ fi
 # Step 5: Configure environment
 # ========================================
 echo ""
-echo -e "${GREEN}[5/${TOTAL_STEPS}]${NC} Configuring environment..."
+echo -e "${GREEN}[6/${TOTAL_STEPS}]${NC} Configuring environment..."
 
 # Set environment variables
 export ANDROID_HOME=$PREFIX/opt/android-sdk
@@ -838,7 +838,7 @@ echo "  ✓ Environment configured"
 # Step 6: Test build
 # ========================================
 echo ""
-echo -e "${GREEN}[6/${TOTAL_STEPS}]${NC} Testing APK build..."
+echo -e "${GREEN}[7/${TOTAL_STEPS}]${NC} Testing APK build..."
 
 # Install aapt2 (manually; post_install holds it against the dynamic-libprotobuf rolling breakage)
 echo "Checking aapt2..."
