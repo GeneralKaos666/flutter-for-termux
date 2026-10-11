@@ -203,7 +203,7 @@ jobs:
           DEB=$(python -c "import build; print(build.Build().output('arm64'))")
           PACKAGE_VERSION=$(python -c "import build; print(build.Build().package_version)")
           test -f "$DEB"
-          sha256sum "$DEB" | tee "${DEB}.sha256"
+          (cd "$(dirname "$DEB")" && sha256sum "$(basename "$DEB")") | tee "${DEB}.sha256"
           stat -c '%s' "$DEB" | tee "${DEB}.size.txt"
           TZ=UTC dpkg-deb -c "$DEB" > inventory.txt
           TREE_SHA=$(git log -1 --format='%T' HEAD)
