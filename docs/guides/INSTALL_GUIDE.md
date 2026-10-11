@@ -17,8 +17,8 @@ This guide covers `flutter_3.47.7-2_aarch64.deb`, targeting the following on ARM
 | Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |
 
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
-| deb size | 608,276,592 bytes (about 580 MiB) |
-| SHA256 | `c2f1b8cc2c9065ff8b96addb6c9d76d3aecb3205465fb211674d5a213ed6de85` |
+| deb size | 607,361,036 bytes (about 579 MiB) |
+| SHA256 | `2f780eac774122b59aeac83932663ac0fab1987c200ec0b49c12995ffb216ba5` |
 
 ## System Requirements
 
@@ -48,7 +48,7 @@ pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake
 cd ~
 wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-2_aarch64.deb
 sha256sum flutter_3.47.7-2_aarch64.deb
-# Confirm the output matches: c2f1b8cc2c9065ff8b96addb6c9d76d3aecb3205465fb211674d5a213ed6de85
+# Confirm the output matches: 2f780eac774122b59aeac83932663ac0fab1987c200ec0b49c12995ffb216ba5
 
 dpkg -i flutter_3.47.7-2_aarch64.deb
 apt --fix-broken install -y
