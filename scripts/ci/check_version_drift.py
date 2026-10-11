@@ -103,6 +103,7 @@ def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) ->
         text = re.sub(r"(?m)^(\|\s*Package\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{asset_name}\g<2>", text)
         text = replace_line_value(text, "FLUTTER_VERSION", tag)[0]
         text = replace_line_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
+        text = replace_line_int_value(text, "PKG_REL", cfg.get("pkg_rel", ""))[0]
         text = replace_line_value(text, "RELEASE_TAG", release_tag)[0]
         text = replace_default_var_value(text, "FLUTTER_VERSION", tag)[0]
         text = replace_default_var_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
@@ -403,6 +404,23 @@ def check_doctor_script(cfg: dict[str, str], root_path: Path | None = None) -> N
         fail(f"scripts/install/flutter_termux_doctor.sh: EXP_REV mismatch, expected '{fw_rev}'")
 
 
+def check_pkg_rel_references(cfg: dict[str, str], root_path: Path | None = None) -> None:
+    """Catch bare ``PKG_REL=<n>`` references (e.g. README download snippets)."""
+    base_root = root_path or ROOT
+    pkg_rel = cfg.get("pkg_rel", "")
+    if not pkg_rel:
+        return
+    file_list = sorted(set(MARKDOWN_DOCS + GUIDANCE_DOCS + GUIDE_DOCS + INSTALLER_SCRIPTS))
+    for rel_path in file_list:
+        path = base_root / rel_path
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r'(?m)^\s*PKG_REL\s*=\s*["\']?(\d+)', text):
+            if match.group(1) != pkg_rel:
+                fail(f"{rel_path}: PKG_REL mismatch: found '{match.group(1)}', expected '{pkg_rel}'")
+
+
 def run_checks(root_path: Path | None = None) -> list[str]:
     ERRORS.clear()
     cfg = load_build_config(root_path)
@@ -415,6 +433,7 @@ def run_checks(root_path: Path | None = None) -> list[str]:
     check_agent_guidance_docs(cfg, root_path)
     check_guide_docs(cfg, root_path)
     check_installer_scripts(cfg, root_path)
+    check_pkg_rel_references(cfg, root_path)
     check_post_install_script(cfg, root_path)
     check_doctor_script(cfg, root_path)
 
