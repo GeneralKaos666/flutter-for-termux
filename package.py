@@ -208,11 +208,17 @@ def tar(path, data):
             out = Path(out)
             assert mod is None or isinstance(mod, int)
 
+            # dpkg does not create missing parent directories while
+            # unpacking, so every file entry needs explicit ancestor dir
+            # entries emitted before it (e.g. share/flutter for manifest.json
+            # and post_install.sh). add_dir() recurses and de-duplicates.
             if isinstance(src, bytes):
+                add_dir(tar, out.parent)
                 add_bin(tar, out, src, mod)
             elif not src or src.is_dir():
                 add_dir(tar, out, mod)
             elif src.exists():
+                add_dir(tar, out.parent)
                 add_file(tar, out, src, mod)
             else:
                 raise FileNotFoundError(src)
