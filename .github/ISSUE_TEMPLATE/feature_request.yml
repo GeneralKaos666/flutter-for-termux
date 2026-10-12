@@ -1,0 +1,62 @@
+name: Feature request
+description: Suggest an improvement to the Termux Flutter SDK, its tooling, or these docs
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. This project is a cross-compiled Flutter SDK for aarch64 Termux,
+        so requests that change Flutter itself (Dart, widgets, engine APIs) belong upstream at
+        https://github.com/flutter/flutter/issues — file those there instead.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched existing issues and this hasn't been requested yet.
+          required: true
+        - label: This is about the Termux packaging/tooling, not upstream Flutter itself.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: What does this affect?
+      options:
+        - Installing or upgrading the SDK (deb / install script)
+        - flutter build apk
+        - flutter build linux
+        - flutter run / developer workflow
+        - The SDK build itself (build.py, patches)
+        - Documentation
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the limitation or friction you hit, not just the feature you want.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? Include commands, flags, or config if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you're using now, or other approaches you ruled out.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Who else benefits, links to related issues, or prior art from other distros.
+    validations:
+      required: false
