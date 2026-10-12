@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Install / upgrade guide
+    url: https://github.com/GeneralKaos666/flutter-for-termux/blob/main/docs/guides/INSTALL_GUIDE.md
+    about: Installing, upgrading, and recovering the Termux Flutter SDK.
+  - name: Build guide
+    url: https://github.com/GeneralKaos666/flutter-for-termux/blob/main/docs/guides/BUILD_GUIDE.md
+    about: Building the SDK and building APKs on-device.
+  - name: Termux issues
+    url: https://github.com/termux/termux-app/issues
+    about: Problems with the Termux app itself, unrelated to this SDK.
