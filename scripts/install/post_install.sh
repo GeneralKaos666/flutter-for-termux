@@ -303,12 +303,28 @@ patch_build_appbundle() {
 register_patch "build_appbundle" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/commands/build_appbundle.dart" patch_build_appbundle
 
 patch_plugin_utils() {
-	# forceNdkDownload() patched to early return
-	if grep -F -q "return // Termux" "$1"; then return 0; fi
+	# forceNdkDownload() patched to early return.
+	# The body is replaced with a single `return` rather than injecting a
+	# `return` above the first statement: an injected return leaves the rest of
+	# the function unreachable, and Kotlin does not smart-cast in unreachable
+	# code, so the generated `androidComponents.finalizeDsl { ... }` fails to
+	# compile with "Only safe (?.) or non-null asserted (!!.) calls are allowed
+	# on a nullable receiver of type 'AndroidComponentsExtension<*, *, *>?'"
+	# (Flutter 3.47.7, flutter_tools/gradle). Replacing the whole body keeps the
+	# same runtime behaviour (NDK is preinstalled on Termux) with no dead code.
+	if grep -F -q "Termux: NDK provisioning disabled" "$1"; then return 0; fi
 	grep -q "fun forceNdkDownload" "$1" || return 1
-	sed -i '/fun forceNdkDownload/,/^    }/ {
-        /val forcingNotRequired: Boolean/i\        return // Termux: NDK already installed, skip CMake trick
-    }' "$1"
+	awk '
+		/^[[:space:]]*internal fun forceNdkDownload\(/ { in_sig = 1 }
+		in_body && /^    }[[:space:]]*$/ { print; in_body = 0; next }
+		in_body { next }
+		in_sig && /\)[[:space:]]*\{[[:space:]]*$/ {
+			print
+			print "        return // Termux: NDK provisioning disabled (NDK preinstalled)"
+			in_sig = 0; in_body = 1; next
+		}
+		{ print }
+	' "$1" > "$1.termux_tmp" && mv "$1.termux_tmp" "$1"
 }
 register_patch "plugin_utils" "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterPluginUtils.kt" patch_plugin_utils
 
