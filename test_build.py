@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import re
+import subprocess
 import tarfile
 import tempfile
 import tomllib
@@ -168,6 +169,73 @@ class BuildTest(unittest.TestCase):
         hunk_line_count = int(hunk.group(1))
         added_lines = sum(1 for line in hunk.group('body').splitlines() if line.startswith('+'))
         self.assertEqual(added_lines, hunk_line_count)
+
+    def test_plugin_utils_patch_replaces_body_to_avoid_unreachable_smart_cast(self):
+        """Regression for #26's APK-build failure (Flutter 3.47.7).
+
+        ``patch_plugin_utils`` used to inject a bare ``return`` above the first
+        statement of ``forceNdkDownload``, leaving the rest of the function
+        unreachable. Kotlin does not smart-cast in unreachable code, so the
+        generated ``androidComponents.finalizeDsl { ... }`` failed to compile
+        with "Only safe (?.) or non-null asserted (!!.) calls are allowed on a
+        nullable receiver of type 'AndroidComponentsExtension<*, *, *>?'".
+        The patch must now replace the whole body with a single return: same
+        runtime behaviour (NDK is preinstalled on Termux), no dead code.
+        """
+        script = (
+            Path(__file__).parent / 'scripts' / 'install' / 'post_install.sh'
+        ).read_text()
+        func = re.search(r'^patch_plugin_utils\(\) \{.*?^\}', script, re.M | re.DOTALL)
+        self.assertIsNotNone(func)
+
+        fixture = (
+            'package com.flutter.gradle\n'
+            '\n'
+            '    @JvmStatic\n'
+            '    @JvmName("forceNdkDownload")\n'
+            '    internal fun forceNdkDownload(\n'
+            '        gradleProject: Project,\n'
+            '        flutterSdkRootPath: String\n'
+            '    ) {\n'
+            '        val gradleProjectAndroidExtension = getLegacyAndroidExtension(gradleProject)\n'
+            '        val forcingNotRequired: Boolean =\n'
+            '            gradleProjectAndroidExtension.externalNativeBuild.cmake.path != null\n'
+            '        if (forcingNotRequired) {\n'
+            '            return\n'
+            '        }\n'
+            '        val androidComponents =\n'
+            '            gradleProject.extensions.findByType(AndroidComponentsExtension::class.java)\n'
+            '        if (androidComponents == null) {\n'
+            '            return\n'
+            '        }\n'
+            '        androidComponents.finalizeDsl { _ -> return@finalizeDsl }\n'
+            '    }\n'
+        )
+
+        def run_patch(target: Path) -> None:
+            subprocess.run(
+                ['bash', '-c', f'set -e\n{func.group(0)}\npatch_plugin_utils "$1"', 'bash', str(target)],
+                check=True,
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'FlutterPluginUtils.kt.tmp'
+            target.write_text(fixture)
+            run_patch(target)
+            patched = target.read_text()
+
+            # signature and parameters survive so callers still link
+            self.assertIn('internal fun forceNdkDownload(', patched)
+            self.assertIn('gradleProject: Project,', patched)
+            self.assertIn('flutterSdkRootPath: String', patched)
+            # body is a single return; no unreachable smart-cast code remains
+            self.assertIn('return // Termux: NDK provisioning disabled', patched)
+            self.assertNotIn('val forcingNotRequired', patched)
+            self.assertNotIn('androidComponents.finalizeDsl', patched)
+
+            # idempotent: re-running the patch is a no-op
+            run_patch(target)
+            self.assertEqual(patched, target.read_text())
 
 
 class PackageManifestTest(unittest.TestCase):
