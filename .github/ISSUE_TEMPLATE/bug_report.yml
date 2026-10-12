@@ -1,0 +1,113 @@
+name: Bug report
+description: Report a build failure, install problem, or runtime bug with this Termux Flutter SDK
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a report. Build and install bugs here almost always need the exact package
+        version and the full command output, so please fill in as much as you can.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched existing issues and this hasn't been reported yet.
+          required: true
+        - label: I'm on aarch64 Termux (the only supported target).
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: What is affected?
+      options:
+        - Installing or upgrading the SDK (deb / install script)
+        - flutter build apk
+        - flutter build linux
+        - flutter run / hot reload
+        - The SDK build itself (build.py)
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: package_version
+    attributes:
+      label: Flutter package version
+      description: "Output of `dpkg -s flutter | grep Version`, or the .deb filename you installed."
+      placeholder: "3.47.7-3"
+    validations:
+      required: true
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: How did you install it?
+      options:
+        - .deb release from GitHub Releases
+        - install_flutter_complete.sh
+        - Built from source with build.py
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      description: "Output of `getprop ro.product.model` and `getprop ro.build.version.release`."
+      placeholder: "Pixel 7, Android 14"
+    validations:
+      required: true
+  - type: input
+    id: termux_version
+    attributes:
+      label: Termux version and architecture
+      description: "Termux app version (Settings → About) and `uname -m`."
+      placeholder: "0.118.3, aarch64"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command(s) run
+      description: The exact command, including every flag.
+      render: shell
+      placeholder: "flutter build apk --release"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Paste the full error output instead of a screenshot of text.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "Output from a verbose run (`-v`), `flutter doctor -v`, or attached log files. Attach large logs rather than pasting megabytes."
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Link to a repo or gist with the smallest project that fails, if one is available.
+      placeholder: "https://github.com/you/repro"
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that might help — workarounds, when it started, related issues.
+    validations:
+      required: false
