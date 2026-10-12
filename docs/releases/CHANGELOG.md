@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retired the Mode-A "pin API 34" constraint documented in the AAPT2 analysis.
 - Reoriented repository documentation to English-first: `README.md` is now the English primary (promoted from `README_EN.md`), the Chinese README moved to `README_ZH.md`, and the four `docs/guides/*` documents gained English canonicals with Chinese `*_ZH.md` twins. Translated user-facing messages and comments in scripts to English. Removed stale `.orig` merge artifacts.
 
+### Fixed
+- **APK smoke test failed under AGP 9 and rolled back installs (issue #27).** The installer's smoke project was rewritten with an outdated `build.gradle.kts` DSL (`kotlin-android` plugin, `kotlinOptions { jvmTarget }`, `externalNativeBuild`). AGP 9.1.0 / Kotlin 2.4.0 reject those accessors, so the test build died with "Script compilation errors" and the installer rolled the whole installation back. The smoke project now uses the current Flutter 3.47.7 DSL (no `kotlin-android`, `kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }`, `compileOptions` at Java 17).
+- **Smoke failures are now diagnosable.** On an APK smoke failure the installer prints the tail of the relevant Gradle build log (filtered to error lines) and detects/report a failed `flutter create`, instead of the previous bare `✗ APK build failed`.
+- **NDK default pinned to the shipped NDK.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant in `gradle_utils.dart`) to the NDK shipped in the package (`29.0.14206865`), so new projects no longer make AGP auto-download the x86-64-only `android-ndk-r28c-linux` (whose tools cannot run on ARM64 Termux).
+
 ## [3.44.9-termux] - 2026-07-04
 
 ### Added
