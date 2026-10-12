@@ -137,9 +137,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.47.7-2_aarch64.deb`
-- `flutter_3.47.7-2_aarch64.deb.sha256`
-- `flutter_3.47.7-2_aarch64.deb.size.txt`
+- `flutter_3.47.7-3_aarch64.deb`
+- `flutter_3.47.7-3_aarch64.deb.sha256`
+- `flutter_3.47.7-3_aarch64.deb.size.txt`
 
 ## Release policy
 
@@ -182,8 +182,8 @@ Manual workflow: **Device smoke (self-hosted)**
 Default input tests the published 3.47.7 release asset:
 
 ```text
-deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-2_aarch64.deb
-expected_sha256: 2f780eac774122b59aeac83932663ac0fab1987c200ec0b49c12995ffb216ba5
+deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-3_aarch64.deb
+expected_sha256: daeab94d5cee72cffb941f9d89a03925d8e35acfa11f3ab3e8f838c8e39201f2
 ```
 
 Required self-hosted environment:
@@ -283,5 +283,5 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-2_aarch64.deb"
+  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-3_aarch64.deb"
 ```

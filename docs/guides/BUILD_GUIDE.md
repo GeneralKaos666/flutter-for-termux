@@ -9,8 +9,8 @@ This document explains how to build a Flutter deb package that includes Android 
 | Flutter tag | `3.47.7` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
 | Package | `flutter_3.47.7-3_aarch64.deb` |
-| Package size | 607,361,036 bytes (about 579 MiB) |
-| SHA256 | `2f780eac774122b59aeac83932663ac0fab1987c200ec0b49c12995ffb216ba5` |
+| Package size | 611,866,756 bytes (about 584 MiB) |
+| SHA256 | `daeab94d5cee72cffb941f9d89a03925d8e35acfa11f3ab3e8f838c8e39201f2` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
 3.47.7 introduces three new points that require special attention:

@@ -9,7 +9,7 @@
 export FLUTTER_VERSION="3.47.7"
 export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-3}"
 export RELEASE_TAG="3.47.7"
-export EXPECTED_SHA256="2f780eac774122b59aeac83932663ac0fab1987c200ec0b49c12995ffb216ba5"
+export EXPECTED_SHA256="daeab94d5cee72cffb941f9d89a03925d8e35acfa11f3ab3e8f838c8e39201f2"
 export FLUTTER_DEB_NAME="flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL}_aarch64.deb"
 
 # Android SDK (mumumusuc/termux-android-sdk apt package, release tag below)
