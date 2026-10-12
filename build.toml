@@ -94,4 +94,4 @@ pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 [package]
 conf = './package.yaml'
 path = '.'
-pkg_rel = '2'  # Debian packaging revision suffix (e.g. 2 -> 3.47.7-2); bumped for the tar parent-dir fix (#26)
+pkg_rel = '3'  # Debian packaging revision suffix (3.47.7-3 ships the forceNdkDownload Kotlin compile fix (#26))
