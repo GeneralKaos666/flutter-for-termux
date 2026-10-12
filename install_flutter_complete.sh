@@ -409,6 +409,15 @@ fi
 
 TOTAL_STEPS=7
 
+# Purge stale work dirs left by previous interrupted runs. The EXIT trap only
+# fires on graceful exits; if Termux kills the install (screen off, app
+# swiped away, kill -9), each aborted run can leave GBs of staged debs and
+# build artifacts in "$PREFIX/tmp/flutter_install.*" that never get deleted.
+for stale_work_dir in "${TMPDIR:-$PREFIX/tmp}"/flutter_install.*; do
+	[ -e "$stale_work_dir" ] || continue
+	rm -rf "$stale_work_dir" 2>/dev/null || true
+done
+
 # Allocate WORK_DIR early for all staging and downloads (#55)
 WORK_DIR=$(mktemp -d "${TMPDIR:-$PREFIX/tmp}/flutter_install.XXXXXX" 2>/dev/null || mktemp -d 2>/dev/null || mktemp -d -t flutter_install.XXXXXX)
 INSTALL_FAILED=false
