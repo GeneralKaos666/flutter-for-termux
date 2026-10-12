@@ -35,6 +35,19 @@ if [ -f "$PREFIX/share/flutter/manifest.json" ]; then
 	[ -n "${TERMUX_TARGET_SDK:-}" ] && TARGET_SDK="$TERMUX_TARGET_SDK"
 fi
 
+# NDK version the Flutter tool defaults to. The shipped package builds and
+# ships exactly one NDK (build.toml [ndk] -> manifest.json "ndk_version").
+# Upstream Flutter defaults to 28.2.13676358, but on an aarch64 Termux host
+# AGP would auto-download "android-ndk-r28c-linux" — Google publishes only the
+# x86-64 linux NDK build, whose tools cannot run on this device. Pinning the
+# default to the shipped NDK (which has Termux clang wrappers) avoids that.
+NDK_VERSION="${TERMUX_NDK_VERSION:-29.0.14206865}"
+if [ -f "$PREFIX/share/flutter/manifest.json" ]; then
+	_m_ndk=$(grep -o '"ndk_version": *"[^"]*"' "$PREFIX/share/flutter/manifest.json" 2>/dev/null | cut -d'"' -f4 || echo "")
+	[ -n "$_m_ndk" ] && NDK_VERSION="$_m_ndk"
+	[ -n "${TERMUX_NDK_VERSION:-}" ] && NDK_VERSION="$TERMUX_NDK_VERSION"
+fi
+
 MODE="${MODE:-apply}"
 if [ "${1:-}" = "--check" ]; then MODE="check"; fi
 if [ "${1:-}" = "--apply" ]; then MODE="apply"; fi
@@ -233,6 +246,26 @@ patch_compile_sdk() {
 	sed -i "s/val compileSdkVersion: Int = [0-9]*/val compileSdkVersion: Int = $COMPILE_SDK/" "$1"
 }
 register_patch "compile_sdk" "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" patch_compile_sdk
+
+patch_ndk_version() {
+	# Pin the Flutter Gradle plugin's default ndkVersion to the NDK shipped by
+	# this package (see NDK_VERSION above). Generated projects reference
+	# `flutter.ndkVersion`, which resolves to this Kotlin default at build time.
+	if grep -F -q "val ndkVersion: String = \"$NDK_VERSION\"" "$1"; then return 0; fi
+	grep -q "val ndkVersion: String =" "$1" || return 1
+	sed -i "s/val ndkVersion: String = \"[0-9.]*\"/val ndkVersion: String = \"$NDK_VERSION\"/" "$1"
+}
+register_patch "ndk_version" "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" patch_ndk_version
+
+patch_ndk_version_dart() {
+	# Same pin for the Dart-side constant (flutter_tools): it feeds create-time
+	# template rendering (module/plugin projects) and NDK validation. Baked into
+	# flutter_tools.snapshot by finalize_flutter_tools_cache (step 17).
+	if grep -F -q "const ndkVersion = '$NDK_VERSION'" "$1"; then return 0; fi
+	grep -q "const ndkVersion = " "$1" || return 1
+	sed -i "s/const ndkVersion = '[0-9.]*'/const ndkVersion = '$NDK_VERSION'/" "$1"
+}
+register_patch "ndk_version_dart" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/gradle_utils.dart" patch_ndk_version_dart
 
 patch_plugin_constants() {
 	if grep -F -q "PLATFORM_ARM64" "$1" && ! grep -F -q "PLATFORM_ARM32 = \"android-arm\"" "$1"; then return 0; fi

@@ -874,11 +874,22 @@ if [ -d "$TEST_APP_DIR" ]; then
 fi
 
 echo "Creating test project..."
-# Create a project with Android and Linux support
+# Create a project with Android and Linux support.
+# `flutter create` stderr is suppressed (it is noisy on success), so verify the
+# project actually appeared and fail with a reproducible command otherwise —
+# a later bare "✗ APK build failed" hides the underlying problem (issue #27).
 if command -v pkg-config &>/dev/null && pkg-config --exists gtk+-3.0 2>/dev/null; then
 	flutter create --platforms android,linux "$TEST_APP_DIR" 2>/dev/null
 else
 	flutter create --platforms android "$TEST_APP_DIR" 2>/dev/null
+fi
+if [ ! -d "$TEST_APP_DIR/android" ]; then
+	echo "  ✗ flutter create failed (no android/ directory at $TEST_APP_DIR/android)" >&2
+	echo "    Re-run manually to see the error:" >&2
+	echo "      flutter create --platforms android \"$TEST_APP_DIR\"" >&2
+	record_stage smoke failed
+	INSTALL_FAILED=true
+	exit 60
 fi
 
 cd "$TEST_APP_DIR"
@@ -892,11 +903,12 @@ cat >>android/gradle.properties <<'PROPS'
 android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
 PROPS
 
-# Update build.gradle.kts (set compileSdk=36, targetSdk=36, abiFilters=arm64-v8a)
+# Update build.gradle.kts (set compileSdk=36, targetSdk=36, ndkVersion, AGP 9-compatible DSL)
+# NB: must match current Flutter template DSL — the old kotlinOptions/externalNativeBuild
+# accessors are deprecated and fail script compilation under AGP 9/Kotlin 2.4
 cat >android/app/build.gradle.kts <<'GRADLE'
 plugins {
     id("com.android.application")
-    id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -906,12 +918,8 @@ android {
     ndkVersion = "29.0.14206865"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     defaultConfig {
@@ -920,14 +928,6 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
-        externalNativeBuild {
-            cmake {
-                abiFilters("arm64-v8a")
-            }
-        }
     }
 
     buildTypes {
@@ -935,11 +935,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
 
-    splits {
-        abi {
-            isEnable = false
-        }
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
@@ -987,6 +987,19 @@ if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
 else
 	APK_BUILD_SUCCESS=false
 	echo "  ✗ APK build failed"
+	# Print the build log tail so failures are self-diagnosable: the bare ✗
+	# alone hides the real Gradle error from the user (issue #27).
+	if [ -f "$build2_log" ]; then
+		DIAG_LOG="$build2_log"
+	else
+		DIAG_LOG="$build1_log"
+	fi
+	echo "  Build logs: $build1_log${build2_log:+ , $build2_log}"
+	echo "  --- last 60 relevant lines of ${DIAG_LOG} ---"
+	tail -n 200 "$DIAG_LOG" 2>/dev/null | tr '\r' '\n' |
+		grep -aiE "error|failed|exception|deprecated|warning|could not|cannot|what went wrong|exit code|compilation|unresolved|no such" |
+		tail -n 60 || true
+	echo "  --- full log: ${DIAG_LOG} ---"
 	record_stage smoke failed
 	INSTALL_FAILED=true
 	exit 60
