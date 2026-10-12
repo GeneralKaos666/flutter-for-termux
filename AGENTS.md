@@ -40,7 +40,7 @@ Key details:
 - `tag` is the release version (no `v` prefix). Release asset is `flutter_<tag>-<pkg_rel>_aarch64.deb` (e.g. `flutter_3.47.7-3_aarch64.deb`).
 - Prefix `NO_RECORD=1` to bypass the `@utils.record` debug-logging wrapper (it logs and re-raises; bypass reduces log noise, used by CI for `python3 build.py tag`).
 - NDK discovery: build.py reads `[ndk] path` from build.toml, else the `ANDROID_NDK` env var. Workflows translate `NDK_PATH`/`ANDROID_NDK_HOME` → `ANDROID_NDK`.
-- Host must have `dpkg` (sysroot.py runs `dpkg -x`) and `ar` (package.py runs `ar rc`).
+- Host build prereqs beyond `pip install -r requirements.txt`: `gclient` (depot_tools), `ninja`, `vpython3`, `dpkg` (`sysroot.py` runs `dpkg -x`), and `ar` (`package.py` runs `ar rc`). CI bootstraps depot_tools by cloning it inline.
 - `pip install -r requirements.txt` first (fire, loguru, GitPython, PyYAML, aiohttp, requests, pytest).
 
 ## Architecture
@@ -59,17 +59,21 @@ Key details:
 
 ## Lightweight verification
 
-Mirrors `ci.yml`. Run all of these before pushing:
+Mirrors `ci.yml` (plus a couple of local-only checks). Run before pushing:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/generate_versions.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
-pytest test_build.py        # NB: there is no tests/ dir; pytest.ini (testpaths=test_build.py) names the file
+ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/   # ruff-format is non-blocking (|| true) in CI
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/*.py
+pytest test_build.py        # NB: no tests/ dir; pytest.ini (testpaths=test_build.py) names the file. Subprocess is mocked, so no NDK/Flutter checkout is needed even though setUp sets ANDROID_NDK=/tmp/android-ndk
+pytest test_build.py::BuildTest::test_build_requests_packaged_targets   # single test
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
-python scripts/ci/generate_versions.py --check
+python scripts/ci/generate_versions.py --check   # versions_common.sh must match build.toml
 python scripts/ci/check_version_drift.py   # add --fix to auto-rewrite drifted version refs from build.toml
 python scripts/ci/check_repo.py
 git diff --check
 ```
+
+`.pre-commit-config.yaml` wraps the same checks (`pre-commit run --all-files`): trailing-whitespace, end-of-file-fixer, check-yaml/toml, mixed-line-ending (LF), `ruff`, `ruff-format`.
 
 ## CI/CD
 
@@ -81,16 +85,18 @@ git diff --check
 - `autorelease.yml` — nightly: detects latest Flutter stable, bumps `build.toml`, `sed`s the same version strings across docs (incl. this file) and installers, then pushes.
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.
 
+`main` is protected by `.github/rulesets/main_protection_ruleset.json`: PR + review + resolved threads, strict `CI` checks, linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/CI_CD.md`.
+
 ## Gotchas
 
 1. **Version drift is enforced.** `scripts/ci/check_version_drift.py` and `check_repo.py` scan AGENTS.md, guides, installers, and post_install.sh — every `3.47.7` / `flutter_3.47.7-3_aarch64.deb` / patch path must match `build.toml [flutter] tag` or CI fails. `autorelease.yml` rewrites these files automatically on a bump, so don't fight the sed format. Use `check_version_drift.py --fix` to auto-rewrite from `build.toml`.
 2. **Only ARM64 works** for APK gen_snapshot. `arm` fails (32-bit BoringSSL shift overflow), `x64` fails (sysroot mismatch). Packaging is ARM64-only.
 3. **`utils.__MODE__ = ('release', 'debug', 'profile')`** — release first. `Output.any` picks the first existing `flutter/engine/src/out/linux_*_*` dir; it drives which dart-sdk snapshots get packaged. `debuild` asserts at least one output dir exists — build before you package.
-4. **`package.yaml` variables resolve with `safe_eval()`** (package.py) using constrained globals (`root`, `arch`, `output`, `version`, substitution defines). It allowlists literals, names, attribute access, and f-strings — keep template expressions constrained. `$version` is the engine revision from `bin/internal/engine.version`. Don't drop resource keys (`flutter`, `dart_sdk`, `artifacts`, `flutter_linux_gtk_*`, `flutter_patched_sdk*`, `executable`, `profile`, `stamps`, `manifest`, `post_install`) — `check_repo.py` asserts them.
+4. **`package.yaml` variables resolve with `safe_eval()`** (package.py) using constrained globals (`tag`, `root`, `arch`, `output`, `version`, `architecture`, plus CLI extras like `dart_version`; resource-local `define:` values layer on top). It allowlists literals, names, attribute access, f-strings, and simple operators — no calls, comprehensions, lambdas, or dunder access. `$version` is the engine revision from `bin/internal/engine.version`. Don't drop the resources `check_repo.py` asserts: `flutter`, `flutter_gpu`, `sky_engine`, `dart_sdk`, `artifacts`, `flutter_linux_gtk_release`, `flutter_linux_gtk_profile`, `flutter_patched_sdk_product`, `executable`, `profile`, `stamps`, `manifest`, `post_install`.
 5. **GN flag `is_termux=true`** activates repo-specific BUILD.gn rules (`-llog -lm`, termux toolchain). `configure()` also passes `custom_sysroot`, `-I` for NDK Vulkan headers + `stubs/` headers, and `-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__` so SwiftShader can weak-import API-29 symbols at API 26.
-6. **`build()` ninja targets are contract**: `flutter` + `flutter/build/archives:artifacts`, `:dart_sdk_archive`, `:flutter_patched_sdk`, `flutter/shell/platform/linux:flutter_gtk`, `flutter/tools/font_subset`. Dropping `flutter_gtk` breaks `flutter build linux`; `test_build.py` asserts this exact target list. `patches/dart.new.patch` is a symlink to `patches/dart.patch` — edit `dart.patch` only.
+6. **`build()` ninja targets are contract**: `flutter`, `flutter/build/archives:artifacts`, `flutter/build/archives:dart_sdk_archive`, `flutter/build/archives:flutter_patched_sdk`, `flutter/shell/platform/linux:flutter_gtk`, `flutter/tools/font_subset`. Dropping `flutter_gtk` breaks `flutter build linux`; `test_build.py` asserts this list. `patches/dart.new.patch` is a symlink to `patches/dart.patch` — edit `dart.patch` only.
 7. **`sysroot/` is disposable** (gitignored). Rebuild with `python3 build.py sysroot --arch=arm64`; `sysroot.lock.json` records the pinned package set and is required by `check_repo.py`.
-8. **Repo hygiene is enforced.** New docs go under `docs/` (only `AGENTS.md`, `README.md`, etc. may live at root); every `.sh` needs a `#!` shebang with LF-only endings (same for the `build.py`/`package.py`/`sysroot.py`/ci-script entrypoints); never commit `scratch/`, `*.bak`, `*.receipt.json`, or test caches; keep `post_install.sh` marker comments intact (`PLATFORM_ABI_LIST`, Gradle-cache/NDK-download patches, Termux host→Linux-artifact mapping).
+8. **Repo hygiene is enforced** by `check_repo.py`. Root markdown allowlist is exactly `AGENTS.md`, `README.md`, `ORIGINAL_REQUEST.md`, `PROJECT.md` (new docs go under `docs/`), and `docs/README.md`, `docs/CI_CD.md`, `docs/guides/*`, `docs/releases/*` must exist. Markdown needs balanced code fences, no control characters, and no broken relative `.md` links. Every `.sh` needs a `#!` shebang with LF-only endings (same for `build.py`/`package.py`/`sysroot.py` and the shebang-bearing ci scripts); never commit `scratch/`, `*.bak`, `*.receipt.json`, or test caches; keep the `post_install.sh` markers intact (`PLATFORM_ABI_LIST`, `Flutter Gradle plugin cache cleared`, `forceNdkDownload() patched to early return`, `Termux: map Android host to Linux artifacts`, `Termux: allow linux build`).
 
 ## Termux runtime
 
