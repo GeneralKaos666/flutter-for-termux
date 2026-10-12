@@ -4,11 +4,21 @@
 
 This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
 
+## Fixed in 3.47.7-4
+
+`3.47.7-3` could fail its own post-install APK smoke test and roll the installation back ([issue #27](https://github.com/GeneralKaos666/flutter-for-termux/issues/27)). `3.47.7-4` fixes this:
+
+- **Smoke test.** The installer's smoke project was generated with an outdated Gradle DSL (`kotlin-android` plugin, `kotlinOptions { jvmTarget }`) that AGP 9.1.0 / Kotlin 2.4.0 reject; it now uses the current Flutter 3.47.7 DSL.
+- **Diagnostics.** If the smoke build ever fails, the installer now prints the relevant Gradle log lines and reports a failed `flutter create`, instead of a bare `✗ APK build failed`.
+- **NDK default.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant) to the NDK shipped in this package (`29.0.14206865`). Projects no longer trigger AGP to auto-download the x86-64-only `android-ndk-r28c-linux`, whose tools cannot run on ARM64 Termux.
+
+Installing `3.47.7-4` over `3.47.7-3` is a drop-in replacement — follow the [Install](#install) steps. If a previous attempt rolled back and removed the SDK, reinstall from scratch with the same commands.
+
 ## Package
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.7-3_aarch64.deb` |
+| Package | `flutter_3.47.7-4_aarch64.deb` |
 | Size | 611,866,756 bytes (~584 MiB) |
 | SHA256 | `daeab94d5cee72cffb941f9d89a03925d8e35acfa11f3ab3e8f838c8e39201f2` |
 | Flutter | 3.47.7 |
@@ -21,8 +31,8 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorp
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-3_aarch64.deb
-dpkg -i flutter_3.47.7-3_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-4_aarch64.deb
+dpkg -i flutter_3.47.7-4_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh

@@ -94,4 +94,4 @@ pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 [package]
 conf = './package.yaml'
 path = '.'
-pkg_rel = '3'  # Debian packaging revision suffix (3.47.7-3 ships the forceNdkDownload Kotlin compile fix (#26))
+pkg_rel = '4'  # Debian packaging revision suffix (3.47.7-4 ships the APK-smoke AGP 9 DSL fix + NDK default pin (#27))
