@@ -20,7 +20,7 @@ source "$(dirname "$0")/../install/lib_common.sh" || {
 	source ./lib_common.sh
 }
 
-export DEB_NAME=${DEB_NAME:-${FLUTTER_DEB_NAME:-"flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL:-2}_aarch64.deb"}}
+export DEB_NAME=${DEB_NAME:-${FLUTTER_DEB_NAME:-"flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL:-3}_aarch64.deb"}}
 export DEB_URL=${DEB_URL:-"https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${DEB_NAME}"}
 
 FAILED=0

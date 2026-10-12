@@ -8,7 +8,7 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorp
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.7-2_aarch64.deb` |
+| Package | `flutter_3.47.7-3_aarch64.deb` |
 | Size | 607,361,036 bytes (~579 MiB) |
 | SHA256 | `2f780eac774122b59aeac83932663ac0fab1987c200ec0b49c12995ffb216ba5` |
 | Flutter | 3.47.7 |
@@ -21,8 +21,8 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorp
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-2_aarch64.deb
-dpkg -i flutter_3.47.7-2_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-3_aarch64.deb
+dpkg -i flutter_3.47.7-3_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
