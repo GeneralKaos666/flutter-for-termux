@@ -480,6 +480,38 @@ if [ "$MODE" == "status" ] || [ "$MODE" == "check" ]; then
 	exit 0
 fi
 
+# Helper: validate/repair an NDK directory so AGP can use it.
+# AGP refuses to configure native modules when <sdk>/ndk/<version>/source.properties
+# is absent, failing with "[CXX1101] NDK at ... did not have a source.properties
+# file". A partially provisioned or corrupt NDK directory can lack it. Repair by
+# regenerating the metadata from the directory name, or remove the directory when
+# it has no LLVM toolchain (unusable stub) so the installer re-provisions it.
+repair_ndk_metadata() {
+	local NDK_PATH="$1"
+	local NDK_NAME
+	NDK_NAME=$(basename "$NDK_PATH")
+
+	if [ -f "$NDK_PATH/source.properties" ]; then
+		return
+	fi
+
+	if [ ! -d "$NDK_PATH/toolchains/llvm" ]; then
+		echo "  ⚠ Removing unusable NDK directory $NDK_NAME (no toolchains/llvm)"
+		rm -rf "$NDK_PATH" 2>/dev/null || true
+		return
+	fi
+
+	local NDK_REVISION="$NDK_NAME"
+	local NDK_RELEASE="r${NDK_NAME%%.*}"
+	{
+		echo "Pkg.Desc = Android NDK"
+		echo "Pkg.Revision = $NDK_REVISION"
+		echo "Pkg.BaseRevision = $NDK_REVISION"
+		echo "Pkg.ReleaseName = $NDK_RELEASE"
+	} >"$NDK_PATH/source.properties"
+	echo "  ✓ Created missing source.properties for NDK $NDK_NAME (required by AGP)"
+}
+
 # Helper function to setup NDK clang wrappers for any NDK version
 setup_ndk_clang_wrappers() {
 	local NDK_PATH="$1"
@@ -1098,6 +1130,11 @@ if [ -d "$NDK_DIR" ]; then
 	NDK_COUNT=0
 	for ndk_path in "$NDK_DIR"/*; do
 		if [ -d "$ndk_path" ]; then
+			repair_ndk_metadata "$ndk_path"
+			# repair_ndk_metadata may remove an unusable directory
+			if [ ! -d "$ndk_path" ]; then
+				continue
+			fi
 			setup_ndk_clang_wrappers "$ndk_path"
 			NDK_COUNT=$((NDK_COUNT + 1))
 		fi
