@@ -148,6 +148,16 @@ restore_ndk_backups() {
 	fi
 }
 
+# An NDK directory is only usable by AGP when it contains both the LLVM
+# toolchain and the source.properties metadata file. A partially extracted or
+# corrupt install can leave an empty directory behind; treating that as
+# "installed" makes AGP fail later with
+# "[CXX1101] NDK at ... did not have a source.properties file".
+ndk_is_valid() {
+	local ndk_dir="$1"
+	[ -d "$ndk_dir/toolchains/llvm" ] && [ -f "$ndk_dir/source.properties" ]
+}
+
 configure_ndk_clang() {
 	local NDK_DIR="$1"
 	local PREBUILT="$NDK_DIR/toolchains/llvm/prebuilt"
@@ -483,7 +493,7 @@ fi
 ANDROID_HOME="$PREFIX/opt/android-sdk"
 NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
 NDK_PREEXISTING=false
-if [ -d "$NDK_PATH" ]; then
+if ndk_is_valid "$NDK_PATH"; then
 	NDK_PREEXISTING=true
 fi
 
@@ -565,7 +575,7 @@ verify_sha256 "$ANDROID_SDK_DEB" "$ANDROID_SDK_EXPECTED_SHA256" || {
 
 ANDROID_HOME="$PREFIX/opt/android-sdk"
 NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
-if [ ! -d "$NDK_PATH" ]; then
+if ! ndk_is_valid "$NDK_PATH"; then
 	echo "Downloading ARM64 NDK..."
 	wget -q --show-progress "$NDK_ARCHIVE_URL" -O "$NDK_ARCHIVE" || {
 		INSTALL_FAILED=true
@@ -694,7 +704,7 @@ fi
 echo ""
 echo -e "${GREEN}[5/${TOTAL_STEPS}]${NC} Installing ARM64 NDK..."
 
-if [ -d "$NDK_PATH" ]; then
+if ndk_is_valid "$NDK_PATH"; then
 	echo "  ✓ NDK installed"
 else
 	echo "Extracting NDK (Staging Isolation)..."

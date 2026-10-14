@@ -212,6 +212,27 @@ Gradle may have downloaded a new NDK or build-tools. Re-run post-install:
 bash $PREFIX/share/flutter/post_install.sh
 ```
 
+### `did not have a source.properties file` (NDK metadata error)
+
+If `flutter build apk`/`flutter build appbundle` fails while configuring a native plugin with:
+
+```text
+[CXX1101] NDK at .../ndk/<version> did not have a source.properties file
+```
+
+the installed NDK directory is incomplete. AGP requires
+`<sdk>/ndk/<version>/source.properties` to identify the NDK, and an
+interrupted or partially extracted install can leave that file missing.
+Re-run post-install, which validates every installed NDK and regenerates the
+missing metadata (or removes an unusable stub so the installer re-provisions it):
+
+```bash
+bash $PREFIX/share/flutter/post_install.sh
+```
+
+If the NDK directory itself is empty or corrupt, re-run the full installer so it
+downloads and extracts a clean NDK.
+
 ### Out of Storage Space
 
 ```bash
