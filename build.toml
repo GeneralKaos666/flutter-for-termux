@@ -94,4 +94,4 @@ pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 [package]
 conf = './package.yaml'
 path = 'release'  # gitignored; created on demand by Build.output()
-pkg_rel = '4'  # Debian packaging revision suffix (3.47.7-4 ships the APK-smoke AGP 9 DSL fix + NDK default pin (#27))
+pkg_rel = '5'  # Debian packaging revision suffix (3.47.7-5 ships the review-fix batch: newline-free engine version, valid flutter_settings JSON, honest snapshot banners, non-interactive --yes, flutter_project_config in the deb, deb under release/)
