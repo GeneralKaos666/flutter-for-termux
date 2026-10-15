@@ -200,7 +200,8 @@ async def _work(out, arch, *src, lock_path=None):
     usr = out/'usr'
     dst = 'data/data/com.termux/files/usr'
 
-    assert os.path.isdir(out/dst)
+    if not os.path.isdir(out/dst):
+        raise ValueError(f'sysroot payload missing: "{out/dst}"')
 
     try:
         usr.symlink_to(dst, True)
@@ -224,14 +225,16 @@ class Sysroot:
 
         if not self.path.exists():
             self.path.mkdir()
-        assert self.path.is_dir(), f'bad sysroot path: "{path}"'
+        if not self.path.is_dir():
+            raise ValueError(f'bad sysroot path: "{path}"')
 
         for k, v in kwargs.items():
             if isinstance(v, dict):
                 self.__include__(k, **v)
 
     def __include__(self, name, repo, dist, pkgs):
-        assert name and repo and dist and pkgs
+        if not (name and repo and dist and pkgs):
+            raise ValueError(f'bad sysroot source: "{name}"')
 
         self.data[name] = {'repo': repo, 'dist': dist, 'pkgs': pkgs}
 
