@@ -9,9 +9,11 @@ LOG=${TERMUX_SMOKE_LOG:-/sdcard/Download/termux_ci_smoke.txt}
 DEB=${TERMUX_SMOKE_DEB:-/sdcard/Download/flutter_ci_input.deb}
 PROJECT=${TERMUX_SMOKE_PROJECT:-flutter_ci_smoke}
 
-if ! exec > "$LOG" 2>&1; then
-    LOG="$HOME_DIR/termux_ci_smoke.txt"
-    exec > "$LOG" 2>&1
+if [ "${TERMUX_SMOKE_SELFTEST:-0}" != "1" ]; then
+    if ! exec > "$LOG" 2>&1; then
+        LOG="$HOME_DIR/termux_ci_smoke.txt"
+        exec > "$LOG" 2>&1
+    fi
 fi
 echo TERMUX_CI_SMOKE
 set -x
@@ -27,6 +29,29 @@ record_status() {
         status=1
     fi
 }
+
+# APT dependency repair used by the install section. Kept in a function so the
+# self-test below exercises the exact production command and can prove a
+# failure records a non-zero APT_REPAIR_STATUS (a trailing `|| true` would mask
+# it as success).
+run_apt_repair() {
+    apt-get install -f -y --fix-missing || apt-get install -f -y
+}
+
+# Deterministic self-test: force `apt-get` to fail, run the real repair helper,
+# and assert the recorded APT_REPAIR_STATUS is non-zero. Run with:
+#   TERMUX_SMOKE_SELFTEST=1 bash scripts/device/termux_smoke.sh
+if [ "${TERMUX_SMOKE_SELFTEST:-0}" = "1" ]; then
+    apt-get() { return 1; }
+    run_apt_repair
+    record_status APT_REPAIR_STATUS $?
+    if [ "${status_APT_REPAIR_STATUS:-0}" != "0" ]; then
+        echo "SELFTEST_OK: forced apt failure recorded APT_REPAIR_STATUS=${status_APT_REPAIR_STATUS}"
+        exit 0
+    fi
+    echo "SELFTEST_FAILED: forced apt failure was masked (APT_REPAIR_STATUS=${status_APT_REPAIR_STATUS:-unset})" >&2
+    exit 1
+fi
 
 EVIDENCE_DIR=""
 EVIDENCE_JSON=""
@@ -161,7 +186,7 @@ echo "Installing candidate package $DEB..."
 dpkg -i "$DEB" || true
 
 echo "Running dependency repair..."
-apt-get install -f -y --fix-missing || apt-get install -f -y || true
+run_apt_repair
 record_status APT_REPAIR_STATUS $?
 
 if [ "$(dpkg-query -W -f='${Status}' "$EXPECTED_PACKAGE" 2>/dev/null)" != "install ok installed" ]; then

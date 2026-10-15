@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Flutter for Termux ARM64 - One-click installer
 # https://github.com/GeneralKaos666/flutter-for-termux
 
