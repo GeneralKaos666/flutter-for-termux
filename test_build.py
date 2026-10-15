@@ -594,6 +594,60 @@ class PackageManifestTest(unittest.TestCase):
         ).read_bytes()
         self.assertEqual(Path(item['src']).read_bytes(), expected)
 
+    def test_package_ships_flutter_project_config(self):
+        """README and termux_smoke.sh probe $PREFIX/share/flutter/
+        flutter_project_config.sh, so the deb must ship that exact script
+        (executable) or the documented configure flow is absent after install."""
+        flutter = self.cfg['flutter']
+        android = self.cfg['android']
+        ndk = self.cfg['ndk']
+
+        with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+            src = yaml.safe_load(f)
+
+        res = src['resource']
+        self.assertIn('flutter_project_config', res)
+        self.assertEqual(
+            res['flutter_project_config']['source'],
+            'scripts/install/flutter_project_config.sh',
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
+            release_out.mkdir(parents=True)
+
+            with (
+                patch('package.utils.flutter_tag', return_value=flutter['tag']),
+                patch('package.utils.engine_version', return_value='engine_revision_mock'),
+            ):
+                pkg = package.Package(
+                    root=str(root),
+                    arch='arm64',
+                    dart_version=flutter['dart_version'],
+                    framework_revision=flutter['framework_revision'],
+                    framework_commit_date=flutter['framework_commit_date'],
+                    devtools_version=flutter['devtools_version'],
+                    ndk_version=ndk.get('version', ''),
+                    compile_sdk=android['compile_sdk'],
+                    target_sdk=android['target_sdk'],
+                    **src,
+                )
+
+            items = list(pkg.gen_resource('flutter_project_config'))
+
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(
+            str(item['out']),
+            'data/data/com.termux/files/usr/share/flutter/flutter_project_config.sh',
+        )
+        self.assertEqual(item['mod'], 0o755)
+        expected = (
+            Path(__file__).parent / 'scripts' / 'install' / 'flutter_project_config.sh'
+        ).read_bytes()
+        self.assertEqual(Path(item['src']).read_bytes(), expected)
+
     def test_tar_ships_ancestor_dirs_for_file_outputs(self):
         """dpkg does not create missing parent dirs, so the data tar must
         carry explicit directory entries for share/flutter (issue #26)."""
