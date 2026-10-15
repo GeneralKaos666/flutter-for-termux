@@ -73,7 +73,7 @@ These warnings in `flutter doctor` are expected:
 | Flutter Tools | Patches the Android/Termux host lookup and clears stale `flutter_tools` snapshots/cache |
 | Gradle plugin | ARM64-only ABI; adds the `PLATFORM_ABI_LIST` that Flutter 3.44 needs |
 | Android SDK | Installs/patches API 34/36, cmdline-tools, build-tools, licenses |
-| NDK | Creates clang wrappers, patches the CMake host tag, replaces objcopy/strip |
+| NDK | Configures the clang driver and host-tag aliases, patches the CMake toolchain, replaces objcopy/strip |
 | Linux desktop | Enables `flutter build linux` to run on the Termux host |
 
 If you still see old Gradle or Kotlin errors after upgrading, re-run:
