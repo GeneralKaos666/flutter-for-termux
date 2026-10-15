@@ -115,8 +115,10 @@ class BuildTest(unittest.TestCase):
     def test_output_uses_package_version_suffix(self):
         pkg_rel = str(self.instance.pkg_rel or '').strip()
         expected_version = f'{self.instance.tag}-{pkg_rel}' if pkg_rel else self.instance.tag
-        output_name = Path(self.instance.output('arm64')).name
-        self.assertEqual(output_name, f'flutter_{expected_version}_aarch64.deb')
+        output = Path(self.instance.output('arm64'))
+        self.assertEqual(output.name, f'flutter_{expected_version}_aarch64.deb')
+        # The deb must land under release/, not the repo root.
+        self.assertEqual(output.parent.name, 'release')
 
     def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
