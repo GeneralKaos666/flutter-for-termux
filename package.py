@@ -277,6 +277,30 @@ def download(url, out, timeout=(10, 60)):
         return None
 
 
+class ResourceDispatcher:
+    """Resolve a resource selector into an ordered list of resource names.
+
+    ``str`` selects one resource, a list selects each entry in order, and a
+    falsy value selects every resource in declaration order. Anything else
+    is a usage error. Both the generator and the test paths share this
+    ``str|list|falsy|else`` ladder so they can never drift apart.
+    """
+
+    __slots__ = ('keys',)
+
+    def __init__(self, keys):
+        self.keys = keys
+
+    def names(self, name=None):
+        if isinstance(name, str):
+            return [name]
+        if isinstance(name, list):
+            return list(name)
+        if not name:
+            return list(self.keys)
+        raise ValueError(f'bad name: "{name}"')
+
+
 class Output:
     def __init__(self, root, arch):
         self.any = None
@@ -335,16 +359,19 @@ class Package:
         return {'out': 'control', 'src': bin.getvalue()}
 
     def gen_resource(self, name=None):
-        if isinstance(name, str):
-            yield from self.gen_resource_internal(name)
-        elif isinstance(name, list):
-            for it in name:
-                yield from self.gen_resource_internal(it)
-        elif not name:
-            for it in self.resource.keys():
-                yield from self.gen_resource_internal(it)
-        else:
-            raise ValueError(f'bad name: "{name}"')
+        for it in ResourceDispatcher(self.resource).names(name):
+            yield from self.gen_resource_internal(it)
+
+    def _resolve_defines(self, data):
+        """Evaluate a resource's ``define:`` block into a fresh mapping.
+
+        Never mutates the loaded YAML: define blocks are aliased/shared and a
+        resource may be generated more than once per process.
+        """
+        return {
+            k: safe_eval(v, self.globals, self.defines)
+            for k, v in data.items()
+        }
 
     def gen_resource_internal(self, name=None):
         if not (data := self.resource.get(name)):
@@ -355,11 +382,8 @@ class Package:
         out = data.get('output')
         bin = data.get('binary', False)
         mod = data.get('mode')
-        dep = data.get('define', {})
+        dep = self._resolve_defines(data.get('define', {}))
         ext = {}
-
-        for k, v in dep.items():
-            dep[k] = safe_eval(v, self.globals, self.defines)
 
         # expect None, str, int
         if isinstance(mod, str):
@@ -389,16 +413,8 @@ class Package:
                 yield it | ext
 
     def test_resource(self, name=None, dest_dir=None):
-        if isinstance(name, str):
-            yield self.test_resource_internal(name, dest_dir=dest_dir)
-        elif isinstance(name, list):
-            for it in name:
-                yield self.test_resource_internal(it, dest_dir=dest_dir)
-        elif not name:
-            for it in self.resource.keys():
-                yield self.test_resource_internal(it, dest_dir=dest_dir)
-        else:
-            raise ValueError(f'bad name: "{name}"')
+        for it in ResourceDispatcher(self.resource).names(name):
+            yield self.test_resource_internal(it, dest_dir=dest_dir)
 
     def test_resource_internal(self, name, dest_dir=None):
         if not (data := self.resource.get(name)):
@@ -406,8 +422,7 @@ class Package:
 
         if not (test := data.get('test', {})):
             return None
-        deps = data.get('define', {}).items()
-        deps = {k: safe_eval(v, self.globals, self.defines) for k, v in deps}
+        deps = self._resolve_defines(data.get('define', {}))
         file = self.render(test['file'], **deps)
         path = self.render(test['path'], **deps)
         dest_dir = Path(dest_dir).expanduser() if dest_dir else Path(tempfile.gettempdir())

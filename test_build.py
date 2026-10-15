@@ -668,6 +668,63 @@ class PackageManifestTest(unittest.TestCase):
                 **src,
             )
 
+    def test_resource_dispatcher_selects_identically(self):
+        """One selector drives both the generator and the test paths: for the
+        same input (str, list, falsy, mapping) they visit the same resources in
+        the same order."""
+        dispatcher = package.ResourceDispatcher(['a', 'b'])
+        self.assertEqual(dispatcher.names('a'), ['a'])
+        self.assertEqual(dispatcher.names(['b', 'a']), ['b', 'a'])
+        self.assertEqual(dispatcher.names(None), ['a', 'b'])
+        self.assertEqual(dispatcher.names([]), [])
+        with self.assertRaises(ValueError):
+            dispatcher.names({'x': 1})
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            (root / 'engine' / 'src' / 'out' / 'linux_release_arm64').mkdir(
+                parents=True
+            )
+            pkg = self._make_package(root)
+
+            gen_calls, test_calls = [], []
+
+            def fake_gen(self_, name):
+                gen_calls.append(name)
+                return []
+
+            def fake_test(self_, name, dest_dir=None):
+                test_calls.append(name)
+                return None
+
+            for selector in ('manifest', ['post_install', 'manifest'], None, []):
+                del gen_calls[:]
+                del test_calls[:]
+                with (
+                    patch.object(package.Package, 'gen_resource_internal', fake_gen),
+                    patch.object(package.Package, 'test_resource_internal', fake_test),
+                ):
+                    list(pkg.gen_resource(selector))
+                    list(pkg.test_resource(selector))
+
+                self.assertEqual(gen_calls, test_calls)
+                self.assertEqual(
+                    gen_calls,
+                    package.ResourceDispatcher(pkg.resource).names(selector),
+                )
+
+            with self.assertRaises(ValueError):
+                list(pkg.gen_resource({'x': 1}))
+
+            # Equal inputs must produce equal output: selecting by name, by a
+            # one-element list, or repeating the call yields the same items.
+            # ``artifacts`` carries a ``define:`` block, so repeating it also
+            # proves generation never mutates the loaded YAML.
+            for name in ('manifest', 'post_install', 'artifacts'):
+                by_name = list(pkg.gen_resource(name))
+                self.assertEqual(by_name, list(pkg.gen_resource([name])))
+                self.assertEqual(by_name, list(pkg.gen_resource(name)))
+
     def test_deprecated_format_matches_render(self):
         """``__format__`` is a deprecated shim: for a fixed representative
         fixture (plain, empty, mixed, unknown) it must warn and return exactly
