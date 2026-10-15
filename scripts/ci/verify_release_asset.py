@@ -40,7 +40,38 @@ BUILD_CRITICAL_FILES = (
 )
 
 
+# Single source of truth for the companion assets a build release publishes.
+# These are exported so tests exercise the same derivation production uses
+# instead of re-implementing it.
+REQUIRED_AUX_SUFFIXES = (".sha256", ".size.txt")
+REQUIRED_AUX_NAMES = ("inventory.txt", "build_metadata.json", "build_evidence.json")
+OPTIONAL_AUX_NAMES = ("device_smoke_evidence.json",)
 
+
+def required_aux_asset_names(expected_asset: str) -> tuple[str, ...]:
+    """Ordered names of the five companions every .deb build release publishes."""
+    return (
+        *(f"{expected_asset}{suffix}" for suffix in REQUIRED_AUX_SUFFIXES),
+        *REQUIRED_AUX_NAMES,
+    )
+
+
+def optional_aux_asset_names() -> tuple[str, ...]:
+    """Companions that are optional-when-present (produced by device-smoke.yml)."""
+    return OPTIONAL_AUX_NAMES
+
+
+def resolve_expected_asset(flutter_cfg: dict, package_cfg: dict) -> tuple[str | None, str | None, str | None]:
+    """Resolve ``(expected_tag, expected_package_version, expected_asset)`` from build.toml sections."""
+    expected_tag = flutter_cfg.get("release_tag") or flutter_cfg.get("tag")
+    pkg_rel = str(package_cfg.get("pkg_rel") or "").strip()
+    expected_package_version = None
+    default_asset = None
+    if expected_tag:
+        expected_package_version = f"{expected_tag}-{pkg_rel}" if pkg_rel else str(expected_tag)
+        default_asset = f"flutter_{expected_package_version}_aarch64.deb"
+    expected_asset = flutter_cfg.get("asset_name") or default_asset
+    return expected_tag, expected_package_version, expected_asset
 
 
 def normalize_member_path(p: str) -> str:
@@ -271,14 +302,7 @@ def main():
 
     flutter_cfg = config.get("flutter", {})
     package_cfg = config.get("package", {})
-    expected_tag = flutter_cfg.get("release_tag") or flutter_cfg.get("tag")
-    pkg_rel = str(package_cfg.get("pkg_rel") or "").strip()
-    expected_package_version = None
-    default_asset = None
-    if expected_tag:
-        expected_package_version = f"{expected_tag}-{pkg_rel}" if pkg_rel else str(expected_tag)
-        default_asset = f"flutter_{expected_package_version}_aarch64.deb"
-    expected_asset = flutter_cfg.get("asset_name") or default_asset
+    expected_tag, expected_package_version, expected_asset = resolve_expected_asset(flutter_cfg, package_cfg)
     expected_sha256 = flutter_cfg.get("sha256")
     expected_size = flutter_cfg.get("size")
 
@@ -298,7 +322,7 @@ def main():
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
     else:
-        print("Manifest has no sha256 declared; skipping checksum verification.")
+        print("Manifest has no sha256 declared.")
 
     if expected_size is not None:
         if not isinstance(expected_size, int) or expected_size <= 0:
@@ -398,21 +422,22 @@ def main():
         print("Error: Could not determine download URL for asset.")
         sys.exit(1)
 
-    # 4. Validate all 6 release companion assets
-    aux_assets = {
-        f"{expected_asset}.sha256": "sha256",
-        f"{expected_asset}.size.txt": "size_txt",
-        "inventory.txt": "inventory",
-        "build_metadata.json": "metadata",
-        "build_evidence.json": "build_evidence",
-        "device_smoke_evidence.json": "device_smoke_evidence",
-    }
+    # 5. Resolve the GitHub API digest once, so both the single-asset and strict
+    #    branches can report whether a sha256 digest was actually used.
+    digest = (asset.get("digest") or "").lower()
+    api_digest_sha = digest[len("sha256:"):] if digest.startswith("sha256:") else None
+    digest_status = "OK" if api_digest_sha is not None else "Unavailable"
 
-    companion_available = all(aux_name in assets for aux_name in aux_assets)
+    # 6. Validate release companion assets. A build publishes five required
+    #    companions; device smoke evidence is produced only by the separate,
+    #    manual device-smoke.yml workflow, so it is optional-when-present.
+    required_aux_assets = required_aux_asset_names(expected_asset)
+    optional_aux_assets = optional_aux_asset_names()
+
+    companion_available = all(aux_name in assets for aux_name in required_aux_assets)
     if not companion_available:
         # FFT-style single-asset release: verify the primary .deb only.
         print("Release contains no companion assets (single-asset release); verifying primary asset only.")
-        digest = (asset.get("digest") or "").lower()
         actual_size = asset.get("size")
         if actual_size is None or not isinstance(actual_size, int) or actual_size <= 0:
             print(f"Error: Invalid asset size returned by API: {actual_size}")
@@ -442,10 +467,10 @@ def main():
         if expected_size is not None and actual_size != expected_size:
             print(f"Error: Size mismatch. Expected {expected_size}, got {actual_size}")
             sys.exit(1)
-        print(f"Release OK: {target_tag} | {expected_asset} | {actual_size} bytes | Digest cross-check: {'OK' if digest else 'Unavailable'}")
+        print(f"Release OK: {target_tag} | {expected_asset} | {actual_size} bytes | Digest cross-check: {digest_status}")
         sys.exit(0)
 
-    for aux_name in aux_assets:
+    for aux_name in required_aux_assets:
         if aux_name not in assets:
             print(f"Error: Auxiliary asset '{aux_name}' not found in release '{target_tag}'.")
             print(f"Available assets: {list(assets.keys())}")
@@ -465,15 +490,25 @@ def main():
             sys.exit(1)
         print(f"  ✓ Exact deb size verified against manifest: {actual_size} bytes")
 
-    # 5. Cross-check digest if provided by github
-    digest = (asset.get("digest") or "").lower()
-    expected_digest = f"sha256:{expected_sha256.lower()}"
-    if digest and digest != expected_digest:
-        print(f"Error: GitHub asset digest mismatch. Expected {expected_digest}, got {digest}")
-        sys.exit(1)
+    # 7. Resolve the expected deb sha256. When the manifest declares a hash,
+    #    every source must match it. Otherwise the manifest is silent, so the
+    #    hash is taken from the sources that are actually present: the required
+    #    companion .sha256 and build_metadata.json.sha256 (which must agree),
+    #    plus the GitHub API digest when it is available. ``digest`` and
+    #    ``api_digest_sha`` were resolved in section 5.
+    if expected_sha256:
+        expected_digest = f"sha256:{expected_sha256.lower()}"
+        if digest and digest != expected_digest:
+            print(f"Error: GitHub asset digest mismatch. Expected {expected_digest}, got {digest}")
+            sys.exit(1)
+    else:
+        print("Manifest declares no sha256; cross-checking companion .sha256, build_metadata.json, and GitHub digest.")
+        if digest and api_digest_sha is None:
+            print(f"  ! GitHub API digest '{digest}' is not a sha256 digest and will be ignored.")
 
-    # 6. Verify contents of auxiliary assets (Strict Fail-Closed)
+    # 8. Verify contents of auxiliary assets (Strict Fail-Closed)
     # Check .sha256 file
+    companion_sha = None
     sha_url = assets[f"{expected_asset}.sha256"].get("browser_download_url")
     if not sha_url:
         print(f"Error: Missing download URL for companion {expected_asset}.sha256")
@@ -481,10 +516,17 @@ def main():
     try:
         with urllib.request.urlopen(urllib.request.Request(sha_url, headers=headers)) as resp:
             sha_content = resp.read().decode("utf-8-sig").strip().split()[0]
-            if sha_content.lower() != expected_sha256.lower():
-                print(f"Error: .sha256 asset content mismatch! Expected {expected_sha256}, got {sha_content}")
-                sys.exit(1)
-            print(f"  ✓ Verified companion .sha256 asset matches expected hash: {sha_content[:8]}...")
+            if expected_sha256:
+                if sha_content.lower() != expected_sha256.lower():
+                    print(f"Error: .sha256 asset content mismatch! Expected {expected_sha256}, got {sha_content}")
+                    sys.exit(1)
+                print(f"  ✓ Verified companion .sha256 asset matches expected hash: {sha_content[:8]}...")
+            else:
+                if not SHA256_HEX_REGEX.match(sha_content):
+                    print(f"Error: Companion .sha256 asset is not a valid 64-char sha256: '{sha_content}'")
+                    sys.exit(1)
+                companion_sha = sha_content.lower()
+                print(f"  ✓ Companion .sha256 asset hash collected for cross-check: {companion_sha[:8]}...")
     except Exception as e:
         print(f"Error: Failed to fetch/verify companion .sha256 asset: {e}")
         sys.exit(1)
@@ -664,9 +706,30 @@ def main():
 
             # Validate sha256
             meta_sha = str(meta_data["sha256"]).strip().lower()
-            if meta_sha != expected_sha256.lower():
-                print(f"Error: build_metadata.json sha256 mismatch! Expected {expected_sha256}, got {meta_sha}")
-                sys.exit(1)
+            if expected_sha256:
+                if meta_sha != expected_sha256.lower():
+                    print(f"Error: build_metadata.json sha256 mismatch! Expected {expected_sha256}, got {meta_sha}")
+                    sys.exit(1)
+            else:
+                if not SHA256_HEX_REGEX.match(meta_sha):
+                    print(f"Error: build_metadata.json sha256 '{meta_sha}' is not a valid 64-char hex hash")
+                    sys.exit(1)
+                if companion_sha is None:
+                    print("Error: Companion .sha256 asset hash was not collected; cannot cross-check hash sources")
+                    sys.exit(1)
+                if companion_sha != meta_sha:
+                    print(f"Error: Hash source mismatch! companion .sha256 = {companion_sha}, build_metadata.json.sha256 = {meta_sha}")
+                    sys.exit(1)
+                if api_digest_sha is not None and api_digest_sha != companion_sha:
+                    print(f"Error: Hash source mismatch! GitHub digest = {api_digest_sha}, companion .sha256 = {companion_sha}")
+                    sys.exit(1)
+                if api_digest_sha is not None:
+                    print(f"  ✓ Hash sources agree (companion .sha256, build_metadata.json, GitHub digest): {companion_sha[:8]}...")
+                elif digest:
+                    print(f"  ! GitHub digest '{digest}' is not a sha256 digest (platform attestation unavailable); companion .sha256 and build_metadata.json agree: {companion_sha[:8]}...")
+                else:
+                    print(f"  ! GitHub digest absent (platform attestation unavailable); companion .sha256 and build_metadata.json agree: {companion_sha[:8]}...")
+                expected_sha256 = companion_sha
 
             # Validate size_bytes
             meta_size = meta_data["size_bytes"]
@@ -776,7 +839,7 @@ def main():
         print(f"Error: Failed to fetch/verify companion build_metadata.json asset: {e}")
         sys.exit(1)
 
-    # 7. Verify build_evidence.json
+    # 9. Verify build_evidence.json
     build_ev_url = assets["build_evidence.json"].get("browser_download_url")
     if not build_ev_url:
         print("Error: Missing download URL for companion build_evidence.json")
@@ -835,81 +898,87 @@ def main():
         print(f"Error: Failed to fetch/verify companion build_evidence.json asset: {e}")
         sys.exit(1)
 
-    # 8. Verify device_smoke_evidence.json
-    dev_ev_url = assets["device_smoke_evidence.json"].get("browser_download_url")
-    if not dev_ev_url:
-        print("Error: Missing download URL for companion device_smoke_evidence.json")
-        sys.exit(1)
-    try:
-        with urllib.request.urlopen(urllib.request.Request(dev_ev_url, headers=headers)) as resp:
-            dev_ev_data = json.loads(resp.read().decode("utf-8-sig"))
+    # 10. Verify optional companion assets (device smoke evidence) when present.
+    #    A build release does not publish them; the manual device-smoke.yml
+    #    workflow does, so they are validated fail-closed only when they exist.
+    for optional_name in optional_aux_assets:
+        if optional_name not in assets:
+            print(f"  - {optional_name} absent (optional); skipping its verification.")
+            continue
+        dev_ev_url = assets[optional_name].get("browser_download_url")
+        if not dev_ev_url:
+            print(f"Error: Missing download URL for companion {optional_name}")
+            sys.exit(1)
+        try:
+            with urllib.request.urlopen(urllib.request.Request(dev_ev_url, headers=headers)) as resp:
+                dev_ev_data = json.loads(resp.read().decode("utf-8-sig"))
 
-            if dev_ev_data.get("status") != "passed":
-                print(f"Error: device_smoke_evidence.json status is not 'passed' (got '{dev_ev_data.get('status')}')")
-                sys.exit(1)
-            if dev_ev_data.get("mode_a_status") != "passed":
-                print(f"Error: device_smoke_evidence.json mode_a_status is not 'passed' (got '{dev_ev_data.get('mode_a_status')}')")
-                sys.exit(1)
-            if dev_ev_data.get("mode_b_status") != "passed":
-                print(f"Error: device_smoke_evidence.json mode_b_status is not 'passed' (got '{dev_ev_data.get('mode_b_status')}')")
-                sys.exit(1)
+                if dev_ev_data.get("status") != "passed":
+                    print(f"Error: device_smoke_evidence.json status is not 'passed' (got '{dev_ev_data.get('status')}')")
+                    sys.exit(1)
+                if dev_ev_data.get("mode_a_status") != "passed":
+                    print(f"Error: device_smoke_evidence.json mode_a_status is not 'passed' (got '{dev_ev_data.get('mode_a_status')}')")
+                    sys.exit(1)
+                if dev_ev_data.get("mode_b_status") != "passed":
+                    print(f"Error: device_smoke_evidence.json mode_b_status is not 'passed' (got '{dev_ev_data.get('mode_b_status')}')")
+                    sys.exit(1)
 
-            dev_src_commit = str(dev_ev_data.get("artifact_source_commit") or dev_ev_data.get("source_commit") or "").strip().lower()
-            dev_ver_commit = str(dev_ev_data.get("verifier_commit") or "").strip().lower()
-            if dev_src_commit != meta_commit:
-                print(f"Error: device_smoke_evidence.json artifact_source_commit mismatch! Expected {meta_commit}, got {dev_src_commit}")
-                sys.exit(1)
-            if dev_ver_commit != meta_commit:
-                print(f"Error: device_smoke_evidence.json verifier_commit mismatch! Expected {meta_commit}, got {dev_ver_commit}")
-                sys.exit(1)
+                dev_src_commit = str(dev_ev_data.get("artifact_source_commit") or dev_ev_data.get("source_commit") or "").strip().lower()
+                dev_ver_commit = str(dev_ev_data.get("verifier_commit") or "").strip().lower()
+                if dev_src_commit != meta_commit:
+                    print(f"Error: device_smoke_evidence.json artifact_source_commit mismatch! Expected {meta_commit}, got {dev_src_commit}")
+                    sys.exit(1)
+                if dev_ver_commit != meta_commit:
+                    print(f"Error: device_smoke_evidence.json verifier_commit mismatch! Expected {meta_commit}, got {dev_ver_commit}")
+                    sys.exit(1)
 
-            dev_build_run_id = dev_ev_data.get("build_run_id") or dev_ev_data.get("run_id")
-            if str(dev_build_run_id) != str(run_id):
-                print(f"Error: device_smoke_evidence.json build_run_id mismatch! Expected {run_id}, got {dev_build_run_id}")
-                sys.exit(1)
+                dev_build_run_id = dev_ev_data.get("build_run_id") or dev_ev_data.get("run_id")
+                if str(dev_build_run_id) != str(run_id):
+                    print(f"Error: device_smoke_evidence.json build_run_id mismatch! Expected {run_id}, got {dev_build_run_id}")
+                    sys.exit(1)
 
-            dev_artifacts = dev_ev_data.get("artifacts", {})
-            if not isinstance(dev_artifacts, dict):
-                print("Error: device_smoke_evidence.json missing 'artifacts' object")
-                sys.exit(1)
+                dev_artifacts = dev_ev_data.get("artifacts", {})
+                if not isinstance(dev_artifacts, dict):
+                    print("Error: device_smoke_evidence.json missing 'artifacts' object")
+                    sys.exit(1)
 
-            dev_deb_sha = str(dev_artifacts.get("deb_sha256", "")).strip().lower()
-            if dev_deb_sha != expected_sha256.lower():
-                print(f"Error: device_smoke_evidence.json artifacts.deb_sha256 mismatch! Expected {expected_sha256}, got {dev_deb_sha}")
-                sys.exit(1)
+                dev_deb_sha = str(dev_artifacts.get("deb_sha256", "")).strip().lower()
+                if dev_deb_sha != expected_sha256.lower():
+                    print(f"Error: device_smoke_evidence.json artifacts.deb_sha256 mismatch! Expected {expected_sha256}, got {dev_deb_sha}")
+                    sys.exit(1)
 
-            dev_deb_sz = dev_artifacts.get("deb_size")
-            if not isinstance(dev_deb_sz, int) or dev_deb_sz != actual_size:
-                print(f"Error: device_smoke_evidence.json artifacts.deb_size mismatch! Expected {actual_size}, got {dev_deb_sz}")
-                sys.exit(1)
+                dev_deb_sz = dev_artifacts.get("deb_size")
+                if not isinstance(dev_deb_sz, int) or dev_deb_sz != actual_size:
+                    print(f"Error: device_smoke_evidence.json artifacts.deb_size mismatch! Expected {actual_size}, got {dev_deb_sz}")
+                    sys.exit(1)
 
-            apk_sha = str(dev_artifacts.get("apk_sha256", "")).strip().lower()
-            if not re.match(r"^[0-9a-f]{64}$", apk_sha):
-                print(f"Error: device_smoke_evidence.json artifacts.apk_sha256 is not a valid 64-char sha256: '{apk_sha}'")
-                sys.exit(1)
+                apk_sha = str(dev_artifacts.get("apk_sha256", "")).strip().lower()
+                if not re.match(r"^[0-9a-f]{64}$", apk_sha):
+                    print(f"Error: device_smoke_evidence.json artifacts.apk_sha256 is not a valid 64-char sha256: '{apk_sha}'")
+                    sys.exit(1)
 
-            apk_sz = dev_artifacts.get("apk_size")
-            if not (isinstance(apk_sz, int) and apk_sz > 0):
-                print(f"Error: device_smoke_evidence.json artifacts.apk_size is not a positive integer: {apk_sz}")
-                sys.exit(1)
+                apk_sz = dev_artifacts.get("apk_size")
+                if not (isinstance(apk_sz, int) and apk_sz > 0):
+                    print(f"Error: device_smoke_evidence.json artifacts.apk_size is not a positive integer: {apk_sz}")
+                    sys.exit(1)
 
-            aab_sha = str(dev_artifacts.get("aab_sha256", "")).strip().lower()
-            if not re.match(r"^[0-9a-f]{64}$", aab_sha):
-                print(f"Error: device_smoke_evidence.json artifacts.aab_sha256 is not a valid 64-char sha256: '{aab_sha}'")
-                sys.exit(1)
+                aab_sha = str(dev_artifacts.get("aab_sha256", "")).strip().lower()
+                if not re.match(r"^[0-9a-f]{64}$", aab_sha):
+                    print(f"Error: device_smoke_evidence.json artifacts.aab_sha256 is not a valid 64-char sha256: '{aab_sha}'")
+                    sys.exit(1)
 
-            aab_sz = dev_artifacts.get("aab_size")
-            if not (isinstance(aab_sz, int) and aab_sz > 0):
-                print(f"Error: device_smoke_evidence.json artifacts.aab_size is not a positive integer: {aab_sz}")
-                sys.exit(1)
+                aab_sz = dev_artifacts.get("aab_size")
+                if not (isinstance(aab_sz, int) and aab_sz > 0):
+                    print(f"Error: device_smoke_evidence.json artifacts.aab_size is not a positive integer: {aab_sz}")
+                    sys.exit(1)
 
-            print(f"  ✓ Verified device_smoke_evidence.json full schema (status=passed, mode_a=passed, mode_b=passed, build_run_id={dev_build_run_id}, deb_sha256={dev_deb_sha[:8]}..., apk_size={apk_sz}, aab_size={aab_sz})")
-    except Exception as e:
-        print(f"Error: Failed to fetch/verify companion device_smoke_evidence.json asset: {e}")
-        sys.exit(1)
+                print(f"  ✓ Verified device_smoke_evidence.json full schema (status=passed, mode_a=passed, mode_b=passed, build_run_id={dev_build_run_id}, deb_sha256={dev_deb_sha[:8]}..., apk_size={apk_sz}, aab_size={aab_sz})")
+        except Exception as e:
+            print(f"Error: Failed to fetch/verify companion device_smoke_evidence.json asset: {e}")
+            sys.exit(1)
 
 
-    # 8. Download asset to RUNNER_TEMP
+    # 11. Download asset to RUNNER_TEMP
     runner_temp = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()
     download_path = Path(runner_temp) / expected_asset
 
@@ -925,7 +994,7 @@ def main():
         print(f"Error: Download failed, {download_path} not found.")
         sys.exit(1)
 
-    # 9. Locally calculate and verify SHA256
+    # 12. Locally calculate and verify SHA256
     print("Calculating local SHA256...")
     sha256_hash = hashlib.sha256()
     with open(download_path, "rb") as f:
@@ -940,7 +1009,7 @@ def main():
 
     print(f"SUCCESS: Local SHA256 verified successfully: {actual_sha256}")
 
-    # 10. Cross-check inventory.txt against downloaded .deb package entries
+    # 13. Cross-check inventory.txt against downloaded .deb package entries
     print("Cross-checking inventory.txt against downloaded package entries...")
     try:
         first_time = None
@@ -967,7 +1036,7 @@ def main():
         print(f"Error: Failed to verify package inventory integrity: {e}")
         sys.exit(1)
 
-    print(f"Release OK: {target_tag} | {expected_asset} | {actual_size} bytes | Digest cross-check: {'OK' if digest else 'Unavailable'}")
+    print(f"Release OK: {target_tag} | {expected_asset} | {actual_size} bytes | Digest cross-check: {digest_status}")
 
 if __name__ == "__main__":
     main()
