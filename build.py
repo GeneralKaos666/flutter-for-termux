@@ -246,28 +246,33 @@ class Build:
         subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
-        conf = conf or self.package
-        root = root or self.root
+        conf = {**(conf or self.package), 'root': root or self.root, 'arch': arch}
         output = output or self.output(arch)
 
-        pkg = Package(
-            root=root,
-            arch=arch,
-            dart_version=self.dart_version,
-            framework_revision=self.framework_revision,
-            framework_commit_date=self.framework_commit_date,
-            devtools_version=self.devtools_version,
-            ndk_version=self.ndk_version,
-            compile_sdk=self.compile_sdk,
-            target_sdk=self.target_sdk,
-            package_version=self.package_version,
-            **conf)
+        pkg = Package(**conf, **self.metadata())
         pkg.debuild(output=output)
 
     def output(self, arch: str):
         self.release.mkdir(parents=True, exist_ok=True)
         name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
         return self.release/name
+
+    def metadata(self):
+        """Bundled release metadata passed to :class:`Package`.
+
+        Keys are byte-identical to the values previously splatted at the
+        ``debuild`` call site.
+        """
+        return {
+            'dart_version': self.dart_version,
+            'framework_revision': self.framework_revision,
+            'framework_commit_date': self.framework_commit_date,
+            'devtools_version': self.devtools_version,
+            'ndk_version': self.ndk_version,
+            'compile_sdk': self.compile_sdk,
+            'target_sdk': self.target_sdk,
+            'package_version': self.package_version,
+        }
 
     def __call__(self):
         self.config()
