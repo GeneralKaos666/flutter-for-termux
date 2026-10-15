@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - NDK is configured from `build.toml [ndk] version` everywhere (docs, `build-deb.yml` fallback to `/opt/android-ndk-r{M}`); `pytest.ini` `testpaths` points at `test_build.py`.
 - Retired the Mode-A "pin API 34" constraint documented in the AAPT2 analysis.
-- Reoriented repository documentation to English-first: `README.md` is now the English primary (promoted from `README_EN.md`), the Chinese README moved to `README_ZH.md`, and the four `docs/guides/*` documents gained English canonicals with Chinese `*_ZH.md` twins. Translated user-facing messages and comments in scripts to English. Removed stale `.orig` merge artifacts.
+- Reoriented repository documentation to English-only: `README.md` is the single English README and the `docs/guides/*` documents are English canonicals (no `*_ZH.md` twins exist). Translated user-facing messages and comments in scripts to English. Removed stale `.orig` merge artifacts.
 - The built deb now lands under `release/` instead of the repository root (`build.toml [package] path`, with `Build.output()` creating the directory on demand).
 
 ### Fixed
@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Snapshot installs reported false success in both installers.** `install_flutter_complete.sh` and the deb-shipped `post_install.sh` printed `✓ Dart SDK snapshots installed` even when the checksum or unzip failed. Both now print the banner only when the extracted snapshot exists and otherwise warn that the bundled snapshots are used.
 - **Non-interactive installs blocked on the continuation prompt.** `install_flutter_complete.sh` now honours `--yes`/`--non-interactive` and a non-TTY stdin, skipping the prompt so piped and scripted installs run to completion.
 - **`flutter_project_config.sh` was not shipped in the deb.** `package.yaml` now declares the `flutter_project_config` resource, installing the script at `$PREFIX/share/flutter/flutter_project_config.sh` instead of leaving the on-device per-project configuration missing.
+- **Documented engine output directories were incorrect.** Earlier notes claimed the build produced `android_release_arm64/` and `android_profile_arm64/` engine output directories; the engine actually builds the three `linux_{debug,release,profile}_arm64/` directories under `flutter/engine/src/out/`. The build guides now match the build.
 
 ## [3.44.9-termux] - 2026-07-04
 
