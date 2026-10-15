@@ -569,28 +569,7 @@ class PackageManifestTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
-
-            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
-                src = yaml.safe_load(f)
-
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
-                )
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource('manifest'))
 
@@ -617,34 +596,9 @@ class PackageManifestTest(unittest.TestCase):
             )
 
     def test_post_install_resource_ships_config_script(self):
-        flutter = self.cfg['flutter']
-        android = self.cfg['android']
-        ndk = self.cfg['ndk']
-
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
-
-            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
-                src = yaml.safe_load(f)
-
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
-                )
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource('post_install'))
 
@@ -669,10 +623,14 @@ class PackageManifestTest(unittest.TestCase):
         """Build a Package against a minimal temp flutter root.
 
         ``flutter_tag``/``engine_version`` are stubbed so no real checkout is
-        needed; ``root`` must already contain a release output dir."""
+        needed, and the release output dir is created for you — callers need
+        not ``mkdir`` it first."""
         flutter = self.cfg['flutter']
         android = self.cfg['android']
         ndk = self.cfg['ndk']
+        (root / 'engine' / 'src' / 'out' / 'linux_release_arm64').mkdir(
+            parents=True, exist_ok=True
+        )
         with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
             src = yaml.safe_load(f)
         with (
@@ -740,9 +698,6 @@ class PackageManifestTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            (root / 'engine' / 'src' / 'out' / 'linux_release_arm64').mkdir(
-                parents=True
-            )
             pkg = self._make_package(root)
 
             gen_calls, test_calls = [], []
@@ -787,10 +742,6 @@ class PackageManifestTest(unittest.TestCase):
         """README and termux_smoke.sh probe $PREFIX/share/flutter/
         flutter_project_config.sh, so the deb must ship that exact script
         (executable) or the documented configure flow is absent after install."""
-        flutter = self.cfg['flutter']
-        android = self.cfg['android']
-        ndk = self.cfg['ndk']
-
         with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
             src = yaml.safe_load(f)
 
@@ -803,25 +754,7 @@ class PackageManifestTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
-
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
-                )
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource('flutter_project_config'))
 
@@ -840,34 +773,9 @@ class PackageManifestTest(unittest.TestCase):
     def test_tar_ships_ancestor_dirs_for_file_outputs(self):
         """dpkg does not create missing parent dirs, so the data tar must
         carry explicit directory entries for share/flutter (issue #26)."""
-        flutter = self.cfg['flutter']
-        android = self.cfg['android']
-        ndk = self.cfg['ndk']
-
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
-
-            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
-                src = yaml.safe_load(f)
-
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
-                )
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource(['manifest', 'post_install']))
             data_tar = Path(tmp, 'data.tar.xz')
