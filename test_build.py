@@ -18,6 +18,7 @@ import tarfile
 import tempfile
 import tomllib
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -639,6 +640,54 @@ class PackageManifestTest(unittest.TestCase):
     def test_package_exposes_render(self):
         from package import Package
         self.assertTrue(callable(getattr(Package, 'render', None)))
+
+    def _make_package(self, root: Path):
+        """Build a Package against a minimal temp flutter root.
+
+        ``flutter_tag``/``engine_version`` are stubbed so no real checkout is
+        needed; ``root`` must already contain a release output dir."""
+        flutter = self.cfg['flutter']
+        android = self.cfg['android']
+        ndk = self.cfg['ndk']
+        with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+            src = yaml.safe_load(f)
+        with (
+            patch('package.utils.flutter_tag', return_value=flutter['tag']),
+            patch('package.utils.engine_version', return_value='engine_revision_mock'),
+        ):
+            return package.Package(
+                root=str(root),
+                arch='arm64',
+                dart_version=flutter['dart_version'],
+                framework_revision=flutter['framework_revision'],
+                framework_commit_date=flutter['framework_commit_date'],
+                devtools_version=flutter['devtools_version'],
+                ndk_version=ndk.get('version', ''),
+                compile_sdk=android['compile_sdk'],
+                target_sdk=android['target_sdk'],
+                **src,
+            )
+
+    def test_deprecated_format_matches_render(self):
+        """``__format__`` is a deprecated shim: for a fixed representative
+        fixture (plain, empty, mixed, unknown) it must warn and return exactly
+        what ``render`` returns."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            (root / 'engine' / 'src' / 'out' / 'linux_release_arm64').mkdir(
+                parents=True
+            )
+            pkg = self._make_package(root)
+
+            for tmpl in ('$tag', '', '$arch ($package_version)', '$not_defined ?'):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter('always')
+                    legacy = pkg.__format__(tmpl)
+                self.assertEqual(legacy, pkg.render(tmpl))
+                self.assertTrue(
+                    any(issubclass(w.category, DeprecationWarning) for w in caught),
+                    f'no DeprecationWarning for template: {tmpl!r}',
+                )
 
     def test_package_ships_flutter_project_config(self):
         """README and termux_smoke.sh probe $PREFIX/share/flutter/
