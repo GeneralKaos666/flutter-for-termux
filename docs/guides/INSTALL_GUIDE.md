@@ -224,14 +224,45 @@ the installed NDK directory is incomplete. AGP requires
 `<sdk>/ndk/<version>/source.properties` to identify the NDK, and an
 interrupted or partially extracted install can leave that file missing.
 Re-run post-install, which validates every installed NDK and regenerates the
-missing metadata (or removes an unusable stub so the installer re-provisions it):
+missing metadata when the rest of the directory is usable:
 
 ```bash
 bash $PREFIX/share/flutter/post_install.sh
 ```
 
-If the NDK directory itself is empty or corrupt, re-run the full installer so it
-downloads and extracts a clean NDK.
+If the directory is incomplete (no `toolchains/llvm`, or no CMake toolchain
+file), post-install removes it rather than stamping it healthy. Re-running
+post-install cannot rebuild a removed directory — the full installer is what
+downloads and extracts the NDK:
+
+```bash
+curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
+```
+
+### `Could not find toolchain file` (incomplete NDK)
+
+If `flutter build apk`/`flutter build appbundle` fails while configuring a
+native plugin (`:jni`, or any plugin using `externalNativeBuild`) with:
+
+```text
+CMake Error at .../CMakeDetermineSystem.cmake:165 (message):
+  Could not find toolchain file:
+  ".../ndk/<version>/build/cmake/android.toolchain.cmake"
+```
+
+the NDK directory is only partially extracted: it still has `toolchains/llvm`,
+but the CMake toolchain files are gone. This is a different failure from the
+`source.properties` error above and it appears *after* that metadata exists, so
+re-running post-install will not repair it — post-install detects the directory
+as incomplete and removes it. Re-provision the NDK with the full installer:
+
+```bash
+curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
+```
+
+This re-downloads the NDK (~550 MB). A complete NDK is verified to configure,
+compile, and link an `arm64-v8a` CMake module (`jni` 1.0.0) on-device, so the
+build proceeds once the toolchain file is back.
 
 ### Out of Storage Space
 

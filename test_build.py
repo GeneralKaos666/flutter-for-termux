@@ -35,6 +35,29 @@ def _load_ci_script(name):
     return module
 
 
+def _bash_function(script, name):
+    """Extract a ``bash`` function definition from an installer script.
+
+    Installer logic is exercised by pulling the function out and running it in a
+    real ``bash`` (same approach as
+    ``test_plugin_utils_patch_replaces_body_to_avoid_unreachable_smart_cast``),
+    which keeps the shipped shell the source of truth instead of re-implementing
+    it here.
+    """
+    func = re.search(rf'^{name}\(\) \{{.*?^\}}', script, re.M | re.DOTALL)
+    if func is None:
+        raise AssertionError(f'{name}() not found')
+    return func.group(0)
+
+
+def _run_bash(func, call, *args):
+    return subprocess.run(
+        ['bash', '-c', f'set -e\n{func}\n{call}', 'bash', *args],
+        capture_output=True,
+        text=True,
+    )
+
+
 class BuildTest(unittest.TestCase):
     def setUp(self):
         self.android_ndk = os.environ.get('ANDROID_NDK')
@@ -236,6 +259,94 @@ class BuildTest(unittest.TestCase):
             # idempotent: re-running the patch is a no-op
             run_patch(target)
             self.assertEqual(patched, target.read_text())
+
+
+class NdkValidationTest(unittest.TestCase):
+    """Regression for #29: an NDK that cannot configure a native build must not
+    be accepted as healthy.
+
+    A partially extracted NDK keeps ``toolchains/llvm`` but loses
+    ``build/cmake/android.toolchain.cmake``. AGP only needs ``source.properties``,
+    so minting that metadata onto an incomplete tree made the installer report
+    "NDK installed" forever, and the toolchain file never came back. The reporter
+    hit exactly that: after the metadata repair, the build failed with
+    ``Could not find toolchain file: .../build/cmake/android.toolchain.cmake``.
+    """
+
+    def setUp(self):
+        root = Path(__file__).parent
+        self.post_install = (root / 'scripts' / 'install' / 'post_install.sh').read_text()
+        self.installer = (root / 'install_flutter_complete.sh').read_text()
+
+    @staticmethod
+    def _make_ndk(root, *, toolchain, source_properties):
+        ndk = root / 'ndk' / '29.0.14206865'
+        (ndk / 'toolchains' / 'llvm').mkdir(parents=True)
+        if toolchain:
+            cmake = ndk / 'build' / 'cmake'
+            cmake.mkdir(parents=True)
+            (cmake / 'android.toolchain.cmake').write_text('# toolchain\n')
+        if source_properties:
+            (ndk / 'source.properties').write_text('Pkg.Revision = 29.0.14206865\n')
+        return ndk
+
+    def _repair(self, ndk):
+        return _run_bash(
+            _bash_function(self.post_install, 'repair_ndk_metadata'),
+            'repair_ndk_metadata "$1"',
+            str(ndk),
+        )
+
+    def test_repair_removes_ndk_missing_cmake_toolchain(self):
+        """The #29 state: metadata already minted, toolchain file gone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk = self._make_ndk(Path(tmp), toolchain=False, source_properties=True)
+            result = self._repair(ndk)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(ndk.exists())
+
+    def test_repair_removes_ndk_missing_cmake_toolchain_and_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk = self._make_ndk(Path(tmp), toolchain=False, source_properties=False)
+            result = self._repair(ndk)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(ndk.exists())
+
+    def test_repair_removes_stub_without_llvm(self):
+        """Pre-existing behaviour kept: an empty stub is removed, not repaired."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk = Path(tmp) / 'ndk' / '29.0.14206865'
+            ndk.mkdir(parents=True)
+            result = self._repair(ndk)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(ndk.exists())
+
+    def test_repair_mints_metadata_for_complete_ndk(self):
+        """Behaviour kept for a usable NDK: missing metadata is regenerated."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk = self._make_ndk(Path(tmp), toolchain=True, source_properties=False)
+            result = self._repair(ndk)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                'Pkg.Revision = 29.0.14206865',
+                (ndk / 'source.properties').read_text(),
+            )
+
+    def test_ndk_is_valid_requires_cmake_toolchain(self):
+        valid = _bash_function(self.installer, 'ndk_is_valid')
+        with tempfile.TemporaryDirectory() as tmp:
+            incomplete = self._make_ndk(
+                Path(tmp) / 'a', toolchain=False, source_properties=True
+            )
+            complete = self._make_ndk(
+                Path(tmp) / 'b', toolchain=True, source_properties=True
+            )
+            self.assertNotEqual(
+                _run_bash(valid, 'ndk_is_valid "$1"', str(incomplete)).returncode, 0
+            )
+            self.assertEqual(
+                _run_bash(valid, 'ndk_is_valid "$1"', str(complete)).returncode, 0
+            )
 
 
 class PackageManifestTest(unittest.TestCase):

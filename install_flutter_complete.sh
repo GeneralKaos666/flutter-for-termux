@@ -148,14 +148,17 @@ restore_ndk_backups() {
 	fi
 }
 
-# An NDK directory is only usable by AGP when it contains both the LLVM
-# toolchain and the source.properties metadata file. A partially extracted or
-# corrupt install can leave an empty directory behind; treating that as
-# "installed" makes AGP fail later with
-# "[CXX1101] NDK at ... did not have a source.properties file".
+# An NDK directory is only usable when it can actually configure a native build:
+# it needs the LLVM toolchain, the CMake toolchain file, and the source.properties
+# metadata. A partially extracted or corrupt install can leave a directory missing
+# any of them; treating that as "installed" makes AGP fail later with
+# "[CXX1101] NDK at ... did not have a source.properties file" or
+# "Could not find toolchain file: .../build/cmake/android.toolchain.cmake".
 ndk_is_valid() {
 	local ndk_dir="$1"
-	[ -d "$ndk_dir/toolchains/llvm" ] && [ -f "$ndk_dir/source.properties" ]
+	[ -d "$ndk_dir/toolchains/llvm" ] &&
+		[ -f "$ndk_dir/build/cmake/android.toolchain.cmake" ] &&
+		[ -f "$ndk_dir/source.properties" ]
 }
 
 configure_ndk_clang() {
