@@ -121,6 +121,30 @@ class BuildTest(unittest.TestCase):
         # The deb must land under release/, not the repo root.
         self.assertEqual(output.parent.name, 'release')
 
+    def test_metadata_bundles_release_config(self):
+        with open(self.instance.conf, 'rb') as f:
+            cfg = tomllib.load(f)
+        meta = self.instance.metadata()
+        self.assertEqual(meta['compile_sdk'], cfg['android']['compile_sdk'])
+        self.assertEqual(meta['target_sdk'], cfg['android']['target_sdk'])
+        self.assertEqual(meta['dart_version'], cfg['flutter'].get('dart_version') or '')
+        self.assertEqual(meta['framework_revision'], cfg['flutter'].get('framework_revision') or '')
+        self.assertEqual(meta['framework_commit_date'], cfg['flutter'].get('framework_commit_date') or '')
+        self.assertEqual(meta['devtools_version'], cfg['flutter'].get('devtools_version') or '')
+        self.assertEqual(meta['ndk_version'], cfg['ndk'].get('version') or '')
+        self.assertEqual(meta['package_version'], self.instance.package_version)
+        expected_keys = {
+            'dart_version',
+            'framework_revision',
+            'framework_commit_date',
+            'devtools_version',
+            'ndk_version',
+            'compile_sdk',
+            'target_sdk',
+            'package_version',
+        }
+        self.assertEqual(set(meta), expected_keys)
+
     def _conf_with_release_path(self, tmp, line):
         """Copy build.toml into ``tmp`` with the ``[package] path`` line rewritten.
 
