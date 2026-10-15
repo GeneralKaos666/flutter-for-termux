@@ -46,7 +46,7 @@ def engine_version(root: str):
     root = os.path.join(root, 'bin/internal/engine.version')
 
     with open(root) as f:
-        return f.read()
+        return f.read().strip()
 
 
 def recordm(func):
