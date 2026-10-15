@@ -120,6 +120,46 @@ class BuildTest(unittest.TestCase):
         # The deb must land under release/, not the repo root.
         self.assertEqual(output.parent.name, 'release')
 
+    def _conf_with_release_path(self, tmp, line):
+        """Copy build.toml into ``tmp`` with the ``[package] path`` line rewritten.
+
+        ``line`` is inserted verbatim (e.g. ``"path = '.'"``), or ``''`` drops
+        the key entirely. Everything else is untouched, so only the release-path
+        lookup differs from the shipped config.
+        """
+        lines = []
+        in_package = False
+        for raw in (Path(__file__).parent / 'build.toml').read_text(encoding='utf-8').splitlines():
+            if raw.startswith('['):
+                in_package = raw.strip() == '[package]'
+            elif in_package and raw.startswith('path ='):
+                if line:
+                    lines.append(line)
+                continue
+            lines.append(raw)
+        conf = Path(tmp) / 'build.toml'
+        conf.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        return conf
+
+    def test_release_path_at_repo_root_is_rejected(self):
+        """``path = '.'`` (the old default) would drop the deb into the source
+        tree, so constructing the Build must fail loudly."""
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf_with_release_path(tmp, "path = '.'")
+            with self.assertRaises(ValueError) as ctx:
+                build.Build(conf=str(conf))
+        self.assertIn('bad release path', str(ctx.exception))
+
+    def test_missing_release_path_is_rejected(self):
+        """A missing or empty ``[package] path`` must raise ValueError, not the
+        TypeError a later ``path/release`` division would produce."""
+        for line in ('', "path = ''"):
+            with self.subTest(line=line), tempfile.TemporaryDirectory() as tmp:
+                conf = self._conf_with_release_path(tmp, line)
+                with self.assertRaises(ValueError) as ctx:
+                    build.Build(conf=str(conf))
+                self.assertIn('bad release path', str(ctx.exception))
+
     def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
         dart_path = os.path.join(patch_dir, 'dart.patch')
