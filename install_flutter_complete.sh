@@ -413,8 +413,15 @@ echo "  • Total ~1.8GB"
 echo ""
 echo -e "${YELLOW}Estimated time:${NC} 10-30 minutes (depending on network speed)"
 echo ""
-read -p "Continue? [Y/n] " -n 1 -r
-echo
+# Skip the prompt when running unattended: --yes/-y, --non-interactive, or a
+# non-TTY stdin (e.g. CI, curl | bash). Take the affirmative default instead of
+# blocking forever on a read that can never receive input.
+if [ "${OPT_YES:-false}" != "true" ] && [ "${OPT_NON_INTERACTIVE:-false}" != "true" ] && [ "${NON_INTERACTIVE:-false}" != "true" ] && [ -t 0 ]; then
+	read -p "Continue? [Y/n] " -n 1 -r
+	echo
+else
+	REPLY=Y
+fi
 if [[ $REPLY =~ ^[Nn]$ ]]; then
 	echo "Installation canceled"
 	exit 0
