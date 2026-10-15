@@ -9,7 +9,9 @@ patch contract intentionally changes, update the assertion deliberately rather
 than pinning a version literal.
 """
 
+import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -18,6 +20,8 @@ import tarfile
 import tempfile
 import tomllib
 import unittest
+import zipfile
+from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -56,6 +60,74 @@ def _run_bash(func, call, *args):
         capture_output=True,
         text=True,
     )
+
+
+class _FakeHttpResponse:
+    """Minimal urllib response stand-in for the release verifier tests."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def read(self, *args, **kwargs):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+_DEB_BYTES = b'flutter-termux-test-deb-payload'
+_DEB_SHA = hashlib.sha256(_DEB_BYTES).hexdigest()
+_DEB_SIZE = len(_DEB_BYTES)
+# Minute-aligned epoch so a fixture .deb's tar timestamps round-trip through the
+# module's timezone inference deterministically.
+_DEB_MTIME = 1699999980
+
+
+def _build_tar_gz(members):
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w:gz') as tar:
+        for member_name, content in members:
+            info = tarfile.TarInfo(member_name)
+            info.size = len(content)
+            info.mode = 0o644
+            info.mtime = _DEB_MTIME
+            info.uname = 'root'
+            info.gname = 'root'
+            tar.addfile(info, io.BytesIO(content))
+    return buffer.getvalue()
+
+
+def _build_ar_archive(members):
+    """Assemble a POSIX ``ar`` archive (the outer container of a .deb)."""
+    out = bytearray(b'!<arch>\n')
+    for member_name, data in members:
+        header = (
+            f'{member_name + "/":<16}'
+            f'{0:<12}'
+            f'{0:<6}'
+            f'{0:<6}'
+            f'{0o100644:<8o}'
+            f'{len(data):<10}'
+            '`\n'
+        )
+        assert len(header) == 60, len(header)
+        out += header.encode('ascii')
+        out += data
+        if len(data) % 2:
+            out += b'\n'
+    return bytes(out)
+
+
+def _build_deb(data_members):
+    """Build a minimal, structurally valid .deb (ar + control.tar.gz + data.tar.gz)."""
+    return _build_ar_archive([
+        ('debian-binary', b'2.0\n'),
+        ('control.tar.gz', _build_tar_gz([('control', b'Package: fixture\nVersion: 1.0\n')])),
+        ('data.tar.gz', _build_tar_gz(data_members)),
+    ])
 
 
 class BuildTest(unittest.TestCase):
@@ -990,6 +1062,397 @@ class ReleasePinSyncTest(unittest.TestCase):
                 self.sync.sync_pins(root, 'not-a-hash', 610124104, '3.47.6', '1')
             with self.assertRaises(SystemExit):
                 self.sync.sync_pins(root, 'd' * 64, 0, '3.47.6', '1')
+
+
+class ReleaseVerificationTest(unittest.TestCase):
+    """Contract tests for scripts/ci/verify_release_asset.py strict verification.
+
+    A ``.deb`` build publishes five required companions (checksum, size,
+    inventory, build metadata, build evidence), while ``device_smoke_evidence.json``
+    is only produced by the separate, manual ``device-smoke.yml`` workflow. Its
+    absence must therefore not downgrade verification to the single-asset path,
+    and when it is present it must still be validated fail-closed.
+    """
+
+    NAME = 'flutter_1.2.3-5_aarch64.deb'
+    COMMIT = 'c' * 40
+    TREE = 'd' * 40
+    INVENTORY_TEXT = '\n'.join(
+        f'-rw-r--r-- root/root {1000 + i} 2026-01-01 00:00 ./usr/lib/libflutter{i:02d}.so'
+        for i in range(12)
+    ) + '\n'
+
+    def setUp(self):
+        self.verify = _load_ci_script('verify_release_asset.py')
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._cwd = os.getcwd()
+        os.chdir(self._tmp.name)
+        self.addCleanup(os.chdir, self._cwd)
+        # Companion names are derived by production, never copied here.
+        self.required_companions = self.verify.required_aux_asset_names(self.NAME)
+
+    def _declared_manifest(self, sha=_DEB_SHA, size=_DEB_SIZE):
+        return (
+            '[flutter]\n'
+            "tag = '1.2.3'\n"
+            f"sha256 = '{sha}'\n"
+            f'size = {size}\n'
+            '[package]\n'
+            "pkg_rel = '5'\n"
+        )
+
+    def _real_manifest_without_hash(self):
+        """Production manifest shape with any sha256/size stripped.
+
+        Rebuilt from the shipped build.toml so the tag, asset name, and package
+        revision cannot drift from production. The hash/size keys (absent in
+        production today) are removed defensively so this fixture always drives
+        the manifest-silent strict path.
+        """
+        config = tomllib.loads((Path(__file__).parent / 'build.toml').read_text(encoding='utf-8'))
+        flutter = {k: v for k, v in config['flutter'].items() if k not in ('sha256', 'size')}
+        pkg_rel = config['package']['pkg_rel']
+        lines = ['[flutter]']
+        lines += [f'{key} = {json.dumps(value)}' for key, value in flutter.items()]
+        lines += ['[package]', f'pkg_rel = {json.dumps(pkg_rel)}']
+        return '\n'.join(lines) + '\n'
+
+    def _real_deb(self):
+        """Build a real fixture .deb and return ``(deb_bytes, matching_inventory)``.
+
+        The inventory is generated by the module's own ``extract_deb_member_paths``
+        so both the pass and mismatch cross-check cases exercise the real parser
+        instead of a mocked return value.
+        """
+        deb_bytes = _build_deb([
+            (f'./usr/lib/libflutter{i:02d}.so', b'x' * (1000 + i)) for i in range(12)
+        ])
+        deb_path = Path(self._tmp.name) / 'fixture.deb'
+        deb_path.write_bytes(deb_bytes)
+        entries = self.verify.extract_deb_member_paths(str(deb_path))
+        return deb_bytes, '\n'.join(entries) + '\n'
+
+    def _resolve_digest(self, api_digest, deb_sha):
+        if api_digest is None or api_digest == 'absent':
+            return ''
+        if api_digest == 'match':
+            return f'sha256:{deb_sha}'
+        if api_digest == 'mismatch':
+            return 'sha256:' + '0' * 64
+        if isinstance(api_digest, str) and ':' in api_digest:
+            return api_digest.lower()
+        raise ValueError(
+            f"unrecognized api_digest shorthand {api_digest!r}; pass None, 'match', "
+            "'mismatch', or a literal '<algo>:<hex>' digest string"
+        )
+
+    def _run_verifier(self, *, include_smoke, smoke_status='passed', manifest_text=None,
+                      api_digest='match', companion_sha=None, metadata_sha=None,
+                      deb_bytes=None, download_bytes=None, inventory_text=None,
+                      patch_extractor=True):
+        manifest_text = self._declared_manifest() if manifest_text is None else manifest_text
+        deb_bytes = _DEB_BYTES if deb_bytes is None else deb_bytes
+        download_bytes = deb_bytes if download_bytes is None else download_bytes
+        deb_sha = hashlib.sha256(deb_bytes).hexdigest()
+        deb_size = len(deb_bytes)
+        companion_sha = deb_sha if companion_sha is None else companion_sha
+        metadata_sha = deb_sha if metadata_sha is None else metadata_sha
+        inventory_text = self.INVENTORY_TEXT if inventory_text is None else inventory_text
+
+        config = tomllib.loads(manifest_text)
+        _, version, name = self.verify.resolve_expected_asset(
+            config.get('flutter', {}), config.get('package', {})
+        )
+
+        Path('build.toml').write_text(manifest_text, encoding='utf-8')
+
+        companion_names = list(self.verify.required_aux_asset_names(name))
+        if include_smoke:
+            companion_names.extend(self.verify.optional_aux_asset_names())
+        digest = self._resolve_digest(api_digest, deb_sha)
+        assets = [
+            {
+                'name': asset_name,
+                'browser_download_url': f'https://example.test/{asset_name}',
+                'size': deb_size if asset_name == name else 1,
+                'digest': digest if asset_name == name else '',
+            }
+            for asset_name in [name, *companion_names]
+        ]
+
+        inventory_entries = self.verify.parse_inventory_entries(inventory_text)
+        payloads = {
+            '/releases/tags/': json.dumps({'assets': assets}).encode(),
+            '.sha256': (companion_sha + '\n').encode(),
+            '.size.txt': str(deb_size).encode(),
+            'inventory.txt': inventory_text.encode(),
+            'build_metadata.json': json.dumps({
+                'version': version,
+                'arch': 'aarch64',
+                'run_id': 42,
+                'build_number': 42,
+                'source_commit': self.COMMIT,
+                'tree_sha': self.TREE,
+                'sha256': metadata_sha,
+                'size_bytes': deb_size,
+                'build_duration_seconds': 12.5,
+            }).encode(),
+            'build_evidence.json': json.dumps({
+                'type': 'build_evidence',
+                'version': version,
+                'arch': 'aarch64',
+                'run_id': 42,
+                'build_number': 42,
+                'source_commit': self.COMMIT,
+                'tree_sha': self.TREE,
+                'deb_sha256': deb_sha,
+                'deb_size_bytes': deb_size,
+                'inventory_file_count': len(inventory_entries),
+                'build_duration_seconds': 12.5,
+            }).encode(),
+            'device_smoke_evidence.json': json.dumps({
+                'status': smoke_status,
+                'mode_a_status': 'passed',
+                'mode_b_status': 'passed',
+                'artifact_source_commit': self.COMMIT,
+                'verifier_commit': self.COMMIT,
+                'build_run_id': 42,
+                'artifacts': {
+                    'deb_sha256': deb_sha,
+                    'deb_size': deb_size,
+                    'apk_sha256': 'a' * 64,
+                    'apk_size': 1024,
+                    'aab_sha256': 'b' * 64,
+                    'aab_size': 2048,
+                },
+            }).encode(),
+        }
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w') as archive:
+            archive.writestr('flutter_aarch64.deb', deb_bytes)
+        zip_bytes = zip_buffer.getvalue()
+
+        def fake_urlopen(req, *args, **kwargs):
+            url = getattr(req, 'full_url', str(req))
+            if '/git/commits/' in url:
+                return _FakeHttpResponse(json.dumps({'tree': {'sha': self.TREE}}).encode())
+            if '/compare/' in url:
+                return _FakeHttpResponse(json.dumps({
+                    'behind_by': 0, 'ahead_by': 0, 'status': 'identical', 'files': [],
+                }).encode())
+            if url.endswith('/zip'):
+                return _FakeHttpResponse(zip_bytes)
+            if url.endswith('/artifacts'):
+                return _FakeHttpResponse(json.dumps({
+                    'artifacts': [{'name': name, 'id': 7, 'expired': False}],
+                }).encode())
+            if '/actions/runs/' in url:
+                return _FakeHttpResponse(json.dumps({
+                    'head_sha': self.COMMIT,
+                    'conclusion': 'success',
+                    'path': '.github/workflows/build-deb.yml',
+                    'run_number': 42,
+                }).encode())
+            for marker, payload in payloads.items():
+                if marker in url:
+                    return _FakeHttpResponse(payload)
+            raise AssertionError(f'unexpected url: {url}')
+
+        def fake_urlretrieve(url, path):
+            Path(path).write_bytes(download_bytes)
+            return str(path), None
+
+        out = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict(os.environ, {'RUNNER_TEMP': self._tmp.name}, clear=True))
+            stack.enter_context(patch.object(self.verify.urllib.request, 'urlopen', fake_urlopen))
+            stack.enter_context(patch.object(self.verify.urllib.request, 'urlretrieve', fake_urlretrieve))
+            if patch_extractor:
+                stack.enter_context(patch.object(
+                    self.verify,
+                    'extract_deb_member_paths',
+                    return_value=inventory_entries,
+                ))
+            stack.enter_context(redirect_stdout(out))
+            try:
+                self.verify.main()
+            except SystemExit as exc:
+                code = exc.code if exc.code is not None else 0
+            else:
+                code = 0
+        return code, out.getvalue()
+
+    def test_build_companions_alone_reach_strict_verification(self):
+        code, out = self._run_verifier(include_smoke=False)
+
+        self.assertEqual(code, 0)
+        self.assertNotIn('single-asset', out)
+        for name in self.required_companions:
+            self.assertIn(f'Found companion asset: {name}', out)
+        self.assertIn('device_smoke_evidence.json absent', out)
+
+    def test_harness_uses_production_asset_and_companion_derivation(self):
+        # Guard against the harness re-implementing production naming: the
+        # exported helpers must derive the declared fixture's names.
+        _, version, name = self.verify.resolve_expected_asset({'tag': '1.2.3'}, {'pkg_rel': '5'})
+        self.assertEqual(version, '1.2.3-5')
+        self.assertEqual(name, self.NAME)
+        self.assertEqual(
+            self.verify.required_aux_asset_names(name),
+            (f'{self.NAME}.sha256', f'{self.NAME}.size.txt', 'inventory.txt',
+             'build_metadata.json', 'build_evidence.json'),
+        )
+        self.assertEqual(self.verify.optional_aux_asset_names(), ('device_smoke_evidence.json',))
+
+    def test_smoke_evidence_is_validated_when_present(self):
+        code, out = self._run_verifier(include_smoke=True)
+
+        self.assertEqual(code, 0)
+        self.assertIn('Verified device_smoke_evidence.json full schema', out)
+
+    def test_failing_smoke_evidence_is_rejected_when_present(self):
+        code, out = self._run_verifier(include_smoke=True, smoke_status='failed')
+
+        self.assertEqual(code, 1)
+        self.assertIn("device_smoke_evidence.json status is not 'passed'", out)
+
+    def test_manifest_without_sha256_cross_checks_present_sources(self):
+        # Production build.toml declares no sha256/size, and GitHub may omit the
+        # asset digest; the required companion .sha256 and build_metadata.json
+        # must still agree and the strict branch must not crash.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='absent',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertNotIn('single-asset', out)
+        self.assertIn('Manifest declares no sha256; cross-checking', out)
+        self.assertIn('platform attestation unavailable', out)
+        self.assertNotIn('GitHub digest mismatch', out)
+
+    def test_manifest_without_sha256_accepts_matching_api_digest(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='match',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('Hash sources agree (companion .sha256, build_metadata.json, GitHub digest)', out)
+
+    def test_manifest_without_sha256_rejects_mismatched_companion_hash(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            companion_sha='0' * 64,
+            metadata_sha=_DEB_SHA,
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Hash source mismatch! companion .sha256', out)
+
+    def test_manifest_without_sha256_rejects_mismatched_api_digest(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='mismatch',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Hash source mismatch! GitHub digest', out)
+
+    def test_manifest_without_sha256_ignores_non_sha256_digest(self):
+        # A present-but-non-sha256 digest must be ignored explicitly, not
+        # reported as absent, and must not fail verification on its own.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='md5:' + '0' * 32,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('is not a sha256 digest and will be ignored', out)
+        self.assertNotIn('GitHub digest absent', out)
+
+    def test_manifest_without_sha256_rejects_malformed_companion_hash(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            companion_sha='not-a-valid-sha256',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('is not a valid 64-char sha256', out)
+
+    def test_manifest_without_sha256_rejects_malformed_metadata_hash(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            metadata_sha='zz',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn("build_metadata.json sha256 'zz' is not a valid 64-char hex hash", out)
+
+    def test_manifest_without_sha256_rejects_failed_smoke_evidence(self):
+        code, out = self._run_verifier(
+            include_smoke=True,
+            smoke_status='failed',
+            manifest_text=self._real_manifest_without_hash(),
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn("device_smoke_evidence.json status is not 'passed'", out)
+
+    def test_manifest_without_sha256_resolved_hash_gates_final_download(self):
+        # Correct companion/metadata hashes but tampered download bytes must fail
+        # the final local SHA256 check against the resolved hash.
+        corrupt = bytearray(_DEB_BYTES)
+        corrupt[0] ^= 0xFF
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            download_bytes=bytes(corrupt),
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Local SHA256 mismatch', out)
+
+    def test_harness_rejects_unknown_api_digest_shorthand(self):
+        with self.assertRaisesRegex(ValueError, 'unrecognized api_digest'):
+            self._run_verifier(include_smoke=False, api_digest='bogus')
+
+    def test_real_deb_inventory_cross_check_passes(self):
+        deb_bytes, inventory_text = self._real_deb()
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            deb_bytes=deb_bytes,
+            inventory_text=inventory_text,
+            patch_extractor=False,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('Inventory perfectly matches package contents', out)
+
+    def test_real_deb_inventory_cross_check_rejects_mismatch(self):
+        deb_bytes, inventory_text = self._real_deb()
+        # A format-valid but semantically wrong inventory entry must be rejected.
+        tampered = inventory_text.replace('libflutter00.so', 'libflutter99.so', 1)
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            deb_bytes=deb_bytes,
+            inventory_text=tampered,
+            patch_extractor=False,
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Semantic mismatch between inventory.txt', out)
 
 
 class SysrootLockTest(unittest.TestCase):
