@@ -667,13 +667,16 @@ if [ -n "$ENGINE_VERSION" ] && [ ! -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; 
 	dart_zip="$WORK_DIR/dart-sdk.zip"
 	wget -q --show-progress "$SNAPSHOTS_URL" -O "$dart_zip" || true
 	if [ -f "$dart_zip" ]; then
-		verify_sha256 "$dart_zip" "$SNAPSHOT_EXPECTED_SHA256" || {
-			rm -f "$dart_zip"
-			echo "  ⚠ Dart SDK snapshots checksum mismatch (using the snapshots bundled in the deb)"
-		}
-		unzip -o -j "$dart_zip" 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null || true
+		# Claim success only when the verified archive actually unpacked a snapshot;
+		# on a checksum or unzip failure the snapshots bundled in the deb are used.
+		if verify_sha256 "$dart_zip" "$SNAPSHOT_EXPECTED_SHA256" \
+			&& unzip -o -j "$dart_zip" 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null \
+			&& [ -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
+			echo "  ✓ Dart SDK snapshots installed"
+		else
+			echo "  ⚠ Dart SDK snapshots unavailable (using the snapshots bundled in the deb)"
+		fi
 		rm -f "$dart_zip"
-		echo "  ✓ Dart SDK snapshots installed"
 	fi
 else
 	echo "  ✓ Dart SDK snapshots already present or no update needed"
