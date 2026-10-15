@@ -722,6 +722,15 @@ class RecordDecoratorTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             boom()
 
+    def test_engine_version_strips_trailing_newline(self):
+        import utils
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'bin' / 'internal').mkdir(parents=True)
+            (root / 'bin' / 'internal' / 'engine.version').write_text('b8800d0f\n')
+            self.assertEqual(utils.engine_version(str(root)), 'b8800d0f')
+
 
 class ReleaseNotesTest(unittest.TestCase):
     def setUp(self):
