@@ -349,6 +349,147 @@ class NdkValidationTest(unittest.TestCase):
             )
 
 
+class NdkClangDriverTest(unittest.TestCase):
+    """Regression for #29: ``setup_ndk_clang_wrappers`` must leave the NDK in a
+    state CMake can actually use.
+
+    Two independent bugs are fixed here:
+
+    * The generic ``clang``/``clang++`` names were overwritten with a shell
+      wrapper that added ``-L"$SYSROOT/usr/lib/<triple>"``. Only the static
+      archives live in that directory (``libc.a``, ``libm.a``, ...); the shared
+      stubs (``libc.so``, ...) are in the per-API subdirectories. Because that
+      ``-L`` is searched before the API directory clang derives from
+      ``--sysroot``, ``-lc`` resolved to the static ``libc.a`` and every native
+      link failed with ``undefined symbol: pthread_atfork`` ("The C compiler ...
+      is broken" / ``[CXX1429]``). A native CMake plugin (``jni``, pulled in by
+      ``path_provider_android``) then could not build.
+    * The host directory was assumed to be ``linux-x86_64``. The CMake toolchain
+      derives ``ANDROID_HOST_TAG`` itself and it differs across repacks
+      (``linux-aarch64`` for the current r29 tarball on Android, ``linux-arm64``
+      for the earlier aarch64 repack), so a name that does not exist could be
+      selected.
+    """
+
+    # real host dir -> host-tag alias shipped by that repack
+    LAYOUTS = {
+        'tarball-r29': ('linux-x86_64', 'linux-aarch64'),
+        'older-arm64': ('linux-arm64', 'linux-x86_64'),
+    }
+    HOST_TAGS = ('linux-aarch64', 'linux-arm64', 'linux-x86_64')
+
+    def setUp(self):
+        root = Path(__file__).parent
+        self.post_install = (root / 'scripts' / 'install' / 'post_install.sh').read_text()
+
+    @classmethod
+    def _make_ndk(cls, root, *, driver='clang-21', layout='tarball-r29',
+                  stale_wrappers=False):
+        real_name, alias = cls.LAYOUTS[layout]
+        ndk = root / 'ndk' / '29.0.14206865'
+        prebuilt = ndk / 'toolchains' / 'llvm' / 'prebuilt'
+        real = prebuilt / real_name
+        (real / 'bin').mkdir(parents=True)
+        driver_path = real / 'bin' / driver
+        driver_path.write_text('#!/bin/sh\n# real driver stand-in\n')
+        driver_path.chmod(0o755)
+        # The repack's own alias for its host directory (and the sysroot it
+        # serves), which must survive the installer.
+        if alias != real_name:
+            (prebuilt / alias).symlink_to(real_name)
+        (real / 'sysroot').mkdir()
+        (real / 'sysroot' / '.keep').write_text('')
+        if stale_wrappers:
+            # A pre-existing install: generic names are shell wrappers, and the
+            # old installer left a bare `linux-aarch64` directory behind.
+            where = [prebuilt / 'bin', real / 'bin', prebuilt / 'linux-aarch64' / 'bin']
+            for d in where:
+                d.mkdir(parents=True, exist_ok=True)
+                for name in ('clang', 'clang++'):
+                    wrapper = d / name
+                    wrapper.write_text(
+                        '#!/data/data/com.termux/files/usr/bin/sh\n'
+                        'exec clang -L"$SYSROOT/usr/lib/aarch64-linux-android" "$@"\n'
+                    )
+                    wrapper.chmod(0o755)
+        return ndk, driver_path
+
+    def _configure(self, ndk, tmp):
+        funcs = '\n'.join([
+            _bash_function(self.post_install, 'backup_ndk_file'),
+            _bash_function(self.post_install, 'setup_ndk_clang_wrappers'),
+        ])
+        call = (
+            'export ANDROID_SDK="$2"; export BACKUP_DIR="$3"; export PREFIX="$4"; '
+            'setup_ndk_clang_wrappers "$1"'
+        )
+        return _run_bash(
+            funcs,
+            call,
+            str(ndk),
+            str(ndk.parent),
+            str(Path(tmp) / 'backups'),
+            str(Path(tmp) / 'prefix'),
+        )
+
+    def _assert_usable(self, ndk, driver):
+        """Every host tag CMake may pick must expose a real clang driver."""
+        prebuilt = ndk / 'toolchains' / 'llvm' / 'prebuilt'
+        for tag in self.HOST_TAGS:
+            for name in ('clang', 'clang++'):
+                link = prebuilt / tag / 'bin' / name
+                self.assertTrue(link.is_symlink(), f'{link} is not a symlink')
+                self.assertEqual(link.resolve(), driver.resolve(), f'{link} not the driver')
+                self.assertNotIn('-L"$SYSROOT', link.read_text())
+        for name in ('clang', 'clang++'):
+            link = prebuilt / 'bin' / name
+            self.assertTrue(link.is_symlink(), f'{link} is not a symlink')
+            self.assertEqual(link.resolve(), driver.resolve())
+        self.assertTrue((prebuilt / 'sysroot').exists(), 'prebuilt/sysroot is broken')
+
+    def test_tarball_layout_keeps_shipped_alias_and_sysroot(self):
+        for stale in (False, True):
+            with self.subTest(stale_wrappers=stale), tempfile.TemporaryDirectory() as tmp:
+                ndk, driver = self._make_ndk(Path(tmp), stale_wrappers=stale)
+                result = self._configure(ndk, tmp)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                prebuilt = ndk / 'toolchains' / 'llvm' / 'prebuilt'
+                # The repack's linux-aarch64 -> linux-x86_64 alias must survive,
+                # so the sysroot the toolchain resolves is not lost.
+                self.assertTrue(os.path.islink(prebuilt / 'linux-aarch64'))
+                self.assertEqual(os.readlink(prebuilt / 'linux-aarch64'), 'linux-x86_64')
+                self.assertTrue((prebuilt / 'linux-aarch64' / 'sysroot').exists())
+                self._assert_usable(ndk, driver)
+
+    def test_older_layout_repairs_wrappers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk, driver = self._make_ndk(Path(tmp), layout='older-arm64',
+                                         stale_wrappers=True)
+            result = self._configure(ndk, tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # The stale linux-aarch64 directory becomes an alias to the real host.
+            prebuilt = ndk / 'toolchains' / 'llvm' / 'prebuilt'
+            self.assertTrue(os.path.islink(prebuilt / 'linux-aarch64'))
+            self.assertEqual(os.readlink(prebuilt / 'linux-aarch64'), 'linux-arm64')
+            self._assert_usable(ndk, driver)
+
+    def test_is_version_agnostic(self):
+        """A different NDK release ships clang-18, clang-19, ... instead."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk, driver = self._make_ndk(Path(tmp), driver='clang-18')
+            result = self._configure(ndk, tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self._assert_usable(ndk, driver)
+
+    def test_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk, driver = self._make_ndk(Path(tmp))
+            self.assertEqual(self._configure(ndk, tmp).returncode, 0)
+            second = self._configure(ndk, tmp)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self._assert_usable(ndk, driver)
+
+
 class PackageManifestTest(unittest.TestCase):
     def setUp(self):
         with open(Path(__file__).parent / 'build.toml', 'rb') as f:
