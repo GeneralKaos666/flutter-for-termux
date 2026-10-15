@@ -983,9 +983,15 @@ if [ ! -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
 	) || true
 	if [ -f dart-sdk.zip ]; then
 		echo "  Extracting snapshots..."
-		unzip -o -j dart-sdk.zip 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null || true
+		# Claim success only when the archive actually unpacked the key snapshot;
+		# on a download or unzip failure the snapshots bundled in the deb are used.
+		if unzip -o -j dart-sdk.zip 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null \
+			&& [ -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
+			echo "  ✓ Dart SDK snapshots installed"
+		else
+			echo "  ⚠ Dart SDK snapshots unavailable (using the snapshots bundled in the deb)"
+		fi
 		rm -f dart-sdk.zip
-		echo "  ✓ Dart SDK snapshots installed"
 	else
 		echo "  ⚠ Network unavailable, skipping Dart SDK snapshots download"
 	fi
