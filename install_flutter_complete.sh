@@ -379,7 +379,6 @@ fi
 
 # Version/toolchain constants come from lib_common.sh -> versions_common.sh
 # (FLUTTER_VERSION, NDK_VERSION, the download URLs, and their SHA256 pins).
-REPO_BASE="https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main"
 
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════════════════════════╗"
@@ -1029,12 +1028,10 @@ else
 fi
 
 # Test Linux build (if gtk3 installed)
-LINUX_BUILD_SUCCESS=false
 if command -v pkg-config &>/dev/null && pkg-config --exists gtk+-3.0 2>/dev/null; then
 	echo "Building Linux app (requires gtk3)..."
 	flutter build linux 2>&1 | tail -5 || true
 	if [ -f "build/linux/arm64/release/bundle/flutter_test_app" ]; then
-		LINUX_BUILD_SUCCESS=true
 		echo "  ✓ Linux build successful"
 	else
 		echo "  ⚠ Linux build skipped (install gtk3 to enable)"

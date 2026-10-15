@@ -56,6 +56,10 @@ jobs:
           find scripts -name "*.sh" -exec bash -n {} +
           bash -n install_flutter_complete.sh
 
+      - name: Termux smoke self-test (APT status fidelity)
+        shell: bash
+        run: TERMUX_SMOKE_SELFTEST=1 bash scripts/device/termux_smoke.sh
+
       - name: ShellCheck lint shell scripts
         shell: bash
         run: |
