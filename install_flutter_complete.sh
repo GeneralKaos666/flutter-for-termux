@@ -770,7 +770,7 @@ else
 fi
 
 # Configure all installed NDKs
-echo "Configuring NDK clang wrappers..."
+echo "Configuring NDK clang toolchain..."
 for ndk_dir in $ANDROID_HOME/ndk/*/; do
 	if [ -d "$ndk_dir/toolchains/llvm" ]; then
 		configure_ndk_clang "$ndk_dir"

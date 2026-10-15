@@ -281,7 +281,7 @@ source $PREFIX/etc/profile.d/flutter.sh
 flutter doctor -v
 ```
 
-`post_install.sh` handles most of the things that had to be done manually in older build versions: Android API 34/36, cmdline-tools, build-tools symlinks, NDK clang wrappers, CMake host tag, Dart snapshots, Flutter Tools Android-host patches, Gradle plugin ARM64-only ABI, ELF cleaner, shebang fixes, and cache cleanup.
+`post_install.sh` handles most of the things that had to be done manually in older build versions: Android API 34/36, cmdline-tools, build-tools symlinks, NDK clang driver configuration, CMake toolchain patches, Dart snapshots, Flutter Tools Android-host patches, Gradle plugin ARM64-only ABI, ELF cleaner, shebang fixes, and cache cleanup.
 
 ### Per-APK-Project Manual Setup Still Required
 

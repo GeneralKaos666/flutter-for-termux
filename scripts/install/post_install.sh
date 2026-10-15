@@ -40,7 +40,7 @@ fi
 # Upstream Flutter defaults to 28.2.13676358, but on an aarch64 Termux host
 # AGP would auto-download "android-ndk-r28c-linux" — Google publishes only the
 # x86-64 linux NDK build, whose tools cannot run on this device. Pinning the
-# default to the shipped NDK (which has Termux clang wrappers) avoids that.
+# default to the shipped NDK (set up for the Termux aarch64 host) avoids that.
 NDK_VERSION="${TERMUX_NDK_VERSION:-29.0.14206865}"
 if [ -f "$PREFIX/share/flutter/manifest.json" ]; then
 	_m_ndk=$(grep -o '"ndk_version": *"[^"]*"' "$PREFIX/share/flutter/manifest.json" 2>/dev/null | cut -d'"' -f4 || echo "")
@@ -518,7 +518,34 @@ repair_ndk_metadata() {
 	echo "  ✓ Created missing source.properties for NDK $NDK_NAME (required by AGP)"
 }
 
-# Helper function to setup NDK clang wrappers for any NDK version
+# Helper function to make an NDK's clang toolchain usable on Termux for any
+# repack layout or NDK version.
+#
+# Two independent problems are fixed here:
+#
+# 1. The generic `clang`/`clang++` names must resolve to the repack's real
+#    versioned driver (clang-18, clang-21, ...). The aarch64 repack ships a
+#    native, self-contained driver; older installs of this script overwrote the
+#    generic names with a shell wrapper that re-exec'd Termux's clang with an
+#    extra `-L"$SYSROOT/usr/lib/<triple>"`. That directory holds only the static
+#    archives (libc.a, libm.a, ...); the shared stubs (libc.so, libm.so, ...)
+#    live in the per-API subdirectories (21/, 22/, ...). Because the wrapper's -L
+#    is searched before the API-level directory clang derives from --sysroot,
+#    -lc resolved to the static libc.a and every native link failed:
+#        ld.lld: error: undefined symbol: pthread_atfork
+#        >>> ... in archive .../sysroot/usr/lib/aarch64-linux-android/libc.a
+#    Projects with a native CMake plugin (jni, pulled in by
+#    path_provider_android) then died at :jni:configureCMake* with
+#    "The C compiler ... is broken" / "[CXX1429]" (issue #29).
+#
+# 2. The CMake toolchain picks its host directory from ANDROID_HOST_TAG, which
+#    the NDK computes itself and which changed across repacks: the r29 tarball
+#    sets `linux-aarch64` on Android, while the earlier aarch64 repack set
+#    `linux-arm64`. The physical host directory may be named either, so every
+#    candidate tag is aliased to it (prebuilt/bin and prebuilt/sysroot cover an
+#    empty tag). Without this, the computed tag can name a directory that does
+#    not exist and CMake reports the compiler as "not a full path to an existing
+#    compiler tool".
 setup_ndk_clang_wrappers() {
 	local NDK_PATH="$1"
 	local NDK_NAME=$(basename "$NDK_PATH")
@@ -529,144 +556,107 @@ setup_ndk_clang_wrappers() {
 	fi
 
 	local PREBUILT="$NDK_PATH/toolchains/llvm/prebuilt"
-	local SYSROOT="$PREBUILT/linux-x86_64/sysroot"
-	local CLANG_VERSION=$(ls -1 "$PREBUILT/linux-x86_64/lib/clang/" | sort -V | tail -n 1)
-	local CLANG_LIB="$PREBUILT/linux-x86_64/lib/clang/$CLANG_VERSION/lib/linux"
 
-	echo "    Setting up clang wrappers for NDK $NDK_NAME..."
+	# Locate the real host directory: the physical one that holds the versioned
+	# clang-<N> driver (symlinked tag aliases are skipped).
+	local REAL_HOST=""
+	local dir candidates
+	for dir in "$PREBUILT"/*; do
+		[ -d "$dir" ] || continue
+		[ -L "$dir" ] && continue
+		candidates=("$dir"/bin/clang-[0-9]*)
+		[ -x "${candidates[0]}" ] || continue
+		REAL_HOST="$dir"
+		break
+	done
+	if [ -z "$REAL_HOST" ]; then
+		echo "    ⚠ Skipping $NDK_NAME (no clang-<version> driver found)"
+		return
+	fi
+	local REAL_BIN="$REAL_HOST/bin"
+	local REAL_NAME
+	REAL_NAME=$(basename "$REAL_HOST")
 
-	# Create wrapper script content (using NDK_PATH variable in script)
-	CLANG_WRAPPER="#!${PREFIX:-/data/data/com.termux/files/usr}/bin/sh
-PREFIX=\"\${PREFIX:-${PREFIX:-/data/data/com.termux/files/usr}}\"
-NDK=\"$NDK_PATH\"
-SYSROOT=\"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot\"
-CLANG_VERSION=\$(ls -1 \"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/\" 2>/dev/null | sort -V | tail -n 1)
-CLANG_LIB=\"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/\$CLANG_VERSION/lib/linux\"
+	# The versioned driver inside the real host directory.
+	local DRIVER=""
+	local c
+	for c in "$REAL_BIN"/clang-[0-9]*; do
+		DRIVER=$(basename "$c")
+		break
+	done
 
-ARCH=\"\"
-for arg in \"\$@\"; do
-    case \"\$arg\" in
-        --target=aarch64*) ARCH=\"aarch64\" ;;
-        --target=arm*) ARCH=\"arm\" ;;
-    esac
-done
+	echo "    Configuring clang toolchain for NDK $NDK_NAME (using $DRIVER)..."
 
-if [ \"\$ARCH\" = \"aarch64\" ]; then
-    LIB_PATH=\"\$SYSROOT/usr/lib/aarch64-linux-android\"
-    CLANG_LIB_ARCH=\"\$CLANG_LIB/aarch64\"
-elif [ \"\$ARCH\" = \"arm\" ]; then
-    LIB_PATH=\"\$SYSROOT/usr/lib/arm-linux-androideabi\"
-    CLANG_LIB_ARCH=\"\$CLANG_LIB/arm\"
-else
-    exec \"\$PREFIX/bin/clang\" \"\$@\"
-fi
-
-exec \"\$PREFIX/bin/clang\" -L\"\$LIB_PATH\" -L\"\$CLANG_LIB_ARCH\" \"\$@\""
-
-	CLANGPP_WRAPPER="#!${PREFIX:-/data/data/com.termux/files/usr}/bin/sh
-PREFIX=\"\${PREFIX:-${PREFIX:-/data/data/com.termux/files/usr}}\"
-NDK=\"$NDK_PATH\"
-SYSROOT=\"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot\"
-CLANG_VERSION=\$(ls -1 \"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/\" 2>/dev/null | sort -V | tail -n 1)
-CLANG_LIB=\"\$NDK/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/\$CLANG_VERSION/lib/linux\"
-
-ARCH=\"\"
-for arg in \"\$@\"; do
-    case \"\$arg\" in
-        --target=aarch64*) ARCH=\"aarch64\" ;;
-        --target=arm*) ARCH=\"arm\" ;;
-    esac
-done
-
-if [ \"\$ARCH\" = \"aarch64\" ]; then
-    LIB_PATH=\"\$SYSROOT/usr/lib/aarch64-linux-android\"
-    CLANG_LIB_ARCH=\"\$CLANG_LIB/aarch64\"
-elif [ \"\$ARCH\" = \"arm\" ]; then
-    LIB_PATH=\"\$SYSROOT/usr/lib/arm-linux-androideabi\"
-    CLANG_LIB_ARCH=\"\$CLANG_LIB/arm\"
-else
-    exec \"\$PREFIX/bin/clang++\" \"\$@\"
-fi
-
-exec \"\$PREFIX/bin/clang++\" -L\"\$LIB_PATH\" -L\"\$CLANG_LIB_ARCH\" \"\$@\""
-
-	# Create wrappers in prebuilt/bin/ (for some toolchain configs)
-	mkdir -p "$PREBUILT/bin"
-	backup_ndk_file "$PREBUILT/bin/clang"
-	backup_ndk_file "$PREBUILT/bin/clang++"
-	echo "$CLANG_WRAPPER" >"$PREBUILT/bin/clang"
-	chmod +x "$PREBUILT/bin/clang"
-	echo "$CLANGPP_WRAPPER" >"$PREBUILT/bin/clang++"
-	chmod +x "$PREBUILT/bin/clang++"
-
-	# Create wrappers in prebuilt/linux-x86_64/bin/ (official NDK structure)
-	mkdir -p "$PREBUILT/linux-x86_64/bin"
-	# Remove symlinks/files first (clang/clang++ symlink chains cause overwrites)
-	# Must use unlink to properly remove symlinks before writing
+	# 1. Repair the generic driver names: they must resolve to the versioned
+	#    driver, never to a shell wrapper (see note 1 above).
+	local f cur
 	for f in clang clang++; do
-		backup_ndk_file "$PREBUILT/linux-x86_64/bin/$f"
-		if [ -L "$PREBUILT/linux-x86_64/bin/$f" ] || [ -f "$PREBUILT/linux-x86_64/bin/$f" ]; then
-			unlink "$PREBUILT/linux-x86_64/bin/$f" 2>/dev/null || rm "$PREBUILT/linux-x86_64/bin/$f" 2>/dev/null || true
+		if [ -L "$REAL_BIN/$f" ]; then
+			cur=$(readlink "$REAL_BIN/$f")
+		else
+			cur=""
 		fi
-	done
-	echo "$CLANG_WRAPPER" >"$PREBUILT/linux-x86_64/bin/clang"
-	chmod +x "$PREBUILT/linux-x86_64/bin/clang"
-	echo "$CLANGPP_WRAPPER" >"$PREBUILT/linux-x86_64/bin/clang++"
-	chmod +x "$PREBUILT/linux-x86_64/bin/clang++"
-
-	# Create linux-aarch64 directory with bin subdirectory (for toolchain configs)
-	# Note: Must NOT symlink linux-aarch64 -> bin because access to linux-aarch64/bin
-	# would incorrectly resolve to bin/bin (which doesn't exist)
-	rm -rf "$PREBUILT/linux-aarch64" 2>/dev/null || true
-	mkdir -p "$PREBUILT/linux-aarch64/bin"
-	cp "$PREBUILT/bin/clang" "$PREBUILT/linux-aarch64/bin/clang"
-	cp "$PREBUILT/bin/clang++" "$PREBUILT/linux-aarch64/bin/clang++"
-
-	# Create all API-level clang wrappers (required by Android Gradle Plugin)
-	for api in 21 24 26 28 29 30 31 32 33 34 35; do
-		ln -sf clang "$PREBUILT/linux-aarch64/bin/armv7a-linux-androideabi${api}-clang"
-		ln -sf clang++ "$PREBUILT/linux-aarch64/bin/armv7a-linux-androideabi${api}-clang++"
-		ln -sf clang "$PREBUILT/linux-aarch64/bin/aarch64-linux-android${api}-clang"
-		ln -sf clang++ "$PREBUILT/linux-aarch64/bin/aarch64-linux-android${api}-clang++"
-		ln -sf clang "$PREBUILT/linux-aarch64/bin/i686-linux-android${api}-clang"
-		ln -sf clang++ "$PREBUILT/linux-aarch64/bin/i686-linux-android${api}-clang++"
-		ln -sf clang "$PREBUILT/linux-aarch64/bin/x86_64-linux-android${api}-clang"
-		ln -sf clang++ "$PREBUILT/linux-aarch64/bin/x86_64-linux-android${api}-clang++"
+		if [ "$cur" = "$DRIVER" ]; then
+			continue
+		fi
+		backup_ndk_file "$REAL_BIN/$f"
+		unlink "$REAL_BIN/$f" 2>/dev/null || rm -f "$REAL_BIN/$f" 2>/dev/null || true
+		ln -sfn "$DRIVER" "$REAL_BIN/$f"
 	done
 
-	# Create sysroot symlink
-	ln -sf linux-x86_64/sysroot "$PREBUILT/sysroot" 2>/dev/null || true
+	# 2. Alias every candidate host tag to the real host directory, so whichever
+	#    tag the CMake toolchain computes resolves to the full host tree
+	#    (including sysroot). Leave an entry that already resolves correctly.
+	local tag entry
+	for tag in linux-aarch64 linux-arm64 linux-x86_64; do
+		if [ "$tag" = "$REAL_NAME" ]; then
+			continue
+		fi
+		entry="$PREBUILT/$tag"
+		if [ -L "$entry" ] && [ "$(readlink "$entry")" = "$REAL_NAME" ]; then
+			continue
+		fi
+		if [ -e "$entry" ] && [ ! -L "$entry" ]; then
+			# A stale directory left by an older install. Keep it only if it
+			# carries its own driver; otherwise replace it with the alias.
+			candidates=("$entry"/bin/clang-[0-9]*)
+			[ -x "${candidates[0]}" ] && continue
+			rm -rf "$entry"
+		fi
+		ln -sfn "$REAL_NAME" "$entry"
+	done
 
-	# Patch toolchain cmake: skip compiler test and force ANDROID_HOST_TAG
-	# Termux clang wrapper hangs on CMake compiler ID test, and host tag detection
-	# returns empty string on Termux, causing sysroot path: prebuilt//sysroot
+	# 3. Fallbacks for an empty ANDROID_HOST_TAG: the compiler is then resolved
+	#    as prebuilt/bin/clang and the sysroot as prebuilt/sysroot.
+	mkdir -p "$PREBUILT/bin"
+	for f in clang clang++; do
+		backup_ndk_file "$PREBUILT/bin/$f"
+		unlink "$PREBUILT/bin/$f" 2>/dev/null || rm -f "$PREBUILT/bin/$f" 2>/dev/null || true
+		ln -sfn "../$REAL_NAME/bin/$DRIVER" "$PREBUILT/bin/$f"
+	done
+	backup_ndk_file "$PREBUILT/sysroot"
+	ln -sfn "$REAL_NAME/sysroot" "$PREBUILT/sysroot"
+
+	# 4. Patch the toolchain CMake files (host-tag detection is handled above).
 	local TOOLCHAIN="$NDK_PATH/build/cmake/android-legacy.toolchain.cmake"
 	if [ -f "$TOOLCHAIN" ]; then
 		backup_ndk_file "$TOOLCHAIN"
 		if grep -q 'list(APPEND ANDROID_LINKER_FLAGS "-static-libstdc++")' "$TOOLCHAIN" 2>/dev/null; then
 			sed -i 's/list(APPEND ANDROID_LINKER_FLAGS "-static-libstdc++")/# Disabled for Termux: list(APPEND ANDROID_LINKER_FLAGS "-static-libstdc++")/' "$TOOLCHAIN"
 		fi
-		if ! grep -q 'ANDROID_HOST_TAG' "$TOOLCHAIN" 2>/dev/null; then
-			sed -i '1a set(ANDROID_HOST_TAG "linux-x86_64")' "$TOOLCHAIN"
-		fi
 	fi
-	# Also patch the main android.toolchain.cmake
 	local MAIN_TOOLCHAIN="$NDK_PATH/build/cmake/android.toolchain.cmake"
 	if [ -f "$MAIN_TOOLCHAIN" ]; then
 		backup_ndk_file "$MAIN_TOOLCHAIN"
-		if ! grep -q 'ANDROID_HOST_TAG' "$MAIN_TOOLCHAIN" 2>/dev/null; then
-			sed -i '1a set(ANDROID_HOST_TAG "linux-x86_64")' "$MAIN_TOOLCHAIN"
-		fi
 	fi
 
-	# Replace x86_64 llvm-objcopy/llvm-strip with Termux ARM64 native binaries
-	# (Gradle StripDebugSymbolsRunnable fails with x86_64 binaries on ARM64)
-	local LLVM_BIN="$PREBUILT/linux-x86_64/bin"
+	# 5. Replace x86_64 llvm-objcopy/llvm-strip with Termux ARM64 native binaries
+	#    (Gradle StripDebugSymbolsRunnable fails with x86_64 binaries on ARM64).
 	if [ -f "$PREFIX/bin/llvm-objcopy" ]; then
-		backup_ndk_file "$LLVM_BIN/llvm-objcopy"
-		backup_ndk_file "$LLVM_BIN/llvm-strip"
-		cp "$PREFIX/bin/llvm-objcopy" "$LLVM_BIN/llvm-objcopy" 2>/dev/null || true
-		cp "$PREFIX/bin/llvm-strip" "$LLVM_BIN/llvm-strip" 2>/dev/null || true
+		backup_ndk_file "$REAL_BIN/llvm-objcopy"
+		backup_ndk_file "$REAL_BIN/llvm-strip"
+		cp "$PREFIX/bin/llvm-objcopy" "$REAL_BIN/llvm-objcopy" 2>/dev/null || true
+		cp "$PREFIX/bin/llvm-strip" "$REAL_BIN/llvm-strip" 2>/dev/null || true
 		echo "    ✓ llvm-objcopy/llvm-strip replaced with ARM64 native"
 	fi
 
@@ -1128,8 +1118,8 @@ rm -rf "$FLUTTER_ROOT/packages/flutter_tools/gradle/.gradle" \
 	"$FLUTTER_ROOT/packages/flutter_tools/gradle/bin" 2>/dev/null || true
 echo "  ✓ Flutter Gradle plugin cache cleared"
 
-# 8. Create NDK clang wrappers (handles all installed NDK versions)
-echo "[8/17] Creating NDK clang wrappers..."
+# 8. Configure the NDK clang toolchain (handles all installed NDK versions)
+echo "[8/17] Configuring NDK clang toolchain..."
 
 NDK_DIR="$ANDROID_SDK/ndk"
 if [ -d "$NDK_DIR" ]; then
