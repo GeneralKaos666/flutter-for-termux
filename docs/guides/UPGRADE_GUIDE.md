@@ -289,7 +289,7 @@ If the new Flutter version changes any of these locations, they need to be updat
 | `FlutterPluginConstants.kt` | ARM64-only NDK filter | The Gradle plugin structure changed |
 | `compileSdkVersion` downgrade | Termux aapt2 limitation | aapt2 got updated to support newer APIs |
 | `tool_backend.sh` | Shebang fix | Flutter regenerated this script |
-| NDK clang wrapper | Termux ARM64 clang | A new NDK version |
+| NDK clang driver | Termux ARM64 clang | A new NDK version |
 
 **Testing**: run `post_install.sh` on the device and watch the output for `⚠` warnings or errors.
 
