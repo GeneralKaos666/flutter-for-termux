@@ -7,9 +7,10 @@ go stale on every bump. ``build.yml`` runs this right after publishing a
 release; it is also safe to run by hand after a manual publish.
 
 Only exact, known patterns are rewritten (installer hash lines, release
-download URLs, doc size/hash phrases). Toolchain/sysroot hashes and
-changelog history are never touched. Re-running with the same inputs is
-a no-op.
+download URLs, the documented doc hash/size pin fields, deb names). A doc
+line that merely mentions ``SHA256`` — workflow prose, a toolchain/sysroot
+digest, changelog history — matches no pin field and is never touched.
+Re-running with the same inputs is a no-op.
 """
 
 from __future__ import annotations
@@ -113,17 +114,45 @@ def sync_doc_url(path: Path, tag: str, deb: str) -> bool:
     return False
 
 
-def sync_doc_hashes(path: Path, sha256: str) -> bool:
-    """Refresh hash pins on SHA lines only (never blind global replace)."""
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    out = []
-    for line in lines:
-        if re.search(r"SHA256|expected_sha256|output matches", line):
-            new_line, _ = re.subn(HASH_RE, sha256, line)
-            line = new_line
-        out.append(line)
-    updated = "".join(out)
-    if updated != path.read_text(encoding="utf-8"):
+# The documented hash pin fields, per pin-sync doc file: ``(regex, template)``
+# pairs where ``{sha}`` in the template is filled with the published hash and
+# the regex captures only the surrounding literal text. A line that merely
+# mentions ``SHA256`` (workflow prose, a toolchain/sysroot digest, or any
+# unrelated 64-hex token) matches none of these and is never rewritten.
+_MD_TABLE_HASH = (
+    r'(?m)(\|[ \t]*SHA256[ \t]*\|[ \t]*`)[0-9a-f]{64}(`[ \t]*\|[ \t]*)$',
+    r"\g<1>{sha}\g<2>",
+)
+_INSTALL_GUIDE_CONFIRM_HASH = (
+    r'(?m)(^[ \t]*#[ \t]*Confirm the output matches:[ \t]*)[0-9a-f]{64}',
+    r"\g<1>{sha}",
+)
+_SMOKE_INPUT_FIELD = (
+    r'(\bexpected_sha256:[ \t]*)[0-9a-f]{64}',
+    r"\g<1>{sha}",
+)
+_SMOKE_SCRIPT_PARAM = (
+    r'(-ExpectedSha256[ \t]+")[0-9a-f]{64}(")',
+    r"\g<1>{sha}\g<2>",
+)
+DOC_HASH_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
+    "docs/guides/BUILD_GUIDE.md": (_MD_TABLE_HASH,),
+    "docs/guides/INSTALL_GUIDE.md": (_MD_TABLE_HASH, _INSTALL_GUIDE_CONFIRM_HASH),
+    "docs/releases/RELEASE_NOTES.md": (_MD_TABLE_HASH,),
+    "docs/CI_CD.md": (_SMOKE_INPUT_FIELD, _SMOKE_SCRIPT_PARAM),
+}
+
+
+def sync_doc_hashes(path: Path, sha256: str, rel: str) -> bool:
+    """Refresh the documented hash pin fields of one doc. Returns True when changed."""
+    fields = DOC_HASH_FIELDS.get(rel)
+    if not fields:
+        return False
+    text = path.read_text(encoding="utf-8")
+    updated = text
+    for pattern, template in fields:
+        updated, _ = _sub_count(pattern, template.replace("{sha}", sha256), updated)
+    if updated != text:
         path.write_text(updated, encoding="utf-8")
         return True
     return False
@@ -182,7 +211,7 @@ def sync_pins(
             continue
         file_changed = False
         file_changed |= sync_doc_url(path, tag, deb)
-        file_changed |= sync_doc_hashes(path, sha256)
+        file_changed |= sync_doc_hashes(path, sha256, rel)
         file_changed |= sync_doc_sizes(path, size_bytes)
         file_changed |= sync_doc_deb_names(path, deb)
         if file_changed and rel not in changed:

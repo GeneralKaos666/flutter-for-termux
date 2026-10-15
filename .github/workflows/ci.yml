@@ -98,6 +98,9 @@ jobs:
       - name: Version drift check
         run: python scripts/ci/check_version_drift.py
 
+      - name: Version generation check
+        run: python scripts/ci/generate_versions.py --check
+
       - name: Repository contract checks
         run: python scripts/ci/check_repo.py
 
