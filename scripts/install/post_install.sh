@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Flutter Termux Post-Install Script
 # Run this script after installing the deb package to configure the APK build environment
 
@@ -267,8 +267,11 @@ patch_ndk_version_dart() {
 }
 register_patch "ndk_version_dart" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/gradle_utils.dart" patch_ndk_version_dart
 
+# No early-return idempotency guard here on purpose: this patch rewrites the
+# whole file with a heredoc, and re-entrancy is handled by apply_patches()
+# (cmp -s "$target_file" "$target_file.tmp" and the state-hash skip). Do not
+# "restore" a removed guard.
 patch_plugin_constants() {
-	if grep -F -q "PLATFORM_ARM64" "$1" && ! grep -F -q "PLATFORM_ARM32 = \"android-arm\"" "$1"; then return 0; fi
 	cat >"$1" <<'INNER_EOF'
 package com.flutter.gradle
 
@@ -369,7 +372,7 @@ patch_flutter_cache() {
 register_patch "flutter_cache" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/flutter_cache.dart" patch_flutter_cache
 
 patch_artifacts() {
-	if grep -F -q "platform.isAndroid" "$1"; then return 0; fi
+	if grep -F -q "if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts." "$1"; then return 0; fi
 	grep -q "if (platform.isLinux)" "$1" || return 1
 	sed -i "s#if (platform.isLinux) {#if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts.#" "$1"
 }
@@ -383,7 +386,7 @@ patch_build_info() {
 register_patch "build_info" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/build_info.dart" patch_build_info
 
 patch_chrome() {
-	if grep -F -q "platform.isAndroid" "$1"; then return 0; fi
+	if grep -F -q "if (platform.isLinux || platform.isAndroid) { // Termux: use Linux Chrome lookup on Android host." "$1"; then return 0; fi
 	grep -q "if (platform.isLinux)" "$1" || return 1
 	sed -i "s#if (platform.isLinux) {#if (platform.isLinux || platform.isAndroid) { // Termux: use Linux Chrome lookup on Android host.#" "$1"
 }
@@ -1178,7 +1181,7 @@ setup_build_tools_symlinks() {
 		echo "    ✓ Retaining Mode B custom static split-select symlink"
 	else
 		cat >"$BUILD_TOOLS/split-select" <<'SPLITEOF'
-#!/bin/sh
+#!/data/data/com.termux/files/usr/bin/sh
 echo "split-select is not available on Termux ARM64"
 exit 1
 SPLITEOF
