@@ -191,7 +191,7 @@ error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbsta
 
 **Cause**: The sysroot contains both glibc and bionic headers
 
-**Current Status**: Building in debug mode is used as a workaround
+**Current Status**: Release mode is the shipped default — `build.toml [build] runtime = ['release']`, so the pipeline builds and packages release artifacts; debug/profile are opt-in via `--mode`
 
 **Future Fix Direction**: Clean up the sysroot and keep only the bionic headers
 
@@ -274,7 +274,7 @@ Confirm that the version numbers in the following files are consistent:
 - `install_flutter_complete.sh` - `FLUTTER_VERSION`
 - `scripts/install/install_termux_flutter.sh` - `FLUTTER_VERSION`
 - `README.md` - version badge and text
-- `package.yaml` - `Version: $tag`
+- `package.yaml` - `Version: $package_version`
 
 ### 2. Build Artifact
 
