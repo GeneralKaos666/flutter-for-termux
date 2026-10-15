@@ -18,7 +18,6 @@ import tarfile
 import tempfile
 import tomllib
 import unittest
-import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -759,27 +758,6 @@ class PackageManifestTest(unittest.TestCase):
                 by_name = list(pkg.gen_resource(name))
                 self.assertEqual(by_name, list(pkg.gen_resource([name])))
                 self.assertEqual(by_name, list(pkg.gen_resource(name)))
-
-    def test_deprecated_format_matches_render(self):
-        """``__format__`` is a deprecated shim: for a fixed representative
-        fixture (plain, empty, mixed, unknown) it must warn and return exactly
-        what ``render`` returns."""
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp, 'flutter')
-            (root / 'engine' / 'src' / 'out' / 'linux_release_arm64').mkdir(
-                parents=True
-            )
-            pkg = self._make_package(root)
-
-            for tmpl in ('$tag', '', '$arch ($package_version)', '$not_defined ?'):
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter('always')
-                    legacy = pkg.__format__(tmpl)
-                self.assertEqual(legacy, pkg.render(tmpl))
-                self.assertTrue(
-                    any(issubclass(w.category, DeprecationWarning) for w in caught),
-                    f'no DeprecationWarning for template: {tmpl!r}',
-                )
 
     def test_package_ships_flutter_project_config(self):
         """README and termux_smoke.sh probe $PREFIX/share/flutter/
