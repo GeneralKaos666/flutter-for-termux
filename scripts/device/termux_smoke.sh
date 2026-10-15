@@ -197,6 +197,16 @@ echo SECTION=POST_INSTALL_MARKERS
 grep -n -A8 -B3 'PLATFORM_ABI_LIST\|Flutter Gradle plugin cache' "$PREFIX/share/flutter/post_install.sh" || record_status POST_INSTALL_MARKERS_STATUS $?
 grep -n -A8 -B3 'PLATFORM_ABI_LIST' "$PREFIX/opt/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPluginConstants.kt" || record_status GRADLE_CONSTANTS_STATUS $?
 
+echo SECTION=FLUTTER_SETTINGS_JSON
+if [ -f "$HOME/.flutter_settings" ]; then
+    python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$HOME/.flutter_settings" \
+        && record_status FLUTTER_SETTINGS_STATUS 0 \
+        || record_status FLUTTER_SETTINGS_STATUS 1
+else
+    echo "No $HOME/.flutter_settings found after post_install.sh" >&2
+    record_status FLUTTER_SETTINGS_STATUS 1
+fi
+
 echo SECTION=VERSIONS
 flutter --version
 record_status FLUTTER_VERSION_STATUS $?
