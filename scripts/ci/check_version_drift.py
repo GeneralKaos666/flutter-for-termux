@@ -3,7 +3,7 @@
 
 Reads single source of truth version parameters from `build.toml` and verifies that
 all references in README, RELEASE_NOTES, agent guidance, guides, package.yaml,
-installer scripts, and build scripts match.
+installer scripts, build scripts, and issue templates match.
 """
 from __future__ import annotations
 
@@ -19,6 +19,13 @@ except ImportError:
         import tomli as tomllib
     except ImportError:
         tomllib = None
+
+try:
+    import yaml
+except ImportError:
+    # PyYAML is a declared CI dependency (requirements.txt); the guard keeps a
+    # bare checkout importable so the drift check can report the missing parser.
+    yaml = None
 
 ROOT = Path(__file__).resolve().parents[2]
 ERRORS: list[str] = []
@@ -43,10 +50,75 @@ INSTALLER_SCRIPTS = [
 ]
 SEMVER_PATTERN = r"\d+\.\d+\.\d+"
 DEB_NAME_PATTERN = rf"flutter_{SEMVER_PATTERN}(?:-[^/\s`\"']+)?_aarch64\.deb"
+BARE_VERSION_RE = re.compile(rf"{SEMVER_PATTERN}(?:-\d+)?")
+ISSUE_TEMPLATE_DIR = ".github/ISSUE_TEMPLATE"
+# The issue-form field that documents the installed package version is found by
+# its `id`/`label`, never by the shape of its placeholder: a bare semver in any
+# other field (e.g. the Dart SDK) is unrelated and is neither reported nor
+# rewritten.
+PACKAGE_VERSION_FIELD_IDS = frozenset({"package_version", "flutter_package_version", "flutter_version"})
+PACKAGE_VERSION_FIELD_LABELS = frozenset({"flutter package version", "flutter version"})
 
 
 def fail(msg: str) -> None:
     ERRORS.append(msg)
+
+
+def issue_template_files(base_root: Path) -> list[Path]:
+    """GitHub issue-form templates under ``.github/ISSUE_TEMPLATE``."""
+    template_dir = base_root / ISSUE_TEMPLATE_DIR
+    return sorted({*template_dir.glob("*.yml"), *template_dir.glob("*.yaml")})
+
+
+def expected_package_version(cfg: dict[str, str]) -> str:
+    """Current package version as ``dpkg -s flutter`` reports it: ``tag[-pkg_rel]``."""
+    tag = cfg.get("tag", "")
+    if not tag:
+        return ""
+    pkg_rel = cfg.get("pkg_rel", "")
+    return f"{tag}-{pkg_rel}" if pkg_rel else tag
+
+
+def _mapping_value(node: object, key: str) -> object:
+    """Value node for ``key`` in a YAML mapping node, or ``None``."""
+    if not isinstance(node, yaml.MappingNode):
+        return None
+    for key_node, value_node in node.value:
+        if isinstance(key_node, yaml.ScalarNode) and key_node.value == key:
+            return value_node
+    return None
+
+
+def _scalar_value(node: object) -> str:
+    """Text of a YAML scalar node; empty string for anything else."""
+    return node.value if isinstance(node, yaml.ScalarNode) else ""
+
+
+def _is_package_version_field(field_node: object) -> bool:
+    """True when an issue-form field documents the installed Flutter package version."""
+    field_id = _scalar_value(_mapping_value(field_node, "id")).strip().lower()
+    if field_id in PACKAGE_VERSION_FIELD_IDS:
+        return True
+    attributes = _mapping_value(field_node, "attributes")
+    label = " ".join(_scalar_value(_mapping_value(attributes, "label")).split())
+    return label.lower() in PACKAGE_VERSION_FIELD_LABELS
+
+
+def _package_version_placeholder(document: object) -> object:
+    """Placeholder node of the package-version field, or ``None`` when absent."""
+    body = _mapping_value(document, "body")
+    if not isinstance(body, yaml.SequenceNode):
+        return None
+    for field_node in body.value:
+        if not _is_package_version_field(field_node):
+            continue
+        placeholder = _mapping_value(_mapping_value(field_node, "attributes"), "placeholder")
+        return placeholder if isinstance(placeholder, yaml.ScalarNode) else None
+    return None
+
+
+def _is_bare_version_placeholder(node: object) -> bool:
+    return isinstance(node, yaml.ScalarNode) and bool(BARE_VERSION_RE.fullmatch(node.value))
 
 
 def replace_line_value(text: str, key: str, value: str) -> tuple[str, int]:
@@ -78,6 +150,7 @@ def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) ->
     tag = cfg["tag"]
     release_tag = cfg["release_tag"]
     asset_name = cfg["asset_name"]
+    pkg_version = expected_package_version(cfg)
     changed_files: list[str] = []
     file_list = sorted(set(MARKDOWN_DOCS + GUIDANCE_DOCS + GUIDE_DOCS + INSTALLER_SCRIPTS + [
         "scripts/install/post_install.sh",
@@ -115,7 +188,16 @@ def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) ->
             path.write_text(text, encoding="utf-8")
             changed_files.append(rel_path)
 
-    return changed_files
+    # Issue-form templates are rewritten by node, not by line: only the field
+    # that denotes the package version is touched.
+    for path in issue_template_files(base_root):
+        text = path.read_text(encoding="utf-8")
+        updated = fix_issue_template_placeholder(text, pkg_version)
+        if updated != text:
+            path.write_text(updated, encoding="utf-8")
+            changed_files.append(str(path.relative_to(base_root)))
+
+    return sorted(changed_files)
 
 
 def load_build_config(root_path: Path | None = None) -> dict[str, str]:
@@ -404,6 +486,53 @@ def check_doctor_script(cfg: dict[str, str], root_path: Path | None = None) -> N
         fail(f"scripts/install/flutter_termux_doctor.sh: EXP_REV mismatch, expected '{fw_rev}'")
 
 
+def fix_issue_template_placeholder(text: str, expected: str) -> str:
+    """Rewrite the package-version field's placeholder in one template's source.
+
+    Only the field whose ``id``/``label`` denotes the package version is
+    rewritten, and only when its placeholder is a bare version; the surrounding
+    quoting (double, single, or bare) is preserved. Malformed YAML is left
+    untouched for the drift check to report.
+    """
+    if yaml is None or not expected:
+        return text
+    try:
+        document = yaml.compose(text)
+    except yaml.YAMLError:
+        return text
+    placeholder = _package_version_placeholder(document)
+    if not _is_bare_version_placeholder(placeholder) or placeholder.value == expected:
+        return text
+    start, end = placeholder.start_mark.index, placeholder.end_mark.index
+    quote = text[start] if text[start] in "\"'" else ""
+    return f"{text[:start]}{quote}{expected}{quote}{text[end:]}"
+
+
+def check_issue_template_placeholders(cfg: dict[str, str], root_path: Path | None = None) -> None:
+    """Catch a stale package-version placeholder in GitHub issue form templates."""
+    base_root = root_path or ROOT
+    if yaml is None:
+        fail("PyYAML is required to drift-check issue templates")
+        return
+    expected = expected_package_version(cfg)
+    for path in issue_template_files(base_root):
+        rel_path = str(path.relative_to(base_root))
+        text = path.read_text(encoding="utf-8")
+        try:
+            document = yaml.compose(text)
+        except yaml.YAMLError as exc:
+            fail(f"{rel_path}: issue template is not valid YAML: {exc}")
+            continue
+        placeholder = _package_version_placeholder(document)
+        if not expected or not _is_bare_version_placeholder(placeholder):
+            continue
+        if placeholder.value != expected:
+            fail(
+                f"{rel_path}: Flutter package version placeholder mismatch: "
+                f"found '{placeholder.value}', expected '{expected}'"
+            )
+
+
 def check_pkg_rel_references(cfg: dict[str, str], root_path: Path | None = None) -> None:
     """Catch bare ``PKG_REL=<n>`` references (e.g. README download snippets)."""
     base_root = root_path or ROOT
@@ -436,6 +565,7 @@ def run_checks(root_path: Path | None = None) -> list[str]:
     check_pkg_rel_references(cfg, root_path)
     check_post_install_script(cfg, root_path)
     check_doctor_script(cfg, root_path)
+    check_issue_template_placeholders(cfg, root_path)
 
     return ERRORS
 
