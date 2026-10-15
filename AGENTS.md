@@ -85,7 +85,7 @@ git diff --check
 - `autorelease.yml` — nightly: detects latest Flutter stable, bumps `build.toml`, `sed`s the same version strings across docs (incl. this file) and installers, then pushes.
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.
 
-`main` is protected by `.github/rulesets/main_protection_ruleset.json`: PR + review + resolved threads, strict `CI` checks, linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/CI_CD.md`.
+`main` is protected by `.github/rulesets/main_protection_ruleset.json`: a required PR with resolved threads (no approvals required), strict status checks (`Repository sanity`, `Verify release metadata`), linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/CI_CD.md`.
 
 ## Gotchas
 
