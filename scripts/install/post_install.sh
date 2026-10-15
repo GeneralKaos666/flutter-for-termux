@@ -483,21 +483,27 @@ fi
 # Helper: validate/repair an NDK directory so AGP can use it.
 # AGP refuses to configure native modules when <sdk>/ndk/<version>/source.properties
 # is absent, failing with "[CXX1101] NDK at ... did not have a source.properties
-# file". A partially provisioned or corrupt NDK directory can lack it. Repair by
-# regenerating the metadata from the directory name, or remove the directory when
-# it has no LLVM toolchain (unusable stub) so the installer re-provisions it.
+# file". A partially provisioned or corrupt NDK directory can lack it.
+#
+# A directory is only repaired when it can actually configure a native build. A
+# partially extracted tree keeps toolchains/llvm but loses
+# build/cmake/android.toolchain.cmake; minting source.properties onto it would
+# satisfy AGP's metadata check while leaving CMake unable to find the toolchain,
+# so the broken tree would report as healthy forever. Such a directory is removed
+# instead, so the installer re-provisions it.
 repair_ndk_metadata() {
 	local NDK_PATH="$1"
 	local NDK_NAME
 	NDK_NAME=$(basename "$NDK_PATH")
 
-	if [ -f "$NDK_PATH/source.properties" ]; then
+	if [ ! -d "$NDK_PATH/toolchains/llvm" ] ||
+		[ ! -f "$NDK_PATH/build/cmake/android.toolchain.cmake" ]; then
+		echo "  ⚠ Removing incomplete NDK directory $NDK_NAME (missing toolchains/llvm or CMake toolchain file)"
+		rm -rf "$NDK_PATH" 2>/dev/null || true
 		return
 	fi
 
-	if [ ! -d "$NDK_PATH/toolchains/llvm" ]; then
-		echo "  ⚠ Removing unusable NDK directory $NDK_NAME (no toolchains/llvm)"
-		rm -rf "$NDK_PATH" 2>/dev/null || true
+	if [ -f "$NDK_PATH/source.properties" ]; then
 		return
 	fi
 
