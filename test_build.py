@@ -1055,6 +1055,48 @@ class ReleasePinSyncTest(unittest.TestCase):
             text = (root / 'scripts/install/versions_common.sh').read_text()
             self.assertIn(other, text)
 
+    def test_doc_hash_sync_leaves_unrelated_hex_on_sha_lines(self):
+        sha = 'd' * 64
+        unrelated = 'a' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, {
+                'docs/guides/BUILD_GUIDE.md': (
+                    '| SHA256 | `' + '0' * 64 + '` |\n'
+                    'The sysroot SHA256 digest ' + unrelated + ' is not a release pin.\n'
+                    '# output matches ' + unrelated + ' but is prose.\n'
+                ),
+            })
+            self.sync.sync_pins(root, sha, 610124104, '3.47.7', '5')
+            guide = (root / 'docs/guides/BUILD_GUIDE.md').read_text()
+            self.assertIn('| SHA256 | `' + sha + '` |', guide)
+            self.assertEqual(guide.count(unrelated), 2)
+
+    def test_doc_hash_sync_refreshes_every_documented_pin_field(self):
+        sha = 'd' * 64
+        zero = '0' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, {
+                'docs/guides/BUILD_GUIDE.md': '| SHA256 | `' + zero + '` |\n',
+                'docs/guides/INSTALL_GUIDE.md': (
+                    '| SHA256 | `' + zero + '` |\n'
+                    '# Confirm the output matches: ' + zero + '\n'
+                ),
+                'docs/releases/RELEASE_NOTES.md': '| SHA256 | `' + zero + '` |\n',
+                'docs/CI_CD.md': (
+                    'expected_sha256: ' + zero + '\n'
+                    '  -ExpectedSha256 "' + zero + '"\n'
+                ),
+            })
+            changed = self.sync.sync_pins(root, sha, 610124104, '3.47.7', '5')
+            self.assertEqual(changed, [
+                'docs/CI_CD.md',
+                'docs/guides/BUILD_GUIDE.md',
+                'docs/guides/INSTALL_GUIDE.md',
+                'docs/releases/RELEASE_NOTES.md',
+            ])
+            for rel in changed:
+                self.assertNotIn(zero, (root / rel).read_text(encoding='utf-8'))
+
     def test_rejects_malformed_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1062,6 +1104,27 @@ class ReleasePinSyncTest(unittest.TestCase):
                 self.sync.sync_pins(root, 'not-a-hash', 610124104, '3.47.6', '1')
             with self.assertRaises(SystemExit):
                 self.sync.sync_pins(root, 'd' * 64, 0, '3.47.6', '1')
+
+    def test_doc_hash_fields_still_match_the_shipped_docs(self):
+        """Every whitelisted pin field must match a real line in the shipped doc.
+
+        A doc reformat that moves or renames one of these lines would silently
+        stop the pin from being refreshed, and no other gate notices: build.toml
+        carries no ``sha256``, so check_version_drift.py skips its guide SHA
+        comparison. This reads the real files on purpose, so a reformat fails.
+        """
+        root = Path(__file__).parent
+        self.assertLessEqual(
+            set(self.sync.DOC_HASH_FIELDS),
+            set(self.sync.DOC_FILES),
+            'DOC_HASH_FIELDS keys must all be pin-synced DOC_FILES',
+        )
+        for rel, fields in self.sync.DOC_HASH_FIELDS.items():
+            with self.subTest(file=rel):
+                self.assertTrue(fields, f'{rel}: no pin field declared')
+                text = (root / rel).read_text(encoding='utf-8')
+                for pattern, _template in fields:
+                    self.assertRegex(text, pattern, f'{rel}: pin field pattern matched no line')
 
 
 class ReleaseVerificationTest(unittest.TestCase):
@@ -1481,6 +1544,238 @@ class SysrootLockTest(unittest.TestCase):
                 pkg = entry['packages']['glib']
                 for field in ('name', 'version', 'url', 'sha256', 'size', 'archive_path', 'repo', 'dist'):
                     self.assertIn(field, pkg)
+
+
+class CiWorkflowContractTest(unittest.TestCase):
+    """The CI workflow must actually run the checks this plan wires in."""
+
+    def test_ci_runs_generate_versions_check(self):
+        path = Path(__file__).parent / '.github' / 'workflows' / 'ci.yml'
+        data = yaml.safe_load(path.read_text(encoding='utf-8'))
+        runs = [
+            step.get('run', '')
+            for job in data['jobs'].values()
+            for step in job.get('steps', [])
+        ]
+        self.assertTrue(
+            any('generate_versions.py --check' in run for run in runs),
+            'ci.yml has no generate_versions.py --check step',
+        )
+
+
+class VersionDriftCheckTest(unittest.TestCase):
+    """Unit cases for scripts/ci/check_version_drift.py issue-template scanning.
+
+    The package-version field is identified semantically (``id``/``label``), so
+    a bare semver in an unrelated field is neither reported nor rewritten.
+    """
+
+    # Minimal build.toml/build.py so run_checks() reaches the template scan:
+    # everything else in the fixture tree is deliberately absent.
+    _BUILD_TOML = (
+        "[flutter]\n"
+        "tag = '3.47.7'\n"
+        "dart_version = '3.13.5'\n"
+        "\n"
+        "[package]\n"
+        "pkg_rel = '5'\n"
+    )
+    _BUILD_PY = (
+        "class Build:\n"
+        "    def sync(self):\n"
+        "        self.version = self.dart_version\n"
+    )
+    _TEMPLATE = Path('.github') / 'ISSUE_TEMPLATE' / 'bug_report.yml'
+
+    def setUp(self):
+        self.drift = _load_ci_script('check_version_drift.py')
+
+    @staticmethod
+    def _field(field_id, label, placeholder, quote='"'):
+        return (
+            '- type: input\n'
+            f'  id: {field_id}\n'
+            '  attributes:\n'
+            f'    label: {label}\n'
+            f'    placeholder: {quote}{placeholder}{quote}\n'
+        )
+
+    def _version_field(self, placeholder, quote='"'):
+        return self._field('package_version', 'Flutter package version', placeholder, quote)
+
+    def _dart_field(self, placeholder):
+        return self._field('dart_version', 'Bundled Dart SDK', placeholder)
+
+    def _tree(self, tmp, body, name='bug_report.yml', with_template=True):
+        root = Path(tmp)
+        (root / 'build.toml').write_text(self._BUILD_TOML, encoding='utf-8')
+        (root / 'build.py').write_text(self._BUILD_PY, encoding='utf-8')
+        if with_template:
+            template = root / '.github' / 'ISSUE_TEMPLATE' / name
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text('body:\n' + body, encoding='utf-8')
+        return root
+
+    def test_stale_package_version_placeholder_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            errors = self.drift.run_checks(root)
+        self.assertEqual(errors, [
+            '.github/ISSUE_TEMPLATE/bug_report.yml: Flutter package version '
+            "placeholder mismatch: found '3.47.7-3', expected '3.47.7-5'"
+        ])
+
+    def test_different_tag_in_version_field_is_drift(self):
+        """A whole-tag change, not only a ``pkg_rel`` bump, is caught."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.40.0-9'))
+            errors = self.drift.run_checks(root)
+        self.assertEqual(errors, [
+            '.github/ISSUE_TEMPLATE/bug_report.yml: Flutter package version '
+            "placeholder mismatch: found '3.40.0-9', expected '3.47.7-5'"
+        ])
+
+    def test_different_tag_in_version_field_is_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.40.0-9'))
+            cfg = self.drift.load_build_config(root)
+            changed = self.drift.apply_version_autofix(cfg, root)
+            self.assertEqual(changed, ['.github/ISSUE_TEMPLATE/bug_report.yml'])
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: "3.47.7-5"', text)
+            self.assertNotIn('3.40.0', text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_current_package_version_placeholder_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-5'))
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_unrelated_bare_semver_in_other_field_is_ignored(self):
+        """The Dart SDK placeholder is a bare semver but not the version field."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._dart_field('3.13.5'))
+            self.assertEqual(self.drift.run_checks(root), [])
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(self.drift.apply_version_autofix(cfg, root), [])
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: "3.13.5"', text)
+
+    def test_unrelated_bare_semver_is_untouched_while_version_field_is_fixed(self):
+        body = self._version_field('3.47.7-3') + self._dart_field('3.13.5')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, body)
+            self.assertEqual(len(self.drift.run_checks(root)), 1)
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(
+                self.drift.apply_version_autofix(cfg, root),
+                ['.github/ISSUE_TEMPLATE/bug_report.yml'],
+            )
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: "3.47.7-5"', text)
+            self.assertIn('placeholder: "3.13.5"', text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_non_version_placeholders_are_ignored(self):
+        for placeholder in (
+            '0.118.3, aarch64',
+            'Pixel 7, Android 14',
+            'flutter build apk --release',
+            '3.47.7-3, built from source',
+            'flutter --version',
+        ):
+            with self.subTest(placeholder=placeholder), tempfile.TemporaryDirectory() as tmp:
+                root = self._tree(tmp, self._version_field(placeholder))
+                self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_unquoted_version_placeholder_is_checked_and_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3', quote=''))
+            errors = self.drift.run_checks(root)
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn("found '3.47.7-3', expected '3.47.7-5'", errors[0])
+            cfg = self.drift.load_build_config(root)
+            self.drift.apply_version_autofix(cfg, root)
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: 3.47.7-5\n', text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_single_quoted_version_placeholder_keeps_its_quoting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3', quote="'"))
+            cfg = self.drift.load_build_config(root)
+            self.drift.apply_version_autofix(cfg, root)
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn("placeholder: '3.47.7-5'", text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_autofix_rewrites_stale_placeholder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            cfg = self.drift.load_build_config(root)
+            changed = self.drift.apply_version_autofix(cfg, root)
+            self.assertEqual(changed, ['.github/ISSUE_TEMPLATE/bug_report.yml'])
+            template = root / self._TEMPLATE
+            self.assertIn('placeholder: "3.47.7-5"', template.read_text(encoding='utf-8'))
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_autofix_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(
+                self.drift.apply_version_autofix(cfg, root),
+                ['.github/ISSUE_TEMPLATE/bug_report.yml'],
+            )
+            after_first = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertEqual(self.drift.apply_version_autofix(cfg, root), [])
+            self.assertEqual((root / self._TEMPLATE).read_text(encoding='utf-8'), after_first)
+
+    def test_yaml_extension_template_is_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'), name='bug_report.yaml')
+            self.assertEqual(len(self.drift.run_checks(root)), 1)
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(
+                self.drift.apply_version_autofix(cfg, root),
+                ['.github/ISSUE_TEMPLATE/bug_report.yaml'],
+            )
+
+    def test_missing_template_directory_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, '', with_template=False)
+            self.assertEqual(self.drift.issue_template_files(root), [])
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_malformed_template_yaml_is_reported_not_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            (root / self._TEMPLATE).write_text('body: [unclosed\n', encoding='utf-8')
+            errors = self.drift.run_checks(root)
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn('not valid YAML', errors[0])
+            # --fix must not traceback or mangle the unparseable file.
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(self.drift.apply_version_autofix(cfg, root), [])
+            self.assertEqual(
+                (root / self._TEMPLATE).read_text(encoding='utf-8'), 'body: [unclosed\n'
+            )
+
+    def test_expected_package_version_requires_a_tag(self):
+        self.assertEqual(self.drift.expected_package_version({'tag': '', 'pkg_rel': '5'}), '')
+        self.assertEqual(self.drift.expected_package_version({'tag': '3.47.7', 'pkg_rel': '5'}), '3.47.7-5')
+        self.assertEqual(self.drift.expected_package_version({'tag': '3.47.7'}), '3.47.7')
+
+    def test_shipped_template_matches_build_toml(self):
+        root = Path(__file__).parent
+        cfg = self.drift.load_build_config(root)
+        expected = self.drift.expected_package_version(cfg)
+        text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+        field = next(
+            item for item in yaml.safe_load(text)['body'] if item.get('id') == 'package_version'
+        )
+        self.assertEqual(field['attributes']['placeholder'], expected)
+        self.assertEqual([e for e in self.drift.run_checks(root) if 'ISSUE_TEMPLATE' in e], [])
 
 
 if __name__ == '__main__':
