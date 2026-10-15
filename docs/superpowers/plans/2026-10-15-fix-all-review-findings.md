@@ -153,7 +153,49 @@ git add install_flutter_complete.sh scripts/device/termux_smoke.sh
 git commit -m "fix(installer): stop reporting snapshot success after failure"
 ```
 
-### Task 4: Honour non-interactive mode in the prompt
+### Task 4: Report snapshot installs honestly in the deb-shipped post-install
+
+> Added during execution: Task 3's review found the same honesty defect, unfixed, in the
+> script that actually runs during `dpkg -i`.
+
+**Files:**
+- Modify: `scripts/install/post_install.sh:976-997`
+
+**Interfaces:**
+- Consumes: `$SNAPSHOTS_DIR` (`$DART_SDK/bin/snapshots`), the downloaded `dart-sdk.zip`.
+- Produces: the `✓ Dart SDK snapshots installed` banner only when the extracted key snapshot
+  exists; a warning otherwise. The `else` ("already exist") branch already reports truthfully and
+  must keep its message.
+
+- [ ] **Step 1: Write the failing check**
+
+`scripts/device/termux_smoke.sh` already records `DART_SNAPSHOT_STATUS` by probing
+`$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/snapshots/dds_aot.dart.snapshot` (Task 3). Reuse that
+as the end-state assertion; for the failure path, extract the modified block into a harness and
+feed it a truncated `dart-sdk.zip` to prove the banner is suppressed. Record the observation.
+
+- [ ] **Step 2: Implement**
+
+Gate the banner on the extraction result: print `✓ Dart SDK snapshots installed` only when
+`unzip` succeeded **and** `$SNAPSHOTS_DIR/dds_aot.dart.snapshot` (or at least one entry under
+`$SNAPSHOTS_DIR/*.snapshot`) exists; otherwise print a `⚠` warning stating the bundled snapshots
+are used. Keep `rm -f dart-sdk.zip` on every path. Do not add a checksum check here — this script
+has no `verify_sha256` helper and fetching one is out of scope; checking existence is the honest
+minimum and matches what Task 3 does in the sibling script.
+
+- [ ] **Step 3: Verify**
+
+Run: `bash -n scripts/install/post_install.sh`; `shellcheck --severity=error scripts/install/post_install.sh`
+Expected: both exit 0.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/install/post_install.sh
+git commit -m "fix(installer): gate deb post-install snapshot banner on extraction success"
+```
+
+### Task 5: Honour non-interactive mode in the prompt
 
 **Files:**
 - Modify: `install_flutter_complete.sh:416-421`
@@ -192,7 +234,7 @@ git add install_flutter_complete.sh scripts/test/gh_e2e_test.sh
 git commit -m "fix(installer): respect --yes and non-interactive stdin"
 ```
 
-### Task 5: Ship `flutter_project_config.sh` in the deb
+### Task 6: Ship `flutter_project_config.sh` in the deb
 
 **Files:**
 - Modify: `package.yaml` (add a resource block after `post_install`)
@@ -247,7 +289,7 @@ git add package.yaml scripts/install/flutter_project_config.sh test_build.py
 git commit -m "fix(package): ship flutter_project_config script in the deb"
 ```
 
-### Task 6: Route deb output to `release/`
+### Task 7: Route deb output to `release/`
 
 **Files:**
 - Modify: `build.toml:94-96`
@@ -286,7 +328,7 @@ git add build.toml test_build.py
 git commit -m "fix(package): emit the deb under release/"
 ```
 
-### Task 7: Bump `pkg_rel` to 5 and sync every version reference
+### Task 8: Bump `pkg_rel` to 5 and sync every version reference
 
 **Files:**
 - Modify: `build.toml` (`pkg_rel`)
@@ -321,7 +363,7 @@ git commit -m "chore(release): bump pkg_rel to 5 and sync version pins"
 
 ## PR2 — `docs(contract)`: align documentation with the code
 
-### Task 8: Correct the build-output and dependency claims
+### Task 9: Correct the build-output and dependency claims
 
 **Files:**
 - Modify: `docs/guides/BUILD_GUIDE.md:195,205,213,384-386,564`
@@ -355,7 +397,7 @@ git add docs/guides docs/releases
 git commit -m "docs(guides): align build output and dependency claims with the code"
 ```
 
-### Task 9: Correct the CI/CD documentation
+### Task 10: Correct the CI/CD documentation
 
 **Files:**
 - Modify: `docs/CI_CD.md:45,127-128,182-187,215-228,258`
@@ -391,7 +433,7 @@ git commit -m "docs(ci): document review policy, device-smoke inputs, and marker
 
 ## PR3 — `refactor(python)`: smells, behavior-preserving
 
-### Task 10: Give the template renderer an honest name
+### Task 11: Give the template renderer an honest name
 
 **Files:**
 - Modify: `package.py:313` and its internal callers (`322,363,368,371,399,400`)
@@ -416,7 +458,7 @@ def test_package_exposes_render(self):
 
 - [ ] **Step 5: Commit** — `refactor(package): rename Package.__format__ to render`
 
-### Task 11: Bundle the release metadata clump
+### Task 12: Bundle the release metadata clump
 
 **Files:**
 - Modify: `build.py:250-257`
@@ -432,7 +474,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `pytest test_build.py -q` → pass.
 - [ ] **Step 5: Commit** — `refactor(build): bundle release metadata into one payload`
 
-### Task 12: De-duplicate the resource dispatch
+### Task 13: De-duplicate the resource dispatch
 
 **Files:**
 - Modify: `package.py:325-335,349-350,379-389,397-398`
@@ -446,7 +488,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `pytest test_build.py -q`; `ruff check`.
 - [ ] **Step 5: Commit** — `refactor(package): share resource dispatch between gen and test`
 
-### Task 13: Replace asserts, fix TODOs, names, and cache state
+### Task 14: Replace asserts, fix TODOs, names, and cache state
 
 **Files:**
 - Modify: `package.py:115,127,179-180,194,202,288,295`
@@ -464,7 +506,7 @@ def test_package_exposes_render(self):
 
 ## PR4 — `chore(ci)`: shell and CI hardening
 
-### Task 14: Make strict release verification reachable
+### Task 15: Make strict release verification reachable
 
 **Files:**
 - Modify: `scripts/ci/verify_release_asset.py:401-453`
@@ -476,7 +518,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — new test passes; `ruff check`.
 - [ ] **Step 5: Commit** — `fix(ci): treat device smoke evidence as optional in release verification`
 
-### Task 15: Wire the missing version check into CI
+### Task 16: Wire the missing version check into CI
 
 **Files:**
 - Modify: `.github/workflows/ci.yml:98-102`
@@ -492,7 +534,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `python scripts/ci/check_version_drift.py`; `python scripts/ci/generate_versions.py --check`.
 - [ ] **Step 5: Commit** — `chore(ci): gate version generation and narrow pin sync`
 
-### Task 16: Fix the shell defects
+### Task 17: Fix the shell defects
 
 **Files:**
 - Modify: `scripts/device/termux_smoke.sh:164-165`
@@ -507,7 +549,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 3: Verify** — `bash -n`; `shellcheck --severity=error`.
 - [ ] **Step 4: Commit** — `fix(scripts): correct smoke status, guards, and shebangs`
 
-### Task 17: Guard the duplicated NDK helpers
+### Task 18: Guard the duplicated NDK helpers
 
 **Files:**
 - Modify: `install_flutter_complete.sh:43-149` (comment)
@@ -520,7 +562,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `python scripts/ci/check_repo.py`.
 - [ ] **Step 5: Commit** — `chore(ci): detect drift in duplicated NDK helpers`
 
-### Task 18: Remaining CI hygiene and hardening
+### Task 19: Remaining CI hygiene and hardening
 
 **Files:**
 - Modify: `.gitignore:160`
@@ -538,7 +580,7 @@ def test_package_exposes_render(self):
 
 ## Self-review checklist (run before PR handoff)
 
-- [ ] Every spec finding maps to a task (46 findings → Tasks 1-18).
+- [ ] Every spec finding maps to a task (46 findings + 1 found during execution → Tasks 1-19).
 - [ ] No task leaves an open choice that decides behavior.
 - [ ] `Package.render`, `Build.metadata` names are consistent across tasks.
 - [ ] Review Focus items 1-5 each have a test in the owning task.
