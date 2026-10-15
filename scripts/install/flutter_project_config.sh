@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # scripts/install/flutter_project_config.sh
 # Configure a Flutter project for Termux environment (Mode A / Mode B compatible & transactional)
 
