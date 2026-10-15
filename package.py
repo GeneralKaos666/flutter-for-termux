@@ -8,7 +8,6 @@ import string
 import subprocess
 import tarfile
 import tempfile
-import warnings
 import zipfile
 from pathlib import Path
 
@@ -367,17 +366,6 @@ class Package:
             **self.globals,
             **self.defines,
             **extra)
-
-    def __format__(self, s, **extra):
-        # ``__format__`` hijacks the str.format protocol; ``render`` is the
-        # real API. Keep a thin compatibility shim that warns and delegates.
-        warnings.warn(
-            f'{type(self).__name__}.__format__ is deprecated; '
-            'use render() or str(pkg).',
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.render(s, **extra)
 
     def gen_control(self):
         bin = io.BytesIO()
