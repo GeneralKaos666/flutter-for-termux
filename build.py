@@ -65,7 +65,7 @@ class Build:
         gclient = cfg['build'].get('gclient')
         sysroot_cfg = dict(cfg['sysroot'])
         syspath = sysroot_cfg.pop('path')
-        package = cfg['package'].get('conf')
+        package_conf = cfg['package'].get('conf')
         release = cfg['package'].get('path')
         pkg_rel = str(cfg['package'].get('pkg_rel') or '').strip()
         patches = cfg.get('patch')
@@ -75,7 +75,6 @@ class Build:
         if not tag:
             raise ValueError('require flutter tag')
 
-        # TODO: check parameters
         self.tag = tag
         self.pkg_rel = pkg_rel
         self.package_version = f'{self.tag}-{self.pkg_rel}' if self.pkg_rel else self.tag
@@ -88,7 +87,6 @@ class Build:
         self.target_sdk = cfg['android'].get('target_sdk')
         self.api = api or 26
         self.conf = conf
-        # TODO: detect host
         self.host = 'linux-x86_64'
         self.repo = repo or 'https://github.com/flutter/flutter'
         self.arch = arch or 'arm64'
@@ -108,7 +106,7 @@ class Build:
         if self.release.resolve() == path.resolve():
             raise ValueError(f'bad release path: "{release}"')
 
-        with open(path/package, 'rb') as f:
+        with open(path/package_conf, 'rb') as f:
             self.package = yaml.safe_load(f)
 
         if isinstance(patches, dict):
@@ -153,6 +151,7 @@ class Build:
             raise RuntimeError('\n'.join(progress.error_lines))
 
     def sync(self, *, cfg: str = None, root: str = None):
+        require_tools('gclient')
         cfg = cfg or self.gclient
         src = root or self.root
 
@@ -230,6 +229,7 @@ class Build:
         subprocess.run(cmd, cwd=root, check=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
+        require_tools('ninja')
         root = root or self.root
         cmd = [
             'ninja', '-C', utils.target_output(root, arch, mode),
@@ -242,7 +242,7 @@ class Build:
         ]
         if jobs:
             cmd.append(f'-j{jobs}')
-        logger.info(f'running: {" ".join(cmd)}')
+        logger.info(f'running: {" ".join(str(it) for it in cmd)}')
         subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
@@ -269,9 +269,7 @@ class Build:
         name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
         return self.release/name
 
-    # TODO: check gclient and ninja existence
     def __call__(self):
-        require_tools('gclient', 'ninja')
         self.config()
         self.clone()
         self.sync()

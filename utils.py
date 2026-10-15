@@ -1,6 +1,7 @@
 import inspect
 import os
-from functools import wraps
+from functools import lru_cache, wraps
+from pathlib import Path
 
 import git
 from loguru import logger
@@ -23,13 +24,19 @@ def termux_arch(arch: str):
     raise ValueError(f'unknown arch: "{arch}"')
 
 
-def target_output(root: str, arch: str, mode: str, opted: bool = True):
-    root = os.path.abspath(os.path.expanduser(root))
+def target_output(root: str, arch: str, mode: str, opted: bool = True) -> Path:
+    """Absolute output directory for an arch/mode as a Path.
+
+    Callers that need a string (e.g. GN/ninja command lines or templates)
+    stringify it themselves; ``str(Path(p))`` matches the old ``os.path.join``
+    result exactly.
+    """
+    root = Path(os.path.abspath(os.path.expanduser(str(root))))
     if opted:
         dest = f'linux_{mode}_{arch}'
     else:
         dest = f'linux_{mode}_unopt_{arch}'
-    return os.path.join(root, 'engine', 'src', 'out', dest)
+    return root / 'engine' / 'src' / 'out' / dest
 
 
 def flutter_tag(root: str):
@@ -41,9 +48,15 @@ def flutter_tag(root: str):
         return None
 
 
-# TODO: see bin/internal/update_engine_version.sh
+@lru_cache(maxsize=1)
 def engine_version(root: str):
-    root = os.path.join(root, 'bin/internal/engine.version')
+    """Engine revision pinned by ``bin/internal/engine.version``.
+
+    Cached: the revision is immutable for a given checkout, and it is rewritten
+    only when upstream bumps the engine (see
+    ``bin/internal/update_engine_version.sh``).
+    """
+    root = Path(root) / 'bin/internal/engine.version'
 
     with open(root) as f:
         return f.read().strip()

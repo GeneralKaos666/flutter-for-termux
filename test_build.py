@@ -71,8 +71,9 @@ class BuildTest(unittest.TestCase):
         else:
             os.environ['ANDROID_NDK'] = self.android_ndk
 
+    @patch('build.require_tools')
     @patch('build.subprocess.run')
-    def test_build_requests_packaged_targets(self, run):
+    def test_build_requests_packaged_targets(self, run, _require_tools):
         self.instance.build(arch='arm64', mode='debug', jobs=42)
 
         cmd = run.call_args.args[0]
@@ -667,6 +668,40 @@ class PackageManifestTest(unittest.TestCase):
                 target_sdk=android['target_sdk'],
                 **src,
             )
+
+    def test_output_requires_an_existing_out_dir(self):
+        """Preconditions that used to be `assert`s now raise ValueError so
+        they survive `python -O`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            root.mkdir()
+            with self.assertRaises(ValueError):
+                package.Output(root, 'arm64')
+
+    def test_package_rejects_missing_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                package.Package(
+                    root=str(Path(tmp, 'missing')),
+                    arch='arm64',
+                    control={},
+                    resource={},
+                )
+
+    def test_sysroot_rejects_bad_path_and_source(self):
+        import sysroot as sysroot_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            not_a_dir = Path(tmp, 'not-a-dir')
+            not_a_dir.write_text('x')
+            with self.assertRaises(ValueError):
+                sysroot_mod.Sysroot(path=str(not_a_dir))
+
+            with self.assertRaises(ValueError):
+                sysroot_mod.Sysroot(
+                    path=str(Path(tmp, 'sysroot')),
+                    broken={'repo': '', 'dist': 'd', 'pkgs': ['a']},
+                )
 
     def test_resource_dispatcher_selects_identically(self):
         """One selector drives both the generator and the test paths: for the

@@ -89,7 +89,8 @@ def safe_eval(expr: str, globals_dict: dict, locals_dict: dict | None = None):
 
 
 def explore_file(src: Path):
-    assert src.exists()
+    if not src.exists():
+        raise FileNotFoundError(src)
 
     if src.is_dir():
         for root, dirs, files in src.walk():
@@ -101,7 +102,8 @@ def explore_file(src: Path):
 
 
 def explore_git(src: Path):
-    assert src.is_dir()
+    if not src.is_dir():
+        raise ValueError(f'not a directory: "{src}"')
 
     for it in Repo(src).tree().traverse():
         yield it.path
@@ -111,21 +113,23 @@ def explore_git(src: Path):
 
 
 def emit(out, src, git):
-    assert isinstance(src, (Path, bytes, list)), src
+    if not isinstance(src, (Path, bytes, list)):
+        raise ValueError(f'bad src type: "{type(src)}"')
 
-    if isdir := isinstance(src, list):
+    nested = isinstance(src, list)
+    if nested:
         yield {'out': out}
     if isinstance(src, bytes):
         yield {'out': out, 'src': src}
         return
     for src, it in explore(src, git):
         yield {
-            'out': out/src.name/it if isdir else out/it,
+            'out': out/src.name/it if nested else out/it,
             'src': src/it}
 
 
 def explore(src, git):
-    explore = explore_git if git else explore_file
+    walk = explore_git if git else explore_file
 
     if not isinstance(src, list):
         src = [src]
@@ -135,7 +139,7 @@ def explore(src, git):
             logger.warning(f'source not found: "{src}"')
             continue
         yield src, Path('.')
-        for it in explore(src):
+        for it in walk(src):
             yield src, it
 
 
@@ -148,47 +152,60 @@ def reset(info):
     info.mode |= 0o200
 
 
-def add_bin(tar, out, src, mod=None):
-    assert tar, 'bad tar'
-    assert out, 'bad out'
-    assert isinstance(src, bytes), f'bad src type: "{type(src)}"'
+def add_bin(archive, out, src, mod=None):
+    if not archive:
+        raise ValueError('bad tar')
+    if not out:
+        raise ValueError('bad out')
+    if not isinstance(src, bytes):
+        raise ValueError(f'bad src type: "{type(src)}"')
 
     info = tarfile.TarInfo(str(out))
     info.mode = mod or 0o644
     info.size = len(src)
     reset(info)
-    tar.addfile(info, io.BytesIO(src))
+    archive.addfile(info, io.BytesIO(src))
 
 
-def add_file(tar, out, src, mod=None):
-    assert tar, 'bad tar'
-    assert out, 'bad out'
-    assert src.exists(), f'source not found: "{src}"'
+def add_file(archive, out, src, mod=None):
+    if not archive:
+        raise ValueError('bad tar')
+    if not out:
+        raise ValueError('bad out')
+    if not src.exists():
+        raise FileNotFoundError(src)
 
-    info = tar.gettarinfo(src, out)
+    info = archive.gettarinfo(src, out)
     info.mode = mod or info.mode
     reset(info)
 
     with open(src, 'rb') as f:
-        tar.addfile(info, f)
+        archive.addfile(info, f)
 
 
-def add_dir(tar, out, mod=None):
-    assert tar, 'bad tar'
-    assert out, 'bad out'
+def add_dir(archive, out, mod=None, cache=None):
+    """Emit ``out`` and its ancestors (once each) as tar directory entries.
 
-    cache = getattr(tar, '__cache__', set())
-    tar.__cache__ = cache
+    ``cache`` tracks directories already written for the current archive; it is
+    threaded explicitly by :func:`tar` instead of being smuggled onto the
+    tarfile object.
+    """
+    if not archive:
+        raise ValueError('bad tar')
+    if not out:
+        raise ValueError('bad out')
+    if cache is None:
+        cache = set()
 
     if out.parent == Path('.') or out in cache:
         return
 
-    add_dir(tar, out.parent)
+    add_dir(archive, out.parent, cache=cache)
     info = tarfile.TarInfo(f'{out}/')
     info.type = tarfile.DIRTYPE
     info.mode = mod or 0o755
     reset(info)
-    tar.addfile(info)
+    archive.addfile(info)
     cache.add(out)
 
 
@@ -198,29 +215,35 @@ def tar(path, data):
         return
     if isinstance(data, dict):
         data = [data]
-    assert hasattr(data, '__iter__'), f'bad data format: "{data}"'
+    if not hasattr(data, '__iter__'):
+        raise ValueError(f'bad data format: "{data}"')
 
-    with tarfile.open(path, mode='w:xz', format=tarfile.GNU_FORMAT, dereference=True) as tar:
+    cache = set()
+    with tarfile.open(
+        path, mode='w:xz', format=tarfile.GNU_FORMAT, dereference=True
+    ) as archive:
         for it in data:
             out = it.get('out')
             src = it.get('src')
             mod = it.get('mod')
-            assert out, f'bad out field: "{out}"'
+            if not out:
+                raise ValueError(f'bad out field: "{out}"')
             out = Path(out)
-            assert mod is None or isinstance(mod, int)
+            if mod is not None and not isinstance(mod, int):
+                raise ValueError(f'bad mod type: "{type(mod)}"')
 
             # dpkg does not create missing parent directories while
             # unpacking, so every file entry needs explicit ancestor dir
             # entries emitted before it (e.g. share/flutter for manifest.json
             # and post_install.sh). add_dir() recurses and de-duplicates.
             if isinstance(src, bytes):
-                add_dir(tar, out.parent)
-                add_bin(tar, out, src, mod)
+                add_dir(archive, out.parent, cache=cache)
+                add_bin(archive, out, src, mod)
             elif not src or src.is_dir():
-                add_dir(tar, out, mod)
+                add_dir(archive, out, mod, cache=cache)
             elif src.exists():
-                add_dir(tar, out.parent)
-                add_file(tar, out, src, mod)
+                add_dir(archive, out.parent, cache=cache)
+                add_file(archive, out, src, mod)
             else:
                 raise FileNotFoundError(src)
 
@@ -234,8 +257,10 @@ def base64_md5_file(path):
 
 
 def download(url, out, timeout=(10, 60)):
-    assert url, 'bad url'
-    assert out, 'bad out'
+    if not url:
+        raise ValueError('bad url')
+    if not out:
+        raise ValueError('bad out')
 
     if (dst := Path(out)) and dst.is_dir():
         dst = dst/url.split('?')[0].split('/')[-1]
@@ -304,20 +329,22 @@ class ResourceDispatcher:
 class Output:
     def __init__(self, root, arch):
         self.any = None
-        for it in utils.__MODE__:
-            out = utils.target_output(root, arch, it)
-            self.__dict__[it] = out
-            if not self.any and Path(out).is_dir():
+        for mode in utils.__MODE__:
+            out = utils.target_output(root, arch, mode)
+            self.__dict__[mode] = out
+            if not self.any and out.is_dir():
                 self.any = out
 
-        assert self.any, 'no valid out path found.'
+        if not self.any:
+            raise ValueError('no valid out path found.')
 
 
 @utils.record
 class Package:
     def __init__(self, root, arch, control, resource, define=None, **extra):
         root = Path(root).resolve()
-        assert root.is_dir(), f'bad flutter root path: "{root}"'
+        if not root.is_dir():
+            raise ValueError(f'bad flutter root path: "{root}"')
         self.globals = {
             'tag': utils.flutter_tag(root),
             'root': root,
