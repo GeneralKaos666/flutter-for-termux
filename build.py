@@ -96,10 +96,16 @@ class Build:
         self.sysroot = Sysroot(path=path/syspath, **sysroot_cfg)
         self.root = path/root
         self.gclient = path/gclient
+        if not release:
+            raise ValueError(f'bad release path: "{release}"')
         self.release = path/release
         self.toolchain = Path(ndk, f'toolchains/llvm/prebuilt/{self.host}')
 
-        if not self.release.parent.is_dir():
+        # output() creates the release directory on demand, so a missing
+        # directory is not an error. Reject only a path that resolves to the
+        # repo root (the old `path = '.'` default), which would silently drop
+        # the deb into the source tree.
+        if self.release.resolve() == path.resolve():
             raise ValueError(f'bad release path: "{release}"')
 
         with open(path/package, 'rb') as f:
@@ -259,11 +265,9 @@ class Build:
         pkg.debuild(output=output)
 
     def output(self, arch: str):
-        if self.release.is_dir():
-            name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
-            return self.release/name
-        else:
-            return self.release
+        self.release.mkdir(parents=True, exist_ok=True)
+        name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
+        return self.release/name
 
     # TODO: check gclient and ninja existence
     def __call__(self):
