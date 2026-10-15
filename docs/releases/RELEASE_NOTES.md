@@ -86,7 +86,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 ### Technical Details
 
-- Build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`, `android_release_arm64/`, `android_profile_arm64/`
+- Build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/` (the engine has no `android_*` output directory)
 - Deb package size is ~588MB.
 
 ## Required per-project Android settings

@@ -210,7 +210,7 @@ release/flutter_3.47.7-5_aarch64.deb
 # Check all required files
 ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart  # Critical!
 ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
-ls -la flutter/engine/src/out/android_release_arm64/clang_arm64/gen_snapshot
+ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
 ```
 
 ## Problem Analysis and Solution (2025-12-28)
@@ -381,9 +381,13 @@ pkg install openjdk-21
 dpkg --force-depends --configure android-sdk
 ```
 
-**Permanent fix:** package.yaml has been updated to depend on openjdk-21:
+**Permanent fix:** the one-command installer (`install_flutter_complete.sh`)
+installs `openjdk-21` itself (overridable with the `JAVA_PACKAGE` environment
+variable), so a normal install pulls Java in. `package.yaml` does **not**
+declare it, so a manual `apt install ./<deb>` must have a JDK present first:
+
 ```yaml
-Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config, openjdk-21
+Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
 ```
 
 ### 3. libflutter_linux_gtk.so missing (Linux desktop support)
@@ -561,7 +565,7 @@ After the build completes, verify with the following checklist:
 ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart
 ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
 ls -la flutter/engine/src/out/linux_debug_arm64/libflutter_linux_gtk.so
-ls -la flutter/engine/src/out/android_release_arm64/clang_arm64/gen_snapshot
+ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
 
 # 2. After deploying to Termux (after running post_install.sh)
 flutter doctor -v               # ✅ verified
