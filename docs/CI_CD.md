@@ -254,7 +254,7 @@ resolves and the expected SHA256 is well-formed (validating a local asset if
 one is present) and skips the GitHub API lookup. The
 `release`/`workflow_dispatch` path performs the full API verification.
 
-This workflow is safe to run on GitHub-hosted runners because it only reads public release metadata (`permissions: contents: read`).
+This workflow is safe to run on GitHub-hosted runners because it only reads public release metadata (`permissions: contents: read, actions: read`).
 
 ## Security model
 
