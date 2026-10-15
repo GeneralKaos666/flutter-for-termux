@@ -331,7 +331,7 @@ class Output:
         for mode in utils.__MODE__:
             out = utils.target_output(root, arch, mode)
             self.__dict__[mode] = out
-            if not self.any and out.is_dir():
+            if not self.any and Path(out).is_dir():
                 self.any = out
 
         if not self.any:

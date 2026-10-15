@@ -242,7 +242,7 @@ class Build:
         ]
         if jobs:
             cmd.append(f'-j{jobs}')
-        logger.info(f'running: {" ".join(str(it) for it in cmd)}')
+        logger.info(f'running: {" ".join(cmd)}')
         subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
