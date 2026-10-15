@@ -299,6 +299,13 @@ git commit -m "fix(package): ship flutter_project_config script in the deb"
 - Consumes: `build.toml [package] path`.
 - Produces: `Build().output('arm64')` under `release/`.
 
+> Amended during execution (gap G2): setting `path = 'release'` alone is **not** enough.
+> `build.py`'s `output()` returns the deb filename only when `self.release` already exists as a
+> directory (`if self.release.is_dir(): … else: return self.release`), and nothing creates it.
+> `path = '.'` worked solely because the repo root always exists. With `release/` absent,
+> `output()` returns the directory, so the test fails and `debuild` would target a file literally
+> named `release`.
+
 - [ ] **Step 1: Adjust the test**
 
 Assert the parent directory of `output('arm64')` is `release`:
@@ -314,7 +321,12 @@ Expected: FAIL (parent is the repo root).
 
 - [ ] **Step 3: Implement**
 
-Set `path = 'release'` in `build.toml [package]`.
+Set `path = 'release'` in `build.toml [package]` (`release/` is already gitignored), **and** make
+`Build.output()` unconditionally return `self.release/<name>` instead of falling back to returning
+`self.release` when the directory does not exist yet, creating the directory if needed
+(`mkdir(parents=True, exist_ok=True)`). Keep the deb filename format unchanged. If you conclude a
+different location is the right place to create the directory, say so in your report rather than
+silently choosing.
 
 - [ ] **Step 4: Verify**
 
