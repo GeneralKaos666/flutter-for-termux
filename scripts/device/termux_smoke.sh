@@ -207,6 +207,11 @@ else
     record_status FLUTTER_SETTINGS_STATUS 1
 fi
 
+echo SECTION=DART_SDK_SNAPSHOTS
+[ -f "$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/snapshots/dds_aot.dart.snapshot" ] \
+    && record_status DART_SNAPSHOT_STATUS 0 \
+    || record_status DART_SNAPSHOT_STATUS 1
+
 echo SECTION=VERSIONS
 flutter --version
 record_status FLUTTER_VERSION_STATUS $?
