@@ -343,9 +343,10 @@ git commit -m "fix(package): emit the deb under release/"
 ### Task 8: Bump `pkg_rel` to 5 and sync every version reference
 
 **Files:**
-- Modify: `build.toml` (`pkg_rel`)
-- Modify: `docs/releases/CHANGELOG.md`
-- Modify: whatever `check_version_drift.py --fix` rewrites (AGENTS.md, README.md, installers, `.github/ISSUE_TEMPLATE/bug_report.yml` placeholder)
+- Modify: `build.toml` (`pkg_rel` + its trailing comment)
+- Modify: `docs/releases/RELEASE_NOTES.md` (new `## Fixed in 3.47.7-5` section, mirroring the `-4` section)
+- Modify: `docs/releases/CHANGELOG.md` (entries under `## [Unreleased]`)
+- Modify: exactly the 12 files `check_version_drift.py --fix` rewrites (AGENTS.md, README.md, the 3 `docs/guides/*` files, RELEASE_NOTES.md, the 4 installer scripts, versions_common.sh, gh_e2e_test.sh). It does **not** touch `docs/CI_CD.md` or `.github/ISSUE_TEMPLATE/*`.
 
 **Interfaces:**
 - Consumes: the `pkg_rel` value.
@@ -355,9 +356,14 @@ git commit -m "fix(package): emit the deb under release/"
 
 Edit `build.toml`: `pkg_rel = '5'` and update its trailing comment. Then run `python scripts/ci/check_version_drift.py --fix`.
 
-- [ ] **Step 2: Add the CHANGELOG entry**
+- [ ] **Step 2: Write the release docs**
 
-Add a `## 3.47.7-5` section listing the shipping fixes (manifest newline, flutter_settings JSON, snapshot honesty, non-interactive install, config script packaging).
+Mirror precedent commit `282c729` (the `pkg_rel` 3→4 bump):
+
+- `docs/releases/RELEASE_NOTES.md` — add a `## Fixed in 3.47.7-5` section immediately before `## Package`, describing this batch's shipping fixes (engine-version newline, valid `~/.flutter_settings` JSON, honest snapshot banners in both installers, non-interactive `--yes`, `flutter_project_config.sh` now shipped, deb emitted under `release/`), and stating it is a drop-in replacement over the previous revision.
+- `docs/releases/CHANGELOG.md` — add the same items under the existing `## [Unreleased]` heading in its Keep-a-Changelog subsections (`### Fixed`, `### Added`, `### Changed` as appropriate). Do **not** invent a released `## [3.47.7-5]` heading; the release process cuts released sections from this changelog.
+- Do **not** edit the `Size` / `SHA256` values. `build.toml` has no such keys, and the post-publish `sync_release_pins.py` commit fills them (precedent: `282c729` left them stale, `6dc3911` synced them).
+- Do **not** edit `docs/CI_CD.md` or `.github/ISSUE_TEMPLATE/*` — the checker does not scan them; PR2 (Task 10) and PR4 (Task 19) own them.
 
 - [ ] **Step 3: Verify drift is clean**
 
@@ -366,10 +372,14 @@ Expected: all pass.
 
 - [ ] **Step 4: Commit**
 
+Confirm `git status --porcelain` lists only files you expect (no stray artifacts), then:
+
 ```bash
 git add -A
-git commit -m "chore(release): bump pkg_rel to 5 and sync version pins"
+git commit -m "chore(release): bump pkg_rel to 5 for the review-fix batch"
 ```
+
+Give it a body like `282c729`'s: why the bump is needed (the fixes live in files that ship inside the deb), that references were synced with `check_version_drift.py --fix`, and that `CI_CD.md` / `EXPECTED_SHA256` are synced post-publish by `sync_release_pins.py`.
 
 ---
 
