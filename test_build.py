@@ -636,6 +636,10 @@ class PackageManifestTest(unittest.TestCase):
         ).read_bytes()
         self.assertEqual(Path(item['src']).read_bytes(), expected)
 
+    def test_package_exposes_render(self):
+        from package import Package
+        self.assertTrue(callable(getattr(Package, 'render', None)))
+
     def test_package_ships_flutter_project_config(self):
         """README and termux_smoke.sh probe $PREFIX/share/flutter/
         flutter_project_config.sh, so the deb must ship that exact script

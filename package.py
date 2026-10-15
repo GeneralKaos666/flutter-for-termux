@@ -310,7 +310,7 @@ class Package:
         self.__dict__.update(self.globals)
         self.__dict__.update(self.defines)
 
-    def __format__(self, s, **extra):
+    def render(self, s, **extra):
         return string.Template(s).safe_substitute(
             **self.globals,
             **self.defines,
@@ -319,7 +319,7 @@ class Package:
     def gen_control(self):
         bin = io.BytesIO()
         for k, v in self.control.items():
-            bin.write(self.__format__(f'{k}: {v}\n').encode('utf8'))
+            bin.write(self.render(f'{k}: {v}\n').encode('utf8'))
         return {'out': 'control', 'src': bin.getvalue()}
 
     def gen_resource(self, name=None):
@@ -360,15 +360,15 @@ class Package:
         if isinstance(out, str):
             out = [out]
         if isinstance(out, list):
-            out = (Path(self.__format__(it, **dep)) for it in out)
+            out = (Path(self.render(it, **dep)) for it in out)
         else:
             raise ValueError(f'bad output type: "{type(out)}"')
         # expect None, str, list
         if isinstance(src, str):
-            src = self.__format__(src, **dep)
+            src = self.render(src, **dep)
             src = src.encode('utf8') if bin else Path(src)
         if isinstance(src, list) and not bin:
-            src = [Path(self.__format__(it, **dep)) for it in src]
+            src = [Path(self.render(it, **dep)) for it in src]
         elif not isinstance(src, (bytes, Path)):
             raise ValueError(f'bad source type: "{type(src)}"')
 
@@ -396,8 +396,8 @@ class Package:
             return None
         deps = data.get('define', {}).items()
         deps = {k: safe_eval(v, self.globals, self.defines) for k, v in deps}
-        file = self.__format__(test['file'], **deps)
-        path = self.__format__(test['path'], **deps)
+        file = self.render(test['file'], **deps)
+        path = self.render(test['path'], **deps)
         dest_dir = Path(dest_dir).expanduser() if dest_dir else Path(tempfile.gettempdir())
         dest_dir.mkdir(parents=True, exist_ok=True)
         if not (dest := download(file, dest_dir)):
