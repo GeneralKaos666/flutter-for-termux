@@ -47,6 +47,20 @@ REQUIRED_AUX_SUFFIXES = (".sha256", ".size.txt")
 REQUIRED_AUX_NAMES = ("inventory.txt", "build_metadata.json", "build_evidence.json")
 OPTIONAL_AUX_NAMES = ("device_smoke_evidence.json",)
 
+# Workflows allowed to publish a release whose strict provenance is verified.
+# ``build.yml`` is the hosted publisher and attaches its assets via
+# softprops/action-gh-release; ``build-deb.yml`` is the self-hosted fallback.
+# Exported so tests exercise the same derivation production uses.
+RELEASE_PUBLISHER_WORKFLOWS = (
+    ".github/workflows/build.yml",
+    ".github/workflows/build-deb.yml",
+)
+
+# Only build-deb.yml uploads a run artifact holding the .deb, so only it can be
+# cross-checked byte-for-byte against the released checksum. build.yml publishes
+# straight to the release, so a missing artifact is expected there, not an error.
+ARTIFACT_CROSSCHECK_WORKFLOW = ".github/workflows/build-deb.yml"
+
 
 def required_aux_asset_names(expected_asset: str) -> tuple[str, ...]:
     """Ordered names of the five companions every .deb build release publishes."""
@@ -769,8 +783,8 @@ def main():
                     run_path = str(run_obj.get("path", "")).strip()
                     run_num = run_obj.get("run_number")
 
-                    if run_path != ".github/workflows/build-deb.yml":
-                        print(f"Error: Workflow run {run_id} workflow path mismatch! Expected '.github/workflows/build-deb.yml', got '{run_path}'")
+                    if run_path not in RELEASE_PUBLISHER_WORKFLOWS:
+                        print(f"Error: Workflow run {run_id} workflow path mismatch! Expected one of {RELEASE_PUBLISHER_WORKFLOWS}, got '{run_path}'")
                         sys.exit(1)
                     if run_head_sha != meta_commit.lower():
                         print(f"Error: Workflow run {run_id} head_sha mismatch! Claimed {meta_commit}, but run head_sha is '{run_head_sha}'")
@@ -781,7 +795,7 @@ def main():
                     if run_num is not None and int(run_num) != int(b_num):
                         print(f"Error: Workflow run {run_id} run_number mismatch! Claimed build_number {b_num}, but run run_number is '{run_num}'")
                         sys.exit(1)
-                    print(f"  ✓ Verified workflow run_id {run_id} (# {b_num} on .github/workflows/build-deb.yml) succeeded for source_commit {meta_commit[:8]}...")
+                    print(f"  ✓ Verified workflow run_id {run_id} (# {b_num} on {run_path}) succeeded for source_commit {meta_commit[:8]}...")
 
                 # Verify workflow run produced and published the matching release artifact
                 run_artifacts_url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts"
@@ -803,11 +817,17 @@ def main():
                             break
 
                     if not matching_artifact:
-                        print(f"Error: Workflow run {run_id} artifacts do not match expected release package patterns {expected_artifact_patterns} (found: {artifact_names})")
-                        sys.exit(1)
+                        if run_path == ARTIFACT_CROSSCHECK_WORKFLOW:
+                            print(f"Error: Workflow run {run_id} artifacts do not match expected release package patterns {expected_artifact_patterns} (found: {artifact_names})")
+                            sys.exit(1)
+                        # build.yml publishes via softprops/action-gh-release and
+                        # uploads no matching run artifact, so the byte-for-byte
+                        # cross-check is unavailable; the released companions
+                        # (checksum, metadata, evidence) were still verified above.
+                        print(f"  ! Workflow run {run_id} ({run_path}) published without a matching run artifact; skipping the artifact sha256 cross-check")
 
-                    art_id = matching_artifact.get("id")
-                    if matching_artifact.get("expired", False):
+                    art_id = matching_artifact.get("id") if matching_artifact else None
+                    if matching_artifact and matching_artifact.get("expired", False):
                         print(f"Error: Workflow run {run_id} artifact {art_id} has expired; cannot verify artifact contents")
                         sys.exit(1)
 
