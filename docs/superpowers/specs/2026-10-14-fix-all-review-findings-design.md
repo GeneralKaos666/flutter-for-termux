@@ -5,7 +5,7 @@
 
 ## Problem & Goal
 
-A whole-repo review of `flutter-for-termux` found 46 issues across four surfaces: Python core (build/packaging), shell/device scripts, CI/config, and documentation. All existing gates pass (`ruff`, `pytest` 34 tests, `check_repo`, `check_version_drift`, `generate_versions --check`, `bash -n`, `shellcheck --severity=error`), so none of these are caught today.
+A whole-repo review of `flutter-for-termux` found 46 issues across four surfaces: Python core (build/packaging), shell/device scripts, CI/config, and documentation. One further instance of the snapshot-honesty defect (row 47) was found during implementation. All existing gates pass (`ruff`, `pytest` 34 tests, `check_repo`, `check_version_drift`, `generate_versions --check`, `bash -n`, `shellcheck --severity=error`), so none of these are caught today.
 
 **Goal:** resolve all 46 findings, keeping every gate green, split into reviewable PRs. Shipping-artifact changes bump `pkg_rel 4 → 5` once.
 
@@ -42,6 +42,7 @@ A whole-repo review of `flutter-for-termux` found 46 issues across four surfaces
 | 1 | `utils.engine_version()` unstripped newline corrupts `manifest.json` (`utils.py:48-49`, `package.yaml:167`); breaks `post_install.sh:794` | PR1 | `.strip()` the read | Code |
 | 2 | `.flutter_settings` rewrite can emit a double comma (`post_install.sh:1323-1327`) | PR1 | Rewrite via `python3` JSON load/dump | Code |
 | 3 | Snapshot success banner printed after checksum/unzip failure (`install_flutter_complete.sh:668-677`) | PR1 | Print success only when the snapshot file exists | Code |
+| 47 | Same defect, unfixed, in the script that actually runs during `dpkg -i` (`scripts/install/post_install.sh:976-997` — `unzip … \|\| true` then an unconditional success banner, no checksum at all). Found during implementation | PR1 | Gate the banner on extraction success | Code |
 | 4 | `read -p` prompt ignores `--yes` / non-interactive stdin (`install_flutter_complete.sh:416`) | PR1 | Skip when `OPT_YES`/`NON_INTERACTIVE`/non-TTY | Code |
 | 5 | `flutter_project_config.sh` referenced by README + `termux_smoke.sh:220` but never packaged | PR1 | Add `package.yaml` resource → `$prefix/share/flutter/flutter_project_config.sh` (0755) | Code |
 | 6 | `flutter_project_config.sh` shebang `#!/usr/bin/env bash` unsuitable on Termux | PR1 | `#!/data/data/com.termux/files/usr/bin/bash` | Code |

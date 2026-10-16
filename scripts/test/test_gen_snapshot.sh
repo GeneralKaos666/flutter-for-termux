@@ -1,10 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 
 echo "=== Testing gen_snapshot for Termux ==="
 
 # Copy gen_snapshot to Termux bin
-cp /data/local/tmp/gen_snapshot $PREFIX/bin/
-chmod +x $PREFIX/bin/gen_snapshot
+if ! cp /data/local/tmp/gen_snapshot "$PREFIX/bin/"; then
+    echo "Failed to copy gen_snapshot from /data/local/tmp" >&2
+    exit 1
+fi
+chmod +x "$PREFIX/bin/gen_snapshot"
 
 # Test version
 echo ""

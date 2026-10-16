@@ -8,7 +8,7 @@ This document explains how to build a Flutter deb package that includes Android 
 |------|----|
 | Flutter tag | `3.47.7` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
-| Package | `flutter_3.47.7-4_aarch64.deb` |
+| Package | `flutter_3.47.7-5_aarch64.deb` |
 | Package size | 607,509,252 bytes (about 579 MiB) |
 | SHA256 | `8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
@@ -52,8 +52,7 @@ See [`docs/CI_CD.md`](../CI_CD.md) for details.
 | **Dart CLI** | `dart-sdk/bin/dart` | ~50MB | Flutter CLI; post-install replaces it with Termux JIT Dart |
 | **Dart VM** | `dart-sdk/bin/dartvm`, `dartaotruntime` | ~50MB | Runs engine snapshots / AOT runtime |
 | **Flutter Engine** | `libflutter_linux_gtk.so` | ~106MB | Linux desktop runtime |
-| **gen_snapshot (Linux)** | `linux-arm64/gen_snapshot` | ~30MB | `flutter build linux` |
-| **gen_snapshot (Android)** | `android-arm64-release/.../gen_snapshot` | ~30MB | `flutter build apk` |
+| **gen_snapshot** | `linux-arm64/gen_snapshot` | ~30MB | `flutter build linux` directly; `flutter build apk` via the on-device `post_install.sh` symlink |
 | **impellerc** | `impellerc` | ~20MB | Shader compiler |
 | **const_finder** | `const_finder.dart.snapshot` | ~1MB | Icon tree shaking |
 
@@ -81,8 +80,8 @@ See [`docs/CI_CD.md`](../CI_CD.md) for details.
 │                         WSL Build Environment                  │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │ Dart SDK    │  │ Flutter     │  │ gen_snapshot            │  │
-│  │ (ARM64)     │  │ Engine      │  │ ├─ Linux ARM64          │  │
-│  │             │  │ (ARM64)     │  │ └─ Android ARM64        │  │
+│  │ (ARM64)     │  │ Engine      │  │ (Linux ARM64, reused    │  │
+│  │             │  │ (ARM64)     │  │  on-device for Android) │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 │         │               │                    │                   │
 │         └───────────────┴────────────────────┘                   │
@@ -171,18 +170,19 @@ This command automatically completes:
 1. Configure the Linux release build
 2. Compile the Flutter engine
 3. Compile the dart binary (critical!)
-4. Configure the Android gen_snapshot build
-5. Compile the Android gen_snapshot
-6. Package the deb
+4. Package the deb
+
+There is no separate Android gen_snapshot build step — the same Linux
+`gen_snapshot` produced by step 2 is reused on-device for `flutter build apk`
+(see [deb Package Contents](#deb-package-contents)).
 
 Or build step-by-step manually:
 
 ```bash
-# Linux release (for flutter run -d linux --release / flutter build linux --release)
+# Linux release (also builds the gen_snapshot used by flutter build linux and,
+# on-device, flutter build apk)
 python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
-
-# Android gen_snapshot (for flutter build apk)
 
 # Package the deb
 python3 build.py debuild --arch=arm64
@@ -192,7 +192,7 @@ python3 build.py debuild --arch=arm64
 
 After the build completes, the deb package is located at:
 ```
-release/flutter_3.47.7-4_aarch64.deb
+release/flutter_3.47.7-5_aarch64.deb
 ```
 
 ## deb Package Contents
@@ -202,7 +202,11 @@ release/flutter_3.47.7-4_aarch64.deb
 | Flutter SDK | /data/data/com.termux/files/usr/opt/flutter | Main program |
 | dart binary | .../dart-sdk/bin/dart | Core of the flutter command |
 | Linux gen_snapshot | .../engine/linux-arm64/gen_snapshot | flutter run -d linux |
-| Android gen_snapshot | .../engine/android-arm64-release/linux-arm64/gen_snapshot | flutter build apk |
+| Android gen_snapshot | .../engine/android-arm64-release/linux-arm64/gen_snapshot | flutter build apk (on-device path; created by post_install.sh after precache, not a separate deb payload) |
+
+Only the Linux `gen_snapshot` ships in the deb. The Android row is the on-device
+path that `post_install.sh` creates (a symlink to the Linux artifact) once
+`flutter precache --android` has made the `android-arm64-release` directory exist.
 
 ## Verify the Build
 
@@ -210,7 +214,7 @@ release/flutter_3.47.7-4_aarch64.deb
 # Check all required files
 ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart  # Critical!
 ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
-ls -la flutter/engine/src/out/android_release_arm64/clang_arm64/gen_snapshot
+ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
 ```
 
 ## Problem Analysis and Solution (2025-12-28)
@@ -243,7 +247,7 @@ python3 build.py
 ```
 ✓ bin/cache/dart-sdk/bin/dart (102MB)
 ✓ bin/cache/artifacts/engine/linux-arm64/gen_snapshot (6.9MB)
-✓ bin/cache/artifacts/engine/android-arm64-release/linux-arm64/gen_snapshot (6.4MB)
+✓ bin/cache/artifacts/engine/android-arm64-release/linux-arm64/gen_snapshot (6.4MB; on-device symlink created by post_install.sh)
 ```
 
 ## Common Problems
@@ -274,7 +278,7 @@ The Flutter Engine source is about 30GB and the build output about 20GB, so you 
 After installing the deb, run the following in Termux:
 
 ```bash
-dpkg -i flutter_3.47.7-4_aarch64.deb
+dpkg -i flutter_3.47.7-5_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -381,9 +385,13 @@ pkg install openjdk-21
 dpkg --force-depends --configure android-sdk
 ```
 
-**Permanent fix:** package.yaml has been updated to depend on openjdk-21:
+**Permanent fix:** the one-command installer (`install_flutter_complete.sh`)
+installs `openjdk-21` itself (overridable with the `JAVA_PACKAGE` environment
+variable), so a normal install pulls Java in. `package.yaml` does **not**
+declare it, so a manual `apt install ./<deb>` must have a JDK present first:
+
 ```yaml
-Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config, openjdk-21
+Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
 ```
 
 ### 3. libflutter_linux_gtk.so missing (Linux desktop support)
@@ -561,7 +569,7 @@ After the build completes, verify with the following checklist:
 ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart
 ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
 ls -la flutter/engine/src/out/linux_debug_arm64/libflutter_linux_gtk.so
-ls -la flutter/engine/src/out/android_release_arm64/clang_arm64/gen_snapshot
+ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
 
 # 2. After deploying to Termux (after running post_install.sh)
 flutter doctor -v               # ✅ verified
