@@ -194,6 +194,13 @@ apply_patches() {
 	fi
 }
 
+# NOTE: This is the simple variant of the NDK backup/restore helper pair, kept
+# in sync with the rich copy in install_flutter_complete.sh (which maps both
+# ANDROID_HOME and NDK_PATH and tracks absent preimages). Both copies are
+# intentionally different implementations, but they share a contract: the
+# `BACKUP_DIR`/`ndk_backups` preimage directory plus the exact `cp -a`
+# backup/restore commands. scripts/ci/check_repo.py (check_ndk_helper_drift)
+# fails CI when a copy loses that contract, so update both copies together.
 backup_ndk_file() {
 	local file="$1"
 	if [ -f "$file" ] || [ -L "$file" ]; then

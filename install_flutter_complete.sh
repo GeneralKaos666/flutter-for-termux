@@ -40,6 +40,13 @@ if command -v parse_installer_args >/dev/null 2>&1; then
 	parse_installer_args "$@"
 fi
 
+# NOTE: This is the rich variant of the NDK backup/restore helper pair, kept in
+# sync with the simpler copy in scripts/install/post_install.sh (which maps
+# against ANDROID_SDK only and has no absent-preimage list). Both copies are
+# intentionally different implementations, but they share a contract: the
+# `backup_dir`/`ndk_backups` preimage directory plus the exact `cp -a`
+# backup/restore commands. scripts/ci/check_repo.py (check_ndk_helper_drift)
+# fails CI when a copy loses that contract, so update both copies together.
 backup_ndk_file() {
 	local file="$1"
 	local backup_dir="${BACKUP_DIR:-${WORK_DIR:-.}/backup}"
