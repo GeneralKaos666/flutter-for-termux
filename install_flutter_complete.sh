@@ -156,16 +156,34 @@ restore_ndk_backups() {
 }
 
 # An NDK directory is only usable when it can actually configure a native build:
-# it needs the LLVM toolchain, the CMake toolchain file, and the source.properties
-# metadata. A partially extracted or corrupt install can leave a directory missing
-# any of them; treating that as "installed" makes AGP fail later with
-# "[CXX1101] NDK at ... did not have a source.properties file" or
-# "Could not find toolchain file: .../build/cmake/android.toolchain.cmake".
+# it needs the LLVM toolchain, the CMake toolchain file, the source.properties
+# metadata, and a clang driver that runs on this host. A partially extracted or
+# corrupt install can leave a directory missing any of them; treating that as
+# "installed" makes AGP fail later with "[CXX1101] NDK at ... did not have a
+# source.properties file" or "Could not find toolchain file:
+# .../build/cmake/android.toolchain.cmake".
+#
+# The driver probe rejects Google's official Linux NDK, which ships x86_64-only
+# tools. AGP downloads it under the same version number as the aarch64 repack, so
+# all three existence checks above pass while nothing in the directory can
+# execute here. execve() then fails with ENOEXEC, the shell re-parses the ELF
+# bytes as a script, and CMake's compiler probe dies with
+#     clang: 1: Syntax error: ")" unexpected
+# Without this check the broken NDK counts as installed forever and this script
+# never re-downloads the repack over it (#29).
 ndk_is_valid() {
 	local ndk_dir="$1"
-	[ -d "$ndk_dir/toolchains/llvm" ] &&
-		[ -f "$ndk_dir/build/cmake/android.toolchain.cmake" ] &&
-		[ -f "$ndk_dir/source.properties" ]
+	[ -d "$ndk_dir/toolchains/llvm" ] || return 1
+	[ -f "$ndk_dir/build/cmake/android.toolchain.cmake" ] || return 1
+	[ -f "$ndk_dir/source.properties" ] || return 1
+	local driver
+	for driver in "$ndk_dir"/toolchains/llvm/prebuilt/*/bin/clang-[0-9]*; do
+		[ -x "$driver" ] || continue
+		if "$driver" --version >/dev/null 2>&1; then
+			return 0
+		fi
+	done
+	return 1
 }
 
 configure_ndk_clang() {
