@@ -32,8 +32,8 @@ Installing `3.47.7-5` over `3.47.7-4` is a drop-in replacement — follow the [I
 | Item | Value |
 |------|-------|
 | Package | `flutter_3.47.7-5_aarch64.deb` |
-| Size | 607,509,252 bytes (~579 MiB) |
-| SHA256 | `8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e` |
+| Size | 635,042,964 bytes (~606 MiB) |
+| SHA256 | `3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6` |
 | Flutter | 3.47.7 |
 | Flutter Tools Dart | 3.13.5 |
 | Dart VM | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |

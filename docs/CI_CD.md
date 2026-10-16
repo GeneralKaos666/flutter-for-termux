@@ -137,9 +137,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.47.7-4_aarch64.deb`
-- `flutter_3.47.7-4_aarch64.deb.sha256`
-- `flutter_3.47.7-4_aarch64.deb.size.txt`
+- `flutter_3.47.7-5_aarch64.deb`
+- `flutter_3.47.7-5_aarch64.deb.sha256`
+- `flutter_3.47.7-5_aarch64.deb.size.txt`
 - `inventory.txt`
 - `build_metadata.json`
 - `build_evidence.json`
@@ -187,7 +187,7 @@ The workflow tests a `build-deb` candidate artifact: it downloads the artifact b
 ```text
 artifact_run_id: <build-deb workflow run id>
 artifact_name: <uploaded artifact name>
-expected_sha256: 8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e
+expected_sha256: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
 ```
 
 Required self-hosted environment:
@@ -299,8 +299,8 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebPath ".\candidate\flutter_3.47.7-4_aarch64.deb" `
-  -ExpectedSha256 "8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e"
+  -DebPath ".\candidate\flutter_3.47.7-5_aarch64.deb" `
+  -ExpectedSha256 "3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6"
 ```
 
 `-DebPath` is how `device-smoke.yml` invokes the script (via `$env:RESOLVED_DEB`,
