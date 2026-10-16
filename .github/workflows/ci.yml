@@ -56,6 +56,10 @@ jobs:
           find scripts -name "*.sh" -exec bash -n {} +
           bash -n install_flutter_complete.sh
 
+      - name: Termux smoke self-test (APT status fidelity)
+        shell: bash
+        run: TERMUX_SMOKE_SELFTEST=1 bash scripts/device/termux_smoke.sh
+
       - name: ShellCheck lint shell scripts
         shell: bash
         run: |
@@ -71,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! type -p actionlint &>/dev/null; then
-            bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+            bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
           fi
           # Disable embedded shellcheck (handled by separate ShellCheck step)
           ./actionlint -shellcheck="" .github/workflows/*.yml
@@ -97,6 +101,9 @@ jobs:
 
       - name: Version drift check
         run: python scripts/ci/check_version_drift.py
+
+      - name: Version generation check
+        run: python scripts/ci/generate_versions.py --check
 
       - name: Repository contract checks
         run: python scripts/ci/check_repo.py

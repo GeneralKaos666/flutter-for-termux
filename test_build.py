@@ -9,7 +9,9 @@ patch contract intentionally changes, update the assertion deliberately rather
 than pinning a version literal.
 """
 
+import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -18,6 +20,8 @@ import tarfile
 import tempfile
 import tomllib
 import unittest
+import zipfile
+from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -58,6 +62,74 @@ def _run_bash(func, call, *args):
     )
 
 
+class _FakeHttpResponse:
+    """Minimal urllib response stand-in for the release verifier tests."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def read(self, *args, **kwargs):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+_DEB_BYTES = b'flutter-termux-test-deb-payload'
+_DEB_SHA = hashlib.sha256(_DEB_BYTES).hexdigest()
+_DEB_SIZE = len(_DEB_BYTES)
+# Minute-aligned epoch so a fixture .deb's tar timestamps round-trip through the
+# module's timezone inference deterministically.
+_DEB_MTIME = 1699999980
+
+
+def _build_tar_gz(members):
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w:gz') as tar:
+        for member_name, content in members:
+            info = tarfile.TarInfo(member_name)
+            info.size = len(content)
+            info.mode = 0o644
+            info.mtime = _DEB_MTIME
+            info.uname = 'root'
+            info.gname = 'root'
+            tar.addfile(info, io.BytesIO(content))
+    return buffer.getvalue()
+
+
+def _build_ar_archive(members):
+    """Assemble a POSIX ``ar`` archive (the outer container of a .deb)."""
+    out = bytearray(b'!<arch>\n')
+    for member_name, data in members:
+        header = (
+            f'{member_name + "/":<16}'
+            f'{0:<12}'
+            f'{0:<6}'
+            f'{0:<6}'
+            f'{0o100644:<8o}'
+            f'{len(data):<10}'
+            '`\n'
+        )
+        assert len(header) == 60, len(header)
+        out += header.encode('ascii')
+        out += data
+        if len(data) % 2:
+            out += b'\n'
+    return bytes(out)
+
+
+def _build_deb(data_members):
+    """Build a minimal, structurally valid .deb (ar + control.tar.gz + data.tar.gz)."""
+    return _build_ar_archive([
+        ('debian-binary', b'2.0\n'),
+        ('control.tar.gz', _build_tar_gz([('control', b'Package: fixture\nVersion: 1.0\n')])),
+        ('data.tar.gz', _build_tar_gz(data_members)),
+    ])
+
+
 class BuildTest(unittest.TestCase):
     def setUp(self):
         self.android_ndk = os.environ.get('ANDROID_NDK')
@@ -70,8 +142,9 @@ class BuildTest(unittest.TestCase):
         else:
             os.environ['ANDROID_NDK'] = self.android_ndk
 
+    @patch('build.require_tools')
     @patch('build.subprocess.run')
-    def test_build_requests_packaged_targets(self, run):
+    def test_build_requests_packaged_targets(self, run, _require_tools):
         self.instance.build(arch='arm64', mode='debug', jobs=42)
 
         cmd = run.call_args.args[0]
@@ -115,8 +188,74 @@ class BuildTest(unittest.TestCase):
     def test_output_uses_package_version_suffix(self):
         pkg_rel = str(self.instance.pkg_rel or '').strip()
         expected_version = f'{self.instance.tag}-{pkg_rel}' if pkg_rel else self.instance.tag
-        output_name = Path(self.instance.output('arm64')).name
-        self.assertEqual(output_name, f'flutter_{expected_version}_aarch64.deb')
+        output = Path(self.instance.output('arm64'))
+        self.assertEqual(output.name, f'flutter_{expected_version}_aarch64.deb')
+        # The deb must land under release/, not the repo root.
+        self.assertEqual(output.parent.name, 'release')
+
+    def test_metadata_bundles_release_config(self):
+        with open(self.instance.conf, 'rb') as f:
+            cfg = tomllib.load(f)
+        meta = self.instance.metadata()
+        self.assertEqual(meta['compile_sdk'], cfg['android']['compile_sdk'])
+        self.assertEqual(meta['target_sdk'], cfg['android']['target_sdk'])
+        self.assertEqual(meta['dart_version'], cfg['flutter'].get('dart_version') or '')
+        self.assertEqual(meta['framework_revision'], cfg['flutter'].get('framework_revision') or '')
+        self.assertEqual(meta['framework_commit_date'], cfg['flutter'].get('framework_commit_date') or '')
+        self.assertEqual(meta['devtools_version'], cfg['flutter'].get('devtools_version') or '')
+        self.assertEqual(meta['ndk_version'], cfg['ndk'].get('version') or '')
+        self.assertEqual(meta['package_version'], self.instance.package_version)
+        expected_keys = {
+            'dart_version',
+            'framework_revision',
+            'framework_commit_date',
+            'devtools_version',
+            'ndk_version',
+            'compile_sdk',
+            'target_sdk',
+            'package_version',
+        }
+        self.assertEqual(set(meta), expected_keys)
+
+    def _conf_with_release_path(self, tmp, line):
+        """Copy build.toml into ``tmp`` with the ``[package] path`` line rewritten.
+
+        ``line`` is inserted verbatim (e.g. ``"path = '.'"``), or ``''`` drops
+        the key entirely. Everything else is untouched, so only the release-path
+        lookup differs from the shipped config.
+        """
+        lines = []
+        in_package = False
+        for raw in (Path(__file__).parent / 'build.toml').read_text(encoding='utf-8').splitlines():
+            if raw.startswith('['):
+                in_package = raw.strip() == '[package]'
+            elif in_package and raw.startswith('path ='):
+                if line:
+                    lines.append(line)
+                continue
+            lines.append(raw)
+        conf = Path(tmp) / 'build.toml'
+        conf.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        return conf
+
+    def test_release_path_at_repo_root_is_rejected(self):
+        """``path = '.'`` (the old default) would drop the deb into the source
+        tree, so constructing the Build must fail loudly."""
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf_with_release_path(tmp, "path = '.'")
+            with self.assertRaises(ValueError) as ctx:
+                build.Build(conf=str(conf))
+        self.assertIn('bad release path', str(ctx.exception))
+
+    def test_missing_release_path_is_rejected(self):
+        """A missing or empty ``[package] path`` must raise ValueError, not the
+        TypeError a later ``path/release`` division would produce."""
+        for line in ('', "path = ''"):
+            with self.subTest(line=line), tempfile.TemporaryDirectory() as tmp:
+                conf = self._conf_with_release_path(tmp, line)
+                with self.assertRaises(ValueError) as ctx:
+                    build.Build(conf=str(conf))
+                self.assertIn('bad release path', str(ctx.exception))
 
     def test_dart_patches_are_kept_in_sync(self):
         patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
@@ -502,28 +641,7 @@ class PackageManifestTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
-
-            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
-                src = yaml.safe_load(f)
-
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
-                )
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource('manifest'))
 
@@ -550,34 +668,9 @@ class PackageManifestTest(unittest.TestCase):
             )
 
     def test_post_install_resource_ships_config_script(self):
-        flutter = self.cfg['flutter']
-        android = self.cfg['android']
-        ndk = self.cfg['ndk']
-
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
-
-            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
-                src = yaml.safe_load(f)
-
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
-                )
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource('post_install'))
 
@@ -594,37 +687,167 @@ class PackageManifestTest(unittest.TestCase):
         ).read_bytes()
         self.assertEqual(Path(item['src']).read_bytes(), expected)
 
-    def test_tar_ships_ancestor_dirs_for_file_outputs(self):
-        """dpkg does not create missing parent dirs, so the data tar must
-        carry explicit directory entries for share/flutter (issue #26)."""
+    def test_package_exposes_render(self):
+        from package import Package
+        self.assertTrue(callable(getattr(Package, 'render', None)))
+
+    def _make_package(self, root: Path):
+        """Build a Package against a minimal temp flutter root.
+
+        ``flutter_tag``/``engine_version`` are stubbed so no real checkout is
+        needed, and the release output dir is created for you — callers need
+        not ``mkdir`` it first."""
         flutter = self.cfg['flutter']
         android = self.cfg['android']
         ndk = self.cfg['ndk']
+        (root / 'engine' / 'src' / 'out' / 'linux_release_arm64').mkdir(
+            parents=True, exist_ok=True
+        )
+        with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+            src = yaml.safe_load(f)
+        with (
+            patch('package.utils.flutter_tag', return_value=flutter['tag']),
+            patch('package.utils.engine_version', return_value='engine_revision_mock'),
+        ):
+            return package.Package(
+                root=str(root),
+                arch='arm64',
+                dart_version=flutter['dart_version'],
+                framework_revision=flutter['framework_revision'],
+                framework_commit_date=flutter['framework_commit_date'],
+                devtools_version=flutter['devtools_version'],
+                ndk_version=ndk.get('version', ''),
+                compile_sdk=android['compile_sdk'],
+                target_sdk=android['target_sdk'],
+                **src,
+            )
+
+    def test_output_requires_an_existing_out_dir(self):
+        """Preconditions that used to be `assert`s now raise ValueError so
+        they survive `python -O`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            root.mkdir()
+            with self.assertRaises(ValueError):
+                package.Output(root, 'arm64')
+
+    def test_package_rejects_missing_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                package.Package(
+                    root=str(Path(tmp, 'missing')),
+                    arch='arm64',
+                    control={},
+                    resource={},
+                )
+
+    def test_sysroot_rejects_bad_path_and_source(self):
+        import sysroot as sysroot_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            not_a_dir = Path(tmp, 'not-a-dir')
+            not_a_dir.write_text('x')
+            with self.assertRaises(ValueError):
+                sysroot_mod.Sysroot(path=str(not_a_dir))
+
+            with self.assertRaises(ValueError):
+                sysroot_mod.Sysroot(
+                    path=str(Path(tmp, 'sysroot')),
+                    broken={'repo': '', 'dist': 'd', 'pkgs': ['a']},
+                )
+
+    def test_resource_dispatcher_selects_identically(self):
+        """One selector drives both the generator and the test paths: for the
+        same input (str, list, falsy, mapping) they visit the same resources in
+        the same order."""
+        dispatcher = package.ResourceDispatcher(['a', 'b'])
+        self.assertEqual(dispatcher.names('a'), ['a'])
+        self.assertEqual(dispatcher.names(['b', 'a']), ['b', 'a'])
+        self.assertEqual(dispatcher.names(None), ['a', 'b'])
+        self.assertEqual(dispatcher.names([]), [])
+        with self.assertRaises(ValueError):
+            dispatcher.names({'x': 1})
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp, 'flutter')
-            release_out = root / 'engine' / 'src' / 'out' / 'linux_release_arm64'
-            release_out.mkdir(parents=True)
+            pkg = self._make_package(root)
 
-            with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
-                src = yaml.safe_load(f)
+            gen_calls, test_calls = [], []
 
-            with (
-                patch('package.utils.flutter_tag', return_value=flutter['tag']),
-                patch('package.utils.engine_version', return_value='engine_revision_mock'),
-            ):
-                pkg = package.Package(
-                    root=str(root),
-                    arch='arm64',
-                    dart_version=flutter['dart_version'],
-                    framework_revision=flutter['framework_revision'],
-                    framework_commit_date=flutter['framework_commit_date'],
-                    devtools_version=flutter['devtools_version'],
-                    ndk_version=ndk.get('version', ''),
-                    compile_sdk=android['compile_sdk'],
-                    target_sdk=android['target_sdk'],
-                    **src,
+            def fake_gen(self_, name):
+                gen_calls.append(name)
+                return []
+
+            def fake_test(self_, name, dest_dir=None):
+                test_calls.append(name)
+                return None
+
+            for selector in ('manifest', ['post_install', 'manifest'], None, []):
+                del gen_calls[:]
+                del test_calls[:]
+                with (
+                    patch.object(package.Package, 'gen_resource_internal', fake_gen),
+                    patch.object(package.Package, 'test_resource_internal', fake_test),
+                ):
+                    list(pkg.gen_resource(selector))
+                    list(pkg.test_resource(selector))
+
+                self.assertEqual(gen_calls, test_calls)
+                self.assertEqual(
+                    gen_calls,
+                    package.ResourceDispatcher(pkg.resource).names(selector),
                 )
+
+            with self.assertRaises(ValueError):
+                list(pkg.gen_resource({'x': 1}))
+
+            # Equal inputs must produce equal output: selecting by name, by a
+            # one-element list, or repeating the call yields the same items.
+            # ``artifacts`` carries a ``define:`` block, so repeating it also
+            # proves generation never mutates the loaded YAML.
+            for name in ('manifest', 'post_install', 'artifacts'):
+                by_name = list(pkg.gen_resource(name))
+                self.assertEqual(by_name, list(pkg.gen_resource([name])))
+                self.assertEqual(by_name, list(pkg.gen_resource(name)))
+
+    def test_package_ships_flutter_project_config(self):
+        """README and termux_smoke.sh probe $PREFIX/share/flutter/
+        flutter_project_config.sh, so the deb must ship that exact script
+        (executable) or the documented configure flow is absent after install."""
+        with open(Path(__file__).parent / 'package.yaml', encoding='utf-8') as f:
+            src = yaml.safe_load(f)
+
+        res = src['resource']
+        self.assertIn('flutter_project_config', res)
+        self.assertEqual(
+            res['flutter_project_config']['source'],
+            'scripts/install/flutter_project_config.sh',
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            pkg = self._make_package(root)
+
+            items = list(pkg.gen_resource('flutter_project_config'))
+
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(
+            str(item['out']),
+            'data/data/com.termux/files/usr/share/flutter/flutter_project_config.sh',
+        )
+        self.assertEqual(item['mod'], 0o755)
+        expected = (
+            Path(__file__).parent / 'scripts' / 'install' / 'flutter_project_config.sh'
+        ).read_bytes()
+        self.assertEqual(Path(item['src']).read_bytes(), expected)
+
+    def test_tar_ships_ancestor_dirs_for_file_outputs(self):
+        """dpkg does not create missing parent dirs, so the data tar must
+        carry explicit directory entries for share/flutter (issue #26)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'flutter')
+            pkg = self._make_package(root)
 
             items = list(pkg.gen_resource(['manifest', 'post_install']))
             data_tar = Path(tmp, 'data.tar.xz')
@@ -721,6 +944,15 @@ class RecordDecoratorTest(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             boom()
+
+    def test_engine_version_strips_trailing_newline(self):
+        import utils
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'bin' / 'internal').mkdir(parents=True)
+            (root / 'bin' / 'internal' / 'engine.version').write_text('b8800d0f\n')
+            self.assertEqual(utils.engine_version(str(root)), 'b8800d0f')
 
 
 class ReleaseNotesTest(unittest.TestCase):
@@ -823,6 +1055,48 @@ class ReleasePinSyncTest(unittest.TestCase):
             text = (root / 'scripts/install/versions_common.sh').read_text()
             self.assertIn(other, text)
 
+    def test_doc_hash_sync_leaves_unrelated_hex_on_sha_lines(self):
+        sha = 'd' * 64
+        unrelated = 'a' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, {
+                'docs/guides/BUILD_GUIDE.md': (
+                    '| SHA256 | `' + '0' * 64 + '` |\n'
+                    'The sysroot SHA256 digest ' + unrelated + ' is not a release pin.\n'
+                    '# output matches ' + unrelated + ' but is prose.\n'
+                ),
+            })
+            self.sync.sync_pins(root, sha, 610124104, '3.47.7', '5')
+            guide = (root / 'docs/guides/BUILD_GUIDE.md').read_text()
+            self.assertIn('| SHA256 | `' + sha + '` |', guide)
+            self.assertEqual(guide.count(unrelated), 2)
+
+    def test_doc_hash_sync_refreshes_every_documented_pin_field(self):
+        sha = 'd' * 64
+        zero = '0' * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, {
+                'docs/guides/BUILD_GUIDE.md': '| SHA256 | `' + zero + '` |\n',
+                'docs/guides/INSTALL_GUIDE.md': (
+                    '| SHA256 | `' + zero + '` |\n'
+                    '# Confirm the output matches: ' + zero + '\n'
+                ),
+                'docs/releases/RELEASE_NOTES.md': '| SHA256 | `' + zero + '` |\n',
+                'docs/CI_CD.md': (
+                    'expected_sha256: ' + zero + '\n'
+                    '  -ExpectedSha256 "' + zero + '"\n'
+                ),
+            })
+            changed = self.sync.sync_pins(root, sha, 610124104, '3.47.7', '5')
+            self.assertEqual(changed, [
+                'docs/CI_CD.md',
+                'docs/guides/BUILD_GUIDE.md',
+                'docs/guides/INSTALL_GUIDE.md',
+                'docs/releases/RELEASE_NOTES.md',
+            ])
+            for rel in changed:
+                self.assertNotIn(zero, (root / rel).read_text(encoding='utf-8'))
+
     def test_rejects_malformed_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -830,6 +1104,484 @@ class ReleasePinSyncTest(unittest.TestCase):
                 self.sync.sync_pins(root, 'not-a-hash', 610124104, '3.47.6', '1')
             with self.assertRaises(SystemExit):
                 self.sync.sync_pins(root, 'd' * 64, 0, '3.47.6', '1')
+
+    def test_doc_hash_fields_still_match_the_shipped_docs(self):
+        """Every whitelisted pin field must match a real line in the shipped doc.
+
+        A doc reformat that moves or renames one of these lines would silently
+        stop the pin from being refreshed, and no other gate notices: build.toml
+        carries no ``sha256``, so check_version_drift.py skips its guide SHA
+        comparison. This reads the real files on purpose, so a reformat fails.
+        """
+        root = Path(__file__).parent
+        self.assertLessEqual(
+            set(self.sync.DOC_HASH_FIELDS),
+            set(self.sync.DOC_FILES),
+            'DOC_HASH_FIELDS keys must all be pin-synced DOC_FILES',
+        )
+        for rel, fields in self.sync.DOC_HASH_FIELDS.items():
+            with self.subTest(file=rel):
+                self.assertTrue(fields, f'{rel}: no pin field declared')
+                text = (root / rel).read_text(encoding='utf-8')
+                for pattern, _template in fields:
+                    self.assertRegex(text, pattern, f'{rel}: pin field pattern matched no line')
+
+
+class ReleaseVerificationTest(unittest.TestCase):
+    """Contract tests for scripts/ci/verify_release_asset.py strict verification.
+
+    A ``.deb`` build publishes five required companions (checksum, size,
+    inventory, build metadata, build evidence), while ``device_smoke_evidence.json``
+    is only produced by the separate, manual ``device-smoke.yml`` workflow. Its
+    absence must therefore not downgrade verification to the single-asset path,
+    and when it is present it must still be validated fail-closed.
+    """
+
+    NAME = 'flutter_1.2.3-5_aarch64.deb'
+    COMMIT = 'c' * 40
+    TREE = 'd' * 40
+    INVENTORY_TEXT = '\n'.join(
+        f'-rw-r--r-- root/root {1000 + i} 2026-01-01 00:00 ./usr/lib/libflutter{i:02d}.so'
+        for i in range(12)
+    ) + '\n'
+
+    def setUp(self):
+        self.verify = _load_ci_script('verify_release_asset.py')
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._cwd = os.getcwd()
+        os.chdir(self._tmp.name)
+        self.addCleanup(os.chdir, self._cwd)
+        # Companion names are derived by production, never copied here.
+        self.required_companions = self.verify.required_aux_asset_names(self.NAME)
+
+    def _declared_manifest(self, sha=_DEB_SHA, size=_DEB_SIZE):
+        return (
+            '[flutter]\n'
+            "tag = '1.2.3'\n"
+            f"sha256 = '{sha}'\n"
+            f'size = {size}\n'
+            '[package]\n'
+            "pkg_rel = '5'\n"
+        )
+
+    def _real_manifest_without_hash(self):
+        """Production manifest shape with any sha256/size stripped.
+
+        Rebuilt from the shipped build.toml so the tag, asset name, and package
+        revision cannot drift from production. The hash/size keys (absent in
+        production today) are removed defensively so this fixture always drives
+        the manifest-silent strict path.
+        """
+        config = tomllib.loads((Path(__file__).parent / 'build.toml').read_text(encoding='utf-8'))
+        flutter = {k: v for k, v in config['flutter'].items() if k not in ('sha256', 'size')}
+        pkg_rel = config['package']['pkg_rel']
+        lines = ['[flutter]']
+        lines += [f'{key} = {json.dumps(value)}' for key, value in flutter.items()]
+        lines += ['[package]', f'pkg_rel = {json.dumps(pkg_rel)}']
+        return '\n'.join(lines) + '\n'
+
+    def _real_deb(self):
+        """Build a real fixture .deb and return ``(deb_bytes, matching_inventory)``.
+
+        The inventory is generated by the module's own ``extract_deb_member_paths``
+        so both the pass and mismatch cross-check cases exercise the real parser
+        instead of a mocked return value.
+        """
+        deb_bytes = _build_deb([
+            (f'./usr/lib/libflutter{i:02d}.so', b'x' * (1000 + i)) for i in range(12)
+        ])
+        deb_path = Path(self._tmp.name) / 'fixture.deb'
+        deb_path.write_bytes(deb_bytes)
+        entries = self.verify.extract_deb_member_paths(str(deb_path))
+        return deb_bytes, '\n'.join(entries) + '\n'
+
+    def _resolve_digest(self, api_digest, deb_sha):
+        if api_digest is None or api_digest == 'absent':
+            return ''
+        if api_digest == 'match':
+            return f'sha256:{deb_sha}'
+        if api_digest == 'mismatch':
+            return 'sha256:' + '0' * 64
+        if isinstance(api_digest, str) and ':' in api_digest:
+            return api_digest.lower()
+        raise ValueError(
+            f"unrecognized api_digest shorthand {api_digest!r}; pass None, 'match', "
+            "'mismatch', or a literal '<algo>:<hex>' digest string"
+        )
+
+    def _run_verifier(self, *, include_smoke, run_path='.github/workflows/build-deb.yml', run_artifacts=None, smoke_status='passed', manifest_text=None,
+                      api_digest='match', companion_sha=None, metadata_sha=None,
+                      deb_bytes=None, download_bytes=None, inventory_text=None,
+                      patch_extractor=True):
+        manifest_text = self._declared_manifest() if manifest_text is None else manifest_text
+        deb_bytes = _DEB_BYTES if deb_bytes is None else deb_bytes
+        download_bytes = deb_bytes if download_bytes is None else download_bytes
+        deb_sha = hashlib.sha256(deb_bytes).hexdigest()
+        deb_size = len(deb_bytes)
+        companion_sha = deb_sha if companion_sha is None else companion_sha
+        metadata_sha = deb_sha if metadata_sha is None else metadata_sha
+        inventory_text = self.INVENTORY_TEXT if inventory_text is None else inventory_text
+
+        config = tomllib.loads(manifest_text)
+        _, version, name = self.verify.resolve_expected_asset(
+            config.get('flutter', {}), config.get('package', {})
+        )
+
+        Path('build.toml').write_text(manifest_text, encoding='utf-8')
+
+        companion_names = list(self.verify.required_aux_asset_names(name))
+        if include_smoke:
+            companion_names.extend(self.verify.optional_aux_asset_names())
+        digest = self._resolve_digest(api_digest, deb_sha)
+        assets = [
+            {
+                'name': asset_name,
+                'browser_download_url': f'https://example.test/{asset_name}',
+                'size': deb_size if asset_name == name else 1,
+                'digest': digest if asset_name == name else '',
+            }
+            for asset_name in [name, *companion_names]
+        ]
+
+        inventory_entries = self.verify.parse_inventory_entries(inventory_text)
+        payloads = {
+            '/releases/tags/': json.dumps({'assets': assets}).encode(),
+            '.sha256': (companion_sha + '\n').encode(),
+            '.size.txt': str(deb_size).encode(),
+            'inventory.txt': inventory_text.encode(),
+            'build_metadata.json': json.dumps({
+                'version': version,
+                'arch': 'aarch64',
+                'run_id': 42,
+                'build_number': 42,
+                'source_commit': self.COMMIT,
+                'tree_sha': self.TREE,
+                'sha256': metadata_sha,
+                'size_bytes': deb_size,
+                'build_duration_seconds': 12.5,
+            }).encode(),
+            'build_evidence.json': json.dumps({
+                'type': 'build_evidence',
+                'version': version,
+                'arch': 'aarch64',
+                'run_id': 42,
+                'build_number': 42,
+                'source_commit': self.COMMIT,
+                'tree_sha': self.TREE,
+                'deb_sha256': deb_sha,
+                'deb_size_bytes': deb_size,
+                'inventory_file_count': len(inventory_entries),
+                'build_duration_seconds': 12.5,
+            }).encode(),
+            'device_smoke_evidence.json': json.dumps({
+                'status': smoke_status,
+                'mode_a_status': 'passed',
+                'mode_b_status': 'passed',
+                'artifact_source_commit': self.COMMIT,
+                'verifier_commit': self.COMMIT,
+                'build_run_id': 42,
+                'artifacts': {
+                    'deb_sha256': deb_sha,
+                    'deb_size': deb_size,
+                    'apk_sha256': 'a' * 64,
+                    'apk_size': 1024,
+                    'aab_sha256': 'b' * 64,
+                    'aab_size': 2048,
+                },
+            }).encode(),
+        }
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w') as archive:
+            archive.writestr('flutter_aarch64.deb', deb_bytes)
+        zip_bytes = zip_buffer.getvalue()
+
+        def fake_urlopen(req, *args, **kwargs):
+            url = getattr(req, 'full_url', str(req))
+            if '/git/commits/' in url:
+                return _FakeHttpResponse(json.dumps({'tree': {'sha': self.TREE}}).encode())
+            if '/compare/' in url:
+                return _FakeHttpResponse(json.dumps({
+                    'behind_by': 0, 'ahead_by': 0, 'status': 'identical', 'files': [],
+                }).encode())
+            if url.endswith('/zip'):
+                return _FakeHttpResponse(zip_bytes)
+            if url.endswith('/artifacts'):
+                payload_artifacts = (
+                    [{'name': name, 'id': 7, 'expired': False}]
+                    if run_artifacts is None
+                    else run_artifacts
+                )
+                return _FakeHttpResponse(json.dumps({
+                    'artifacts': payload_artifacts,
+                }).encode())
+            if '/actions/runs/' in url:
+                return _FakeHttpResponse(json.dumps({
+                    'head_sha': self.COMMIT,
+                    'conclusion': 'success',
+                    'path': run_path,
+                    'run_number': 42,
+                }).encode())
+            for marker, payload in payloads.items():
+                if marker in url:
+                    return _FakeHttpResponse(payload)
+            raise AssertionError(f'unexpected url: {url}')
+
+        def fake_urlretrieve(url, path):
+            Path(path).write_bytes(download_bytes)
+            return str(path), None
+
+        out = io.StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict(os.environ, {'RUNNER_TEMP': self._tmp.name}, clear=True))
+            stack.enter_context(patch.object(self.verify.urllib.request, 'urlopen', fake_urlopen))
+            stack.enter_context(patch.object(self.verify.urllib.request, 'urlretrieve', fake_urlretrieve))
+            if patch_extractor:
+                stack.enter_context(patch.object(
+                    self.verify,
+                    'extract_deb_member_paths',
+                    return_value=inventory_entries,
+                ))
+            stack.enter_context(redirect_stdout(out))
+            try:
+                self.verify.main()
+            except SystemExit as exc:
+                code = exc.code if exc.code is not None else 0
+            else:
+                code = 0
+        return code, out.getvalue()
+
+    def test_build_companions_alone_reach_strict_verification(self):
+        code, out = self._run_verifier(include_smoke=False)
+
+        self.assertEqual(code, 0)
+        self.assertNotIn('single-asset', out)
+        for name in self.required_companions:
+            self.assertIn(f'Found companion asset: {name}', out)
+        self.assertIn('device_smoke_evidence.json absent', out)
+
+    def test_harness_uses_production_asset_and_companion_derivation(self):
+        # Guard against the harness re-implementing production naming: the
+        # exported helpers must derive the declared fixture's names.
+        _, version, name = self.verify.resolve_expected_asset({'tag': '1.2.3'}, {'pkg_rel': '5'})
+        self.assertEqual(version, '1.2.3-5')
+        self.assertEqual(name, self.NAME)
+        self.assertEqual(
+            self.verify.required_aux_asset_names(name),
+            (f'{self.NAME}.sha256', f'{self.NAME}.size.txt', 'inventory.txt',
+             'build_metadata.json', 'build_evidence.json'),
+        )
+        self.assertEqual(self.verify.optional_aux_asset_names(), ('device_smoke_evidence.json',))
+
+    def test_publisher_workflows_constant_covers_both_builders(self):
+        # Production derives the accepted publishers from this constant; pin it
+        # so dropping build.yml (the hosted sole publisher) fails loudly.
+        self.assertEqual(
+            self.verify.RELEASE_PUBLISHER_WORKFLOWS,
+            ('.github/workflows/build.yml', '.github/workflows/build-deb.yml'),
+        )
+        self.assertEqual(
+            self.verify.ARTIFACT_CROSSCHECK_WORKFLOW, '.github/workflows/build-deb.yml'
+        )
+
+    def test_build_yml_publisher_passes_without_matching_artifact(self):
+        # build.yml attaches assets via softprops/action-gh-release and uploads
+        # no flutter-termux-* artifact, so strict verification must accept it and
+        # skip the byte-for-byte artifact cross-check instead of failing.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/build.yml',
+            run_artifacts=[{'name': 'engine-build-logs', 'id': 9, 'expired': False}],
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('on .github/workflows/build.yml', out)
+        self.assertIn('published without a matching run artifact', out)
+        self.assertNotIn('do not match expected release package patterns', out)
+
+    def test_build_yml_publisher_cross_checks_when_artifact_present(self):
+        # If the hosted publisher happens to expose a matching run artifact, the
+        # byte-for-byte cross-check still runs: the branch keys off the artifact,
+        # not the workflow path.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/build.yml',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('cryptographically matches release deb', out)
+
+    def test_unknown_publisher_workflow_is_rejected(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/evil.yml',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('workflow path mismatch', out)
+        self.assertIn('.github/workflows/build.yml', out)
+        self.assertIn('.github/workflows/build-deb.yml', out)
+
+    def test_build_deb_publisher_requires_matching_artifact(self):
+        # build-deb.yml always uploads the deb artifact, so a missing match there
+        # stays a hard failure rather than being silently downgraded.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/build-deb.yml',
+            run_artifacts=[{'name': 'engine-build-logs', 'id': 9, 'expired': False}],
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('do not match expected release package patterns', out)
+
+    def test_smoke_evidence_is_validated_when_present(self):
+        code, out = self._run_verifier(include_smoke=True)
+
+        self.assertEqual(code, 0)
+        self.assertIn('Verified device_smoke_evidence.json full schema', out)
+
+    def test_failing_smoke_evidence_is_rejected_when_present(self):
+        code, out = self._run_verifier(include_smoke=True, smoke_status='failed')
+
+        self.assertEqual(code, 1)
+        self.assertIn("device_smoke_evidence.json status is not 'passed'", out)
+
+    def test_manifest_without_sha256_cross_checks_present_sources(self):
+        # Production build.toml declares no sha256/size, and GitHub may omit the
+        # asset digest; the required companion .sha256 and build_metadata.json
+        # must still agree and the strict branch must not crash.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='absent',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertNotIn('single-asset', out)
+        self.assertIn('Manifest declares no sha256; cross-checking', out)
+        self.assertIn('platform attestation unavailable', out)
+        self.assertNotIn('GitHub digest mismatch', out)
+
+    def test_manifest_without_sha256_accepts_matching_api_digest(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='match',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('Hash sources agree (companion .sha256, build_metadata.json, GitHub digest)', out)
+
+    def test_manifest_without_sha256_rejects_mismatched_companion_hash(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            companion_sha='0' * 64,
+            metadata_sha=_DEB_SHA,
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Hash source mismatch! companion .sha256', out)
+
+    def test_manifest_without_sha256_rejects_mismatched_api_digest(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='mismatch',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Hash source mismatch! GitHub digest', out)
+
+    def test_manifest_without_sha256_ignores_non_sha256_digest(self):
+        # A present-but-non-sha256 digest must be ignored explicitly, not
+        # reported as absent, and must not fail verification on its own.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            api_digest='md5:' + '0' * 32,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('is not a sha256 digest and will be ignored', out)
+        self.assertNotIn('GitHub digest absent', out)
+
+    def test_manifest_without_sha256_rejects_malformed_companion_hash(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            companion_sha='not-a-valid-sha256',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('is not a valid 64-char sha256', out)
+
+    def test_manifest_without_sha256_rejects_malformed_metadata_hash(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            metadata_sha='zz',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn("build_metadata.json sha256 'zz' is not a valid 64-char hex hash", out)
+
+    def test_manifest_without_sha256_rejects_failed_smoke_evidence(self):
+        code, out = self._run_verifier(
+            include_smoke=True,
+            smoke_status='failed',
+            manifest_text=self._real_manifest_without_hash(),
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn("device_smoke_evidence.json status is not 'passed'", out)
+
+    def test_manifest_without_sha256_resolved_hash_gates_final_download(self):
+        # Correct companion/metadata hashes but tampered download bytes must fail
+        # the final local SHA256 check against the resolved hash.
+        corrupt = bytearray(_DEB_BYTES)
+        corrupt[0] ^= 0xFF
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            download_bytes=bytes(corrupt),
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Local SHA256 mismatch', out)
+
+    def test_harness_rejects_unknown_api_digest_shorthand(self):
+        with self.assertRaisesRegex(ValueError, 'unrecognized api_digest'):
+            self._run_verifier(include_smoke=False, api_digest='bogus')
+
+    def test_real_deb_inventory_cross_check_passes(self):
+        deb_bytes, inventory_text = self._real_deb()
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            deb_bytes=deb_bytes,
+            inventory_text=inventory_text,
+            patch_extractor=False,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('Inventory perfectly matches package contents', out)
+
+    def test_real_deb_inventory_cross_check_rejects_mismatch(self):
+        deb_bytes, inventory_text = self._real_deb()
+        # A format-valid but semantically wrong inventory entry must be rejected.
+        tampered = inventory_text.replace('libflutter00.so', 'libflutter99.so', 1)
+        code, out = self._run_verifier(
+            include_smoke=False,
+            manifest_text=self._real_manifest_without_hash(),
+            deb_bytes=deb_bytes,
+            inventory_text=tampered,
+            patch_extractor=False,
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('Semantic mismatch between inventory.txt', out)
 
 
 class SysrootLockTest(unittest.TestCase):
@@ -858,6 +1610,291 @@ class SysrootLockTest(unittest.TestCase):
                 pkg = entry['packages']['glib']
                 for field in ('name', 'version', 'url', 'sha256', 'size', 'archive_path', 'repo', 'dist'):
                     self.assertIn(field, pkg)
+
+
+class CiWorkflowContractTest(unittest.TestCase):
+    """The CI workflow must actually run the checks this plan wires in."""
+
+    def test_ci_runs_generate_versions_check(self):
+        path = Path(__file__).parent / '.github' / 'workflows' / 'ci.yml'
+        data = yaml.safe_load(path.read_text(encoding='utf-8'))
+        runs = [
+            step.get('run', '')
+            for job in data['jobs'].values()
+            for step in job.get('steps', [])
+        ]
+        self.assertTrue(
+            any('generate_versions.py --check' in run for run in runs),
+            'ci.yml has no generate_versions.py --check step',
+        )
+
+
+class VersionDriftCheckTest(unittest.TestCase):
+    """Unit cases for scripts/ci/check_version_drift.py issue-template scanning.
+
+    The package-version field is identified semantically (``id``/``label``), so
+    a bare semver in an unrelated field is neither reported nor rewritten.
+    """
+
+    # Minimal build.toml/build.py so run_checks() reaches the template scan:
+    # everything else in the fixture tree is deliberately absent.
+    _BUILD_TOML = (
+        "[flutter]\n"
+        "tag = '3.47.7'\n"
+        "dart_version = '3.13.5'\n"
+        "\n"
+        "[package]\n"
+        "pkg_rel = '5'\n"
+    )
+    _BUILD_PY = (
+        "class Build:\n"
+        "    def sync(self):\n"
+        "        self.version = self.dart_version\n"
+    )
+    _TEMPLATE = Path('.github') / 'ISSUE_TEMPLATE' / 'bug_report.yml'
+
+    def setUp(self):
+        self.drift = _load_ci_script('check_version_drift.py')
+
+    @staticmethod
+    def _field(field_id, label, placeholder, quote='"'):
+        return (
+            '- type: input\n'
+            f'  id: {field_id}\n'
+            '  attributes:\n'
+            f'    label: {label}\n'
+            f'    placeholder: {quote}{placeholder}{quote}\n'
+        )
+
+    def _version_field(self, placeholder, quote='"'):
+        return self._field('package_version', 'Flutter package version', placeholder, quote)
+
+    def _dart_field(self, placeholder):
+        return self._field('dart_version', 'Bundled Dart SDK', placeholder)
+
+    def _tree(self, tmp, body, name='bug_report.yml', with_template=True):
+        root = Path(tmp)
+        (root / 'build.toml').write_text(self._BUILD_TOML, encoding='utf-8')
+        (root / 'build.py').write_text(self._BUILD_PY, encoding='utf-8')
+        if with_template:
+            template = root / '.github' / 'ISSUE_TEMPLATE' / name
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text('body:\n' + body, encoding='utf-8')
+        return root
+
+    def test_stale_package_version_placeholder_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            errors = self.drift.run_checks(root)
+        self.assertEqual(errors, [
+            '.github/ISSUE_TEMPLATE/bug_report.yml: Flutter package version '
+            "placeholder mismatch: found '3.47.7-3', expected '3.47.7-5'"
+        ])
+
+    def test_different_tag_in_version_field_is_drift(self):
+        """A whole-tag change, not only a ``pkg_rel`` bump, is caught."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.40.0-9'))
+            errors = self.drift.run_checks(root)
+        self.assertEqual(errors, [
+            '.github/ISSUE_TEMPLATE/bug_report.yml: Flutter package version '
+            "placeholder mismatch: found '3.40.0-9', expected '3.47.7-5'"
+        ])
+
+    def test_different_tag_in_version_field_is_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.40.0-9'))
+            cfg = self.drift.load_build_config(root)
+            changed = self.drift.apply_version_autofix(cfg, root)
+            self.assertEqual(changed, ['.github/ISSUE_TEMPLATE/bug_report.yml'])
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: "3.47.7-5"', text)
+            self.assertNotIn('3.40.0', text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_current_package_version_placeholder_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-5'))
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_unrelated_bare_semver_in_other_field_is_ignored(self):
+        """The Dart SDK placeholder is a bare semver but not the version field."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._dart_field('3.13.5'))
+            self.assertEqual(self.drift.run_checks(root), [])
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(self.drift.apply_version_autofix(cfg, root), [])
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: "3.13.5"', text)
+
+    def test_unrelated_bare_semver_is_untouched_while_version_field_is_fixed(self):
+        body = self._version_field('3.47.7-3') + self._dart_field('3.13.5')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, body)
+            self.assertEqual(len(self.drift.run_checks(root)), 1)
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(
+                self.drift.apply_version_autofix(cfg, root),
+                ['.github/ISSUE_TEMPLATE/bug_report.yml'],
+            )
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: "3.47.7-5"', text)
+            self.assertIn('placeholder: "3.13.5"', text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_non_version_placeholders_are_ignored(self):
+        for placeholder in (
+            '0.118.3, aarch64',
+            'Pixel 7, Android 14',
+            'flutter build apk --release',
+            '3.47.7-3, built from source',
+            'flutter --version',
+        ):
+            with self.subTest(placeholder=placeholder), tempfile.TemporaryDirectory() as tmp:
+                root = self._tree(tmp, self._version_field(placeholder))
+                self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_unquoted_version_placeholder_is_checked_and_fixed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3', quote=''))
+            errors = self.drift.run_checks(root)
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn("found '3.47.7-3', expected '3.47.7-5'", errors[0])
+            cfg = self.drift.load_build_config(root)
+            self.drift.apply_version_autofix(cfg, root)
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn('placeholder: 3.47.7-5\n', text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_single_quoted_version_placeholder_keeps_its_quoting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3', quote="'"))
+            cfg = self.drift.load_build_config(root)
+            self.drift.apply_version_autofix(cfg, root)
+            text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertIn("placeholder: '3.47.7-5'", text)
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_autofix_rewrites_stale_placeholder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            cfg = self.drift.load_build_config(root)
+            changed = self.drift.apply_version_autofix(cfg, root)
+            self.assertEqual(changed, ['.github/ISSUE_TEMPLATE/bug_report.yml'])
+            template = root / self._TEMPLATE
+            self.assertIn('placeholder: "3.47.7-5"', template.read_text(encoding='utf-8'))
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_autofix_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(
+                self.drift.apply_version_autofix(cfg, root),
+                ['.github/ISSUE_TEMPLATE/bug_report.yml'],
+            )
+            after_first = (root / self._TEMPLATE).read_text(encoding='utf-8')
+            self.assertEqual(self.drift.apply_version_autofix(cfg, root), [])
+            self.assertEqual((root / self._TEMPLATE).read_text(encoding='utf-8'), after_first)
+
+    def test_yaml_extension_template_is_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'), name='bug_report.yaml')
+            self.assertEqual(len(self.drift.run_checks(root)), 1)
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(
+                self.drift.apply_version_autofix(cfg, root),
+                ['.github/ISSUE_TEMPLATE/bug_report.yaml'],
+            )
+
+    def test_missing_template_directory_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, '', with_template=False)
+            self.assertEqual(self.drift.issue_template_files(root), [])
+            self.assertEqual(self.drift.run_checks(root), [])
+
+    def test_malformed_template_yaml_is_reported_not_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, self._version_field('3.47.7-3'))
+            (root / self._TEMPLATE).write_text('body: [unclosed\n', encoding='utf-8')
+            errors = self.drift.run_checks(root)
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn('not valid YAML', errors[0])
+            # --fix must not traceback or mangle the unparseable file.
+            cfg = self.drift.load_build_config(root)
+            self.assertEqual(self.drift.apply_version_autofix(cfg, root), [])
+            self.assertEqual(
+                (root / self._TEMPLATE).read_text(encoding='utf-8'), 'body: [unclosed\n'
+            )
+
+    def test_expected_package_version_requires_a_tag(self):
+        self.assertEqual(self.drift.expected_package_version({'tag': '', 'pkg_rel': '5'}), '')
+        self.assertEqual(self.drift.expected_package_version({'tag': '3.47.7', 'pkg_rel': '5'}), '3.47.7-5')
+        self.assertEqual(self.drift.expected_package_version({'tag': '3.47.7'}), '3.47.7')
+
+    def test_shipped_template_matches_build_toml(self):
+        root = Path(__file__).parent
+        cfg = self.drift.load_build_config(root)
+        expected = self.drift.expected_package_version(cfg)
+        text = (root / self._TEMPLATE).read_text(encoding='utf-8')
+        field = next(
+            item for item in yaml.safe_load(text)['body'] if item.get('id') == 'package_version'
+        )
+        self.assertEqual(field['attributes']['placeholder'], expected)
+        self.assertEqual([e for e in self.drift.run_checks(root) if 'ISSUE_TEMPLATE' in e], [])
+
+
+class CheckRepoNdkHelperDriftTest(unittest.TestCase):
+    """Guard the two duplicated NDK backup/restore helpers (review finding 35).
+
+    ``install_flutter_complete.sh`` and ``scripts/install/post_install.sh`` both
+    ship a ``backup_ndk_file``/``restore_ndk_backups`` pair. They are
+    intentionally *different* implementations (the installer variant maps both
+    ``ANDROID_HOME`` and ``NDK_PATH`` and tracks absent preimages, while
+    ``post_install.sh`` maps ``ANDROID_SDK`` only), so the guard cannot demand
+    byte equality. It instead asserts the shared contract the two copies were
+    forked from: both function definitions exist and both copies keep the
+    ``ndk_backups/`` preimage directory plus the exact ``cp -a`` backup and
+    restore commands.
+    """
+
+    def _real_copies(self):
+        return {
+            rel: (Path(__file__).parent / rel).read_text(encoding='utf-8')
+            for rel in self.check_repo.NDK_HELPER_COPIES
+        }
+
+    def setUp(self):
+        self.check_repo = _load_ci_script('check_repo.py')
+
+    def test_real_copies_satisfy_the_shared_contract(self):
+        self.assertEqual(self.check_repo.ndk_helper_drift_messages(self._real_copies()), [])
+
+    def test_removing_each_required_function_from_each_copy_is_drift(self):
+        for rel in self.check_repo.NDK_HELPER_COPIES:
+            for name in self.check_repo.NDK_HELPER_FUNCTIONS:
+                with self.subTest(copy=rel, function=name):
+                    texts = self._real_copies()
+                    texts[rel] = texts[rel].replace(
+                        f'{name}() {{', f'{name}_renamed() {{'
+                    )
+                    messages = self.check_repo.ndk_helper_drift_messages(texts)
+                    self.assertTrue(messages, f'no drift reported for {rel}:{name}')
+                    self.assertTrue(
+                        any(rel in message for message in messages), messages
+                    )
+
+    def test_breaking_each_invariant_in_each_copy_is_drift(self):
+        for rel in self.check_repo.NDK_HELPER_COPIES:
+            for invariant in self.check_repo.NDK_HELPER_INVARIANTS:
+                with self.subTest(copy=rel, invariant=invariant):
+                    texts = self._real_copies()
+                    texts[rel] = texts[rel].replace(invariant, 'REPLACED-BY-TEST')
+                    messages = self.check_repo.ndk_helper_drift_messages(texts)
+                    self.assertTrue(messages, f'no drift reported for {rel}:{invariant}')
+                    self.assertTrue(
+                        any(rel in message for message in messages), messages
+                    )
 
 
 if __name__ == '__main__':

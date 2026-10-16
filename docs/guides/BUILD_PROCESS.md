@@ -110,7 +110,7 @@ python3 build.py build --arch=arm64 --mode=debug --jobs=24
 python3 build.py debuild --arch=arm64
 ```
 
-Output: `release/flutter_3.47.7-4_aarch64.deb`
+Output: `release/flutter_3.47.7-5_aarch64.deb`
 
 ---
 
@@ -191,7 +191,7 @@ error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbsta
 
 **Cause**: The sysroot contains both glibc and bionic headers
 
-**Current Status**: Building in debug mode is used as a workaround
+**Current Status**: Release mode is the shipped default — `build.toml [build] runtime = ['release']`, so the pipeline builds and packages release artifacts; debug/profile are opt-in via `--mode`
 
 **Future Fix Direction**: Clean up the sysroot and keep only the bionic headers
 
@@ -231,11 +231,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.47.7-4_aarch64.deb /sdcard/Download/
+adb push flutter_3.47.7-5_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.47.7-4_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.47.7-5_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -274,19 +274,19 @@ Confirm that the version numbers in the following files are consistent:
 - `install_flutter_complete.sh` - `FLUTTER_VERSION`
 - `scripts/install/install_termux_flutter.sh` - `FLUTTER_VERSION`
 - `README.md` - version badge and text
-- `package.yaml` - `Version: $tag`
+- `package.yaml` - `Version: $package_version`
 
 ### 2. Build Artifact
 
 ```bash
 # Final artifact location
-release/flutter_3.47.7-4_aarch64.deb
+release/flutter_3.47.7-5_aarch64.deb
 ```
 
 ### 3. Upload to GitHub Releases
 
 1. Create a new Release: `3.47.7`
-2. Upload the deb file: `flutter_3.47.7-4_aarch64.deb`
+2. Upload the deb file: `flutter_3.47.7-5_aarch64.deb`
 3. Fill in the Release Notes
 
 ### 4. Verify the One-Click Install Script

@@ -42,7 +42,7 @@ References:
 | Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` + `gate` (builds only when the `build.toml` tag has no published release yet) | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
 | Build deb (self-hosted) | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing (fallback) |
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
-| Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | release publish/edit, manual | Verify release asset name, size, and SHA256 digest |
+| Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | PR, release publish/edit, manual | Verify release asset name, size, and SHA256 digest (lightweight structural check on PRs) |
 
 The legacy `build.yml` GitHub-hosted build path was restored in favor of a
 modernized version: the old one depended on
@@ -140,6 +140,9 @@ then runs the same patched pipeline (see above) before uploading:
 - `flutter_3.47.7-4_aarch64.deb`
 - `flutter_3.47.7-4_aarch64.deb.sha256`
 - `flutter_3.47.7-4_aarch64.deb.size.txt`
+- `inventory.txt`
+- `build_metadata.json`
+- `build_evidence.json`
 
 ## Release policy
 
@@ -179,10 +182,11 @@ self-hosted **Build deb (self-hosted)** workflow instead.
 
 Manual workflow: **Device smoke (self-hosted)**
 
-Default input tests the published 3.47.7 release asset:
+The workflow tests a `build-deb` candidate artifact: it downloads the artifact by run id and name, then verifies the deb against the pinned SHA256 before running the smoke. The three required inputs are:
 
 ```text
-deb_url: https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-4_aarch64.deb
+artifact_run_id: <build-deb workflow run id>
+artifact_name: <uploaded artifact name>
 expected_sha256: 8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e
 ```
 
@@ -213,6 +217,7 @@ and polls `/sdcard/Download/termux_ci_smoke.txt` until `DONE` or timeout.
 Required success markers:
 
 ```text
+APT_REPAIR_STATUS=0
 INSTALL_STATUS=0
 POST_INSTALL_STATUS=0
 FLUTTER_VERSION_STATUS=0
@@ -220,11 +225,14 @@ DART_VERSION_STATUS=0
 DARTVM_VERSION_STATUS=0
 DOCTOR_STATUS=0
 CREATE_STATUS=0
+CONFIG_VERIFY_STATUS=0
 BUILD_APK_STATUS=0
 APK_MANIFEST_STATUS=0
 APK_RESOURCES_STATUS=0
 APK_COPY_STATUS=0
 BUILD_LINUX_STATUS=0
+BUILD_AAB_STATUS=0
+AAB_COPY_STATUS=0
 DONE
 ```
 
@@ -232,19 +240,27 @@ The workflow turns `svc power stayon` back off before exiting.
 
 ## Release check
 
-`release-check.yml` verifies release metadata from GitHub:
+`release-check.yml` runs on `pull_request`, `workflow_dispatch`, and `release`
+(published/edited) events, and verifies release metadata:
 
 - expected tag exists
 - expected asset exists
 - asset size is plausible
 - asset digest matches the expected SHA256 when GitHub exposes the digest
 
-This workflow is safe to run on GitHub-hosted runners because it only reads public release metadata.
+The PR path is lightweight: on `pull_request` the workflow sets
+`LIGHTWEIGHT_CHECK=1`, so `verify_release_asset.py` confirms the manifest
+resolves and the expected SHA256 is well-formed (validating a local asset if
+one is present) and skips the GitHub API lookup. The
+`release`/`workflow_dispatch` path performs the full API verification.
+
+This workflow is safe to run on GitHub-hosted runners because it only reads public release metadata (`permissions: contents: read, actions: read`).
 
 ## Security model
 
-- Fork PRs only get `ci.yml` on GitHub-hosted runners; `Build`/`Release check`
-  are `workflow_run`-guarded or `workflow_dispatch`-only.
+- Fork PRs get the GitHub-hosted `ci.yml` and `release-check.yml`, both
+  read-only (no publish credentials); `Build` is `workflow_run`-guarded or
+  `workflow_dispatch`-only.
 - Self-hosted `Build deb (self-hosted)`/`Device smoke` workflows are
   `workflow_dispatch` only.
 - Device smoke does not run untrusted PR code automatically.
@@ -255,8 +271,8 @@ This workflow is safe to run on GitHub-hosted runners because it only reads publ
 
 The repository governance rules for the `main` branch are codified in `.github/rulesets/main_protection_ruleset.json`:
 
-- **Pull Request Requirements**: Mandatory PR review and thread resolution before merge.
-- **Status Checks**: Strict status checks require `ci.yml` (Python/Shell/Actionlint sanity, contract validation, version drift checks) to pass cleanly before merging.
+- **Pull Request Requirements**: A PR is required and every review thread must be resolved before merge; approvals are **not** required (`required_approving_review_count: 0`, `required_review_thread_resolution: true`).
+- **Status Checks**: Strict status checks (`strict_required_status_checks_policy: true`) require the `Repository sanity` job (`ci.yml`) and the `Verify release metadata` job (`release-check.yml`) to pass before merging.
 - **History & Integrity**: Linear git history is enforced; force pushes (`non_fast_forward`) and branch deletion are blocked.
 - **Repository Hygiene**: Automated pre-merge checks prevent scratch artifacts, test caches, backups, and stage receipts from leaking into git tracking.
 
@@ -283,5 +299,9 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebUrl "https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-4_aarch64.deb"
+  -DebPath ".\candidate\flutter_3.47.7-4_aarch64.deb" `
+  -ExpectedSha256 "8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e"
 ```
+
+`-DebPath` is how `device-smoke.yml` invokes the script (via `$env:RESOLVED_DEB`,
+the artifact it just downloaded and hash-verified).
