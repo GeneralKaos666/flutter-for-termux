@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Shared library for Termux Flutter installers
 
 # Colors
@@ -28,7 +28,7 @@ source_versions_common() {
 
 source_versions_common || true
 export FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.7}"
-export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-4}"
+export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-5}"
 export RELEASE_TAG="${RELEASE_TAG:-3.47.7}"
 export EXPECTED_SHA256="${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e}}"
 export NDK_VERSION="${NDK_VERSION:-29.0.14206865}"

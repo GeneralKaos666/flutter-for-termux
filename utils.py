@@ -41,12 +41,12 @@ def flutter_tag(root: str):
         return None
 
 
-# TODO: see bin/internal/update_engine_version.sh
 def engine_version(root: str):
+    """Engine revision pinned by ``bin/internal/engine.version``."""
     root = os.path.join(root, 'bin/internal/engine.version')
 
     with open(root) as f:
-        return f.read()
+        return f.read().strip()
 
 
 def recordm(func):

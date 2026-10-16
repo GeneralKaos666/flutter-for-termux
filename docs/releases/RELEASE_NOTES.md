@@ -14,11 +14,24 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorp
 
 Installing `3.47.7-4` over `3.47.7-3` is a drop-in replacement — follow the [Install](#install) steps. If a previous attempt rolled back and removed the SDK, reinstall from scratch with the same commands.
 
+## Fixed in 3.47.7-5
+
+`3.47.7-5` is an installer, manifest, and packaging hardening revision. `3.47.7-5` fixes:
+
+- **Manifest.** The rendered `manifest.json` `engine_revision` no longer carries a trailing newline. The engine revision is now stripped when read, so the manifest is valid JSON and `post_install.sh`'s revision check matches instead of silently failing.
+- **Settings.** `~/.flutter_settings` is now always valid JSON. The old rewrite could append `"android-sdk"` after a trailing comma and produce a doubled comma; it now loads, updates, and rewrites the file as JSON (falling back to `cat` when `python3` is unavailable).
+- **Snapshot reporting.** Both `install_flutter_complete.sh` and the deb-shipped `post_install.sh` print the `✓ Dart SDK snapshots installed` banner only when the extracted snapshot actually exists. A checksum or unzip failure now reports a warning that the bundled snapshots are used, instead of a false success.
+- **Non-interactive installs.** `install_flutter_complete.sh` honours `--yes`/`--non-interactive` (and a non-TTY stdin) and no longer blocks on its continuation prompt; piped and scripted installs run to completion.
+- **Project config.** `flutter_project_config.sh` is now actually shipped in the deb (at `$PREFIX/share/flutter/flutter_project_config.sh`), so the per-project `compileSdk`/`targetSdk`/`abiFilters` configuration runs from the installed package instead of being missing.
+- **Artifact location.** The deb is emitted under `release/` instead of the repository root.
+
+Installing `3.47.7-5` over `3.47.7-4` is a drop-in replacement — follow the [Install](#install) steps.
+
 ## Package
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.7-4_aarch64.deb` |
+| Package | `flutter_3.47.7-5_aarch64.deb` |
 | Size | 607,509,252 bytes (~579 MiB) |
 | SHA256 | `8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e` |
 | Flutter | 3.47.7 |
@@ -31,8 +44,8 @@ Installing `3.47.7-4` over `3.47.7-3` is a drop-in replacement — follow the [I
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-4_aarch64.deb
-dpkg -i flutter_3.47.7-4_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-5_aarch64.deb
+dpkg -i flutter_3.47.7-5_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -73,7 +86,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 ### Technical Details
 
-- Build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`, `android_release_arm64/`, `android_profile_arm64/`
+- Build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/` (the engine has no `android_*` output directory)
 - Deb package size is ~588MB.
 
 ## Required per-project Android settings

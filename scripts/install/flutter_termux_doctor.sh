@@ -5,7 +5,6 @@
 set -u
 
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
-HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
 USER_NAME="$(whoami 2>/dev/null || echo "u0_a0")"
 
 # Colors

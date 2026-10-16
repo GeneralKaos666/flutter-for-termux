@@ -1,6 +1,6 @@
 # Termux Flutter 3.47.7 Installation Guide
 
-This guide covers `flutter_3.47.7-4_aarch64.deb`, targeting the following on ARM64 Termux:
+This guide covers `flutter_3.47.7-5_aarch64.deb`, targeting the following on ARM64 Termux:
 
 - `flutter doctor -v`
 - `flutter create`
@@ -46,11 +46,11 @@ pkg update -y
 pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
 
 cd ~
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-4_aarch64.deb
-sha256sum flutter_3.47.7-4_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-5_aarch64.deb
+sha256sum flutter_3.47.7-5_aarch64.deb
 # Confirm the output matches: 8f399d6c4a2a5e77008a0f68763a829f8b86578acad50837033774ce3fcf582e
 
-dpkg -i flutter_3.47.7-4_aarch64.deb
+dpkg -i flutter_3.47.7-5_aarch64.deb
 apt --fix-broken install -y
 
 # Required: dpkg only installs files; this step patches the Termux runtime.

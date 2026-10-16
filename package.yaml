@@ -182,3 +182,10 @@ resource:
     source: scripts/install/post_install.sh
     output: $prefix/share/flutter/post_install.sh
     mode: 0o755
+
+  flutter_project_config:
+    # Ships the per-project configurator probed by README and termux_smoke.sh
+    # at $PREFIX/share/flutter/flutter_project_config.sh after `dpkg -i`.
+    source: scripts/install/flutter_project_config.sh
+    output: $prefix/share/flutter/flutter_project_config.sh
+    mode: 0o755

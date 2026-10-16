@@ -65,7 +65,7 @@ class Build:
         gclient = cfg['build'].get('gclient')
         sysroot_cfg = dict(cfg['sysroot'])
         syspath = sysroot_cfg.pop('path')
-        package = cfg['package'].get('conf')
+        package_conf = cfg['package'].get('conf')
         release = cfg['package'].get('path')
         pkg_rel = str(cfg['package'].get('pkg_rel') or '').strip()
         patches = cfg.get('patch')
@@ -75,7 +75,6 @@ class Build:
         if not tag:
             raise ValueError('require flutter tag')
 
-        # TODO: check parameters
         self.tag = tag
         self.pkg_rel = pkg_rel
         self.package_version = f'{self.tag}-{self.pkg_rel}' if self.pkg_rel else self.tag
@@ -88,7 +87,6 @@ class Build:
         self.target_sdk = cfg['android'].get('target_sdk')
         self.api = api or 26
         self.conf = conf
-        # TODO: detect host
         self.host = 'linux-x86_64'
         self.repo = repo or 'https://github.com/flutter/flutter'
         self.arch = arch or 'arm64'
@@ -96,13 +94,19 @@ class Build:
         self.sysroot = Sysroot(path=path/syspath, **sysroot_cfg)
         self.root = path/root
         self.gclient = path/gclient
+        if not release:
+            raise ValueError(f'bad release path: "{release}"')
         self.release = path/release
         self.toolchain = Path(ndk, f'toolchains/llvm/prebuilt/{self.host}')
 
-        if not self.release.parent.is_dir():
+        # output() creates the release directory on demand, so a missing
+        # directory is not an error. Reject only a path that resolves to the
+        # repo root (the old `path = '.'` default), which would silently drop
+        # the deb into the source tree.
+        if self.release.resolve() == path.resolve():
             raise ValueError(f'bad release path: "{release}"')
 
-        with open(path/package, 'rb') as f:
+        with open(path/package_conf, 'rb') as f:
             self.package = yaml.safe_load(f)
 
         if isinstance(patches, dict):
@@ -147,6 +151,7 @@ class Build:
             raise RuntimeError('\n'.join(progress.error_lines))
 
     def sync(self, *, cfg: str = None, root: str = None):
+        require_tools('gclient')
         cfg = cfg or self.gclient
         src = root or self.root
 
@@ -224,6 +229,7 @@ class Build:
         subprocess.run(cmd, cwd=root, check=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
+        require_tools('ninja')
         root = root or self.root
         cmd = [
             'ninja', '-C', utils.target_output(root, arch, mode),
@@ -240,34 +246,35 @@ class Build:
         subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
-        conf = conf or self.package
-        root = root or self.root
+        conf = {**(conf or self.package), 'root': root or self.root, 'arch': arch}
         output = output or self.output(arch)
 
-        pkg = Package(
-            root=root,
-            arch=arch,
-            dart_version=self.dart_version,
-            framework_revision=self.framework_revision,
-            framework_commit_date=self.framework_commit_date,
-            devtools_version=self.devtools_version,
-            ndk_version=self.ndk_version,
-            compile_sdk=self.compile_sdk,
-            target_sdk=self.target_sdk,
-            package_version=self.package_version,
-            **conf)
+        pkg = Package(**conf, **self.metadata())
         pkg.debuild(output=output)
 
     def output(self, arch: str):
-        if self.release.is_dir():
-            name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
-            return self.release/name
-        else:
-            return self.release
+        self.release.mkdir(parents=True, exist_ok=True)
+        name = f'flutter_{self.package_version}_{utils.termux_arch(arch)}.deb'
+        return self.release/name
 
-    # TODO: check gclient and ninja existence
+    def metadata(self):
+        """Bundled release metadata passed to :class:`Package`.
+
+        Keys are byte-identical to the values previously splatted at the
+        ``debuild`` call site.
+        """
+        return {
+            'dart_version': self.dart_version,
+            'framework_revision': self.framework_revision,
+            'framework_commit_date': self.framework_commit_date,
+            'devtools_version': self.devtools_version,
+            'ndk_version': self.ndk_version,
+            'compile_sdk': self.compile_sdk,
+            'target_sdk': self.target_sdk,
+            'package_version': self.package_version,
+        }
+
     def __call__(self):
-        require_tools('gclient', 'ninja')
         self.config()
         self.clone()
         self.sync()
