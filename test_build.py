@@ -1210,7 +1210,7 @@ class ReleaseVerificationTest(unittest.TestCase):
             "'mismatch', or a literal '<algo>:<hex>' digest string"
         )
 
-    def _run_verifier(self, *, include_smoke, smoke_status='passed', manifest_text=None,
+    def _run_verifier(self, *, include_smoke, run_path='.github/workflows/build-deb.yml', run_artifacts=None, smoke_status='passed', manifest_text=None,
                       api_digest='match', companion_sha=None, metadata_sha=None,
                       deb_bytes=None, download_bytes=None, inventory_text=None,
                       patch_extractor=True):
@@ -1308,14 +1308,19 @@ class ReleaseVerificationTest(unittest.TestCase):
             if url.endswith('/zip'):
                 return _FakeHttpResponse(zip_bytes)
             if url.endswith('/artifacts'):
+                payload_artifacts = (
+                    [{'name': name, 'id': 7, 'expired': False}]
+                    if run_artifacts is None
+                    else run_artifacts
+                )
                 return _FakeHttpResponse(json.dumps({
-                    'artifacts': [{'name': name, 'id': 7, 'expired': False}],
+                    'artifacts': payload_artifacts,
                 }).encode())
             if '/actions/runs/' in url:
                 return _FakeHttpResponse(json.dumps({
                     'head_sha': self.COMMIT,
                     'conclusion': 'success',
-                    'path': '.github/workflows/build-deb.yml',
+                    'path': run_path,
                     'run_number': 42,
                 }).encode())
             for marker, payload in payloads.items():
@@ -1368,6 +1373,67 @@ class ReleaseVerificationTest(unittest.TestCase):
              'build_metadata.json', 'build_evidence.json'),
         )
         self.assertEqual(self.verify.optional_aux_asset_names(), ('device_smoke_evidence.json',))
+
+    def test_publisher_workflows_constant_covers_both_builders(self):
+        # Production derives the accepted publishers from this constant; pin it
+        # so dropping build.yml (the hosted sole publisher) fails loudly.
+        self.assertEqual(
+            self.verify.RELEASE_PUBLISHER_WORKFLOWS,
+            ('.github/workflows/build.yml', '.github/workflows/build-deb.yml'),
+        )
+        self.assertEqual(
+            self.verify.ARTIFACT_CROSSCHECK_WORKFLOW, '.github/workflows/build-deb.yml'
+        )
+
+    def test_build_yml_publisher_passes_without_matching_artifact(self):
+        # build.yml attaches assets via softprops/action-gh-release and uploads
+        # no flutter-termux-* artifact, so strict verification must accept it and
+        # skip the byte-for-byte artifact cross-check instead of failing.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/build.yml',
+            run_artifacts=[{'name': 'engine-build-logs', 'id': 9, 'expired': False}],
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('on .github/workflows/build.yml', out)
+        self.assertIn('published without a matching run artifact', out)
+        self.assertNotIn('do not match expected release package patterns', out)
+
+    def test_build_yml_publisher_cross_checks_when_artifact_present(self):
+        # If the hosted publisher happens to expose a matching run artifact, the
+        # byte-for-byte cross-check still runs: the branch keys off the artifact,
+        # not the workflow path.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/build.yml',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('cryptographically matches release deb', out)
+
+    def test_unknown_publisher_workflow_is_rejected(self):
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/evil.yml',
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('workflow path mismatch', out)
+        self.assertIn('.github/workflows/build.yml', out)
+        self.assertIn('.github/workflows/build-deb.yml', out)
+
+    def test_build_deb_publisher_requires_matching_artifact(self):
+        # build-deb.yml always uploads the deb artifact, so a missing match there
+        # stays a hard failure rather than being silently downgraded.
+        code, out = self._run_verifier(
+            include_smoke=False,
+            run_path='.github/workflows/build-deb.yml',
+            run_artifacts=[{'name': 'engine-build-logs', 'id': 9, 'expired': False}],
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn('do not match expected release package patterns', out)
 
     def test_smoke_evidence_is_validated_when_present(self):
         code, out = self._run_verifier(include_smoke=True)
