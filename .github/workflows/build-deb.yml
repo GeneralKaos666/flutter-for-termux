@@ -100,7 +100,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
 
           INPUT_VERSION="$INPUT_FLUTTER_VERSION"
-          TOML_VERSION=$(grep '^tag *=' build.toml | sed -E "s/tag *= *'([^']+)'/\1/")
+          TOML_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('build.toml','rb'))['flutter']['tag'])")
 
           if [ -z "$TOML_VERSION" ]; then
             echo "Failed to parse flutter version from build.toml" >&2
