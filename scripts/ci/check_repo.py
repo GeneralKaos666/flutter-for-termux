@@ -48,6 +48,22 @@ REQUIRED_DOCS = [
     "docs/releases/RELEASE_NOTES.md",
 ]
 
+# The installer and the on-device post-install patch both ship a copy of the NDK
+# backup/restore helpers. They are intentionally different implementations (the
+# installer maps ANDROID_HOME/NDK_PATH and tracks absent preimages; post_install
+# maps ANDROID_SDK only), so CI cannot demand byte equality -- it asserts the
+# shared contract the two copies were forked from instead.
+NDK_HELPER_FUNCTIONS = ("backup_ndk_file", "restore_ndk_backups")
+NDK_HELPER_INVARIANTS = (
+    "ndk_backups/",
+    'cp -a "$file" "$backup_target" 2>/dev/null || true',
+    'cp -a "$rel" "$dest" 2>/dev/null || true',
+)
+NDK_HELPER_COPIES = (
+    "install_flutter_complete.sh",
+    "scripts/install/post_install.sh",
+)
+
 
 def fail(message: str) -> None:
     ERRORS.append(message)
@@ -317,6 +333,35 @@ def check_installer_contract() -> None:
         fail("install_flutter_complete.sh still references removed NDK r27 downloads")
 
 
+def ndk_helper_drift_messages(texts: dict[str, str]) -> list[str]:
+    """Return drift messages for the duplicated NDK backup/restore helpers.
+
+    ``texts`` maps a copy path to its file contents; empty means the copies still
+    satisfy the shared contract. The two copies are deliberately different, so
+    only the shared contract is checked: each copy must define every entry in
+    ``NDK_HELPER_FUNCTIONS`` and keep every entry in ``NDK_HELPER_INVARIANTS``.
+    """
+    messages: list[str] = []
+    for path in NDK_HELPER_COPIES:
+        text = texts.get(path, "")
+        for name in NDK_HELPER_FUNCTIONS:
+            if f"{name}() {{" not in text:
+                messages.append(f"{path}: missing NDK helper definition {name}()")
+        for invariant in NDK_HELPER_INVARIANTS:
+            if invariant not in text:
+                messages.append(
+                    f"{path}: NDK helper drifted from the shared contract, missing: {invariant}"
+                )
+    return messages
+
+
+def check_ndk_helper_drift() -> None:
+    """Cross-check the two duplicated NDK helpers against their shared contract."""
+    texts = {path: read(path) for path in NDK_HELPER_COPIES}
+    for message in ndk_helper_drift_messages(texts):
+        fail(message)
+
+
 def check_ci_layout() -> None:
     for path in [
         ".github/workflows/ci.yml",
@@ -471,6 +516,7 @@ def main() -> int:
     check_yaml_files()
     check_post_install_contract()
     check_installer_contract()
+    check_ndk_helper_drift()
     check_version_drift_contract()
     check_sysroot_lock_contract()
     check_script_headers()

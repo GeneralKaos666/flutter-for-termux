@@ -1778,5 +1778,58 @@ class VersionDriftCheckTest(unittest.TestCase):
         self.assertEqual([e for e in self.drift.run_checks(root) if 'ISSUE_TEMPLATE' in e], [])
 
 
+class CheckRepoNdkHelperDriftTest(unittest.TestCase):
+    """Guard the two duplicated NDK backup/restore helpers (review finding 35).
+
+    ``install_flutter_complete.sh`` and ``scripts/install/post_install.sh`` both
+    ship a ``backup_ndk_file``/``restore_ndk_backups`` pair. They are
+    intentionally *different* implementations (the installer variant maps both
+    ``ANDROID_HOME`` and ``NDK_PATH`` and tracks absent preimages, while
+    ``post_install.sh`` maps ``ANDROID_SDK`` only), so the guard cannot demand
+    byte equality. It instead asserts the shared contract the two copies were
+    forked from: both function definitions exist and both copies keep the
+    ``ndk_backups/`` preimage directory plus the exact ``cp -a`` backup and
+    restore commands.
+    """
+
+    def _real_copies(self):
+        return {
+            rel: (Path(__file__).parent / rel).read_text(encoding='utf-8')
+            for rel in self.check_repo.NDK_HELPER_COPIES
+        }
+
+    def setUp(self):
+        self.check_repo = _load_ci_script('check_repo.py')
+
+    def test_real_copies_satisfy_the_shared_contract(self):
+        self.assertEqual(self.check_repo.ndk_helper_drift_messages(self._real_copies()), [])
+
+    def test_removing_each_required_function_from_each_copy_is_drift(self):
+        for rel in self.check_repo.NDK_HELPER_COPIES:
+            for name in self.check_repo.NDK_HELPER_FUNCTIONS:
+                with self.subTest(copy=rel, function=name):
+                    texts = self._real_copies()
+                    texts[rel] = texts[rel].replace(
+                        f'{name}() {{', f'{name}_renamed() {{'
+                    )
+                    messages = self.check_repo.ndk_helper_drift_messages(texts)
+                    self.assertTrue(messages, f'no drift reported for {rel}:{name}')
+                    self.assertTrue(
+                        any(rel in message for message in messages), messages
+                    )
+
+    def test_breaking_each_invariant_in_each_copy_is_drift(self):
+        for rel in self.check_repo.NDK_HELPER_COPIES:
+            for invariant in self.check_repo.NDK_HELPER_INVARIANTS:
+                with self.subTest(copy=rel, invariant=invariant):
+                    texts = self._real_copies()
+                    texts[rel] = texts[rel].replace(invariant, 'REPLACED-BY-TEST')
+                    messages = self.check_repo.ndk_helper_drift_messages(texts)
+                    self.assertTrue(messages, f'no drift reported for {rel}:{invariant}')
+                    self.assertTrue(
+                        any(rel in message for message in messages), messages
+                    )
+
+
 if __name__ == '__main__':
     unittest.main()
