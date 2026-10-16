@@ -418,9 +418,20 @@ class NdkValidationTest(unittest.TestCase):
         self.installer = (root / 'install_flutter_complete.sh').read_text()
 
     @staticmethod
-    def _make_ndk(root, *, toolchain, source_properties):
+    def _make_ndk(root, *, toolchain, source_properties, driver='runs'):
         ndk = root / 'ndk' / '29.0.14206865'
         (ndk / 'toolchains' / 'llvm').mkdir(parents=True)
+        if driver is not None:
+            drivers = ndk / 'toolchains' / 'llvm' / 'prebuilt' / 'linux-x86_64' / 'bin'
+            drivers.mkdir(parents=True)
+            executable = drivers / 'clang-21'
+            # 'runs' stands in for the aarch64 repack's native driver; 'dead' for
+            # Google's x86_64 tool, which exists and is executable but cannot
+            # exec() on this device (the reporter's ENOEXEC).
+            executable.write_text(
+                '#!/bin/sh\nexit 0\n' if driver == 'runs' else '#!/bin/sh\nexit 1\n'
+            )
+            executable.chmod(0o755)
         if toolchain:
             cmake = ndk / 'build' / 'cmake'
             cmake.mkdir(parents=True)
@@ -430,11 +441,11 @@ class NdkValidationTest(unittest.TestCase):
         return ndk
 
     def _repair(self, ndk):
-        return _run_bash(
+        funcs = '\n'.join([
+            _bash_function(self.post_install, 'ndk_clang_runs'),
             _bash_function(self.post_install, 'repair_ndk_metadata'),
-            'repair_ndk_metadata "$1"',
-            str(ndk),
-        )
+        ])
+        return _run_bash(funcs, 'repair_ndk_metadata "$1"', str(ndk))
 
     def test_repair_removes_ndk_missing_cmake_toolchain(self):
         """The #29 state: metadata already minted, toolchain file gone."""
@@ -471,6 +482,21 @@ class NdkValidationTest(unittest.TestCase):
                 (ndk / 'source.properties').read_text(),
             )
 
+    def test_repair_removes_ndk_with_unrunnable_driver(self):
+        """Google's x86_64 NDK: toolchain and metadata present, driver cannot exec.
+
+        Accepting it makes ``post_install.sh`` report "configured" and every
+        native build then die with
+        ``.../prebuilt/bin/clang: 1: Syntax error: ")" unexpected``.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk = self._make_ndk(
+                Path(tmp), toolchain=True, source_properties=True, driver='dead'
+            )
+            result = self._repair(ndk)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(ndk.exists())
+
     def test_ndk_is_valid_requires_cmake_toolchain(self):
         valid = _bash_function(self.installer, 'ndk_is_valid')
         with tempfile.TemporaryDirectory() as tmp:
@@ -485,6 +511,17 @@ class NdkValidationTest(unittest.TestCase):
             )
             self.assertEqual(
                 _run_bash(valid, 'ndk_is_valid "$1"', str(complete)).returncode, 0
+            )
+
+    def test_ndk_is_valid_rejects_unrunnable_driver(self):
+        """An x86_64 NDK must not look installed, so it is re-provisioned (#29)."""
+        valid = _bash_function(self.installer, 'ndk_is_valid')
+        with tempfile.TemporaryDirectory() as tmp:
+            dead = self._make_ndk(
+                Path(tmp), toolchain=True, source_properties=True, driver='dead'
+            )
+            self.assertNotEqual(
+                _run_bash(valid, 'ndk_is_valid "$1"', str(dead)).returncode, 0
             )
 
 
@@ -523,14 +560,17 @@ class NdkClangDriverTest(unittest.TestCase):
 
     @classmethod
     def _make_ndk(cls, root, *, driver='clang-21', layout='tarball-r29',
-                  stale_wrappers=False):
+                  stale_wrappers=False, driver_runs=True):
         real_name, alias = cls.LAYOUTS[layout]
         ndk = root / 'ndk' / '29.0.14206865'
         prebuilt = ndk / 'toolchains' / 'llvm' / 'prebuilt'
         real = prebuilt / real_name
         (real / 'bin').mkdir(parents=True)
         driver_path = real / 'bin' / driver
-        driver_path.write_text('#!/bin/sh\n# real driver stand-in\n')
+        driver_path.write_text(
+            '#!/bin/sh\n# real driver stand-in\n'
+            if driver_runs else '#!/bin/sh\nexit 1\n'
+        )
         driver_path.chmod(0o755)
         # The repack's own alias for its host directory (and the sysroot it
         # serves), which must survive the installer.
@@ -555,6 +595,7 @@ class NdkClangDriverTest(unittest.TestCase):
 
     def _configure(self, ndk, tmp):
         funcs = '\n'.join([
+            _bash_function(self.post_install, 'ndk_clang_runs'),
             _bash_function(self.post_install, 'backup_ndk_file'),
             _bash_function(self.post_install, 'setup_ndk_clang_wrappers'),
         ])
@@ -627,6 +668,76 @@ class NdkClangDriverTest(unittest.TestCase):
             second = self._configure(ndk, tmp)
             self.assertEqual(second.returncode, 0, second.stderr)
             self._assert_usable(ndk, driver)
+
+    def test_refuses_unrunnable_driver(self):
+        """Google's x86_64 NDK: must not be "configured" into a broken compiler."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ndk, driver = self._make_ndk(Path(tmp), driver_runs=False)
+            result = self._configure(ndk, tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            prebuilt = ndk / 'toolchains' / 'llvm' / 'prebuilt'
+            link = prebuilt / 'bin' / 'clang'
+            self.assertFalse(
+                link.exists() or os.path.islink(link),
+                'linked a driver that cannot run',
+            )
+            self.assertTrue(driver.exists(), 'the dead driver itself is untouched')
+
+
+class SdkCmakeHostToolsTest(unittest.TestCase):
+    """The SDK's own CMake/Ninja packages ship x86_64-only host tools.
+
+    AGP downloads them itself, so an aarch64 device ends up with an ELF it cannot
+    exec (``.../cmake/<v>/bin/ninja: 1: ELF...: not found``). ``setup_sdk_cmake``
+    repoints each package's tools at the Termux-native ones and pre-creates the
+    default ``3.22.1`` package AGP asks for.
+    """
+
+    def setUp(self):
+        root = Path(__file__).parent
+        self.post_install = (root / 'scripts' / 'install' / 'post_install.sh').read_text()
+
+    def _run(self, tmp, *, packages):
+        sdk = Path(tmp) / 'sdk'
+        prefix = Path(tmp) / 'prefix'
+        (prefix / 'bin').mkdir(parents=True)
+        for tool in ('cmake', 'ninja', 'cpack', 'ctest'):
+            native = prefix / 'bin' / tool
+            native.write_text(f'#!/bin/sh\necho "{tool} version 9"\n')
+            native.chmod(0o755)
+        for version, tools in packages.items():
+            bindir = sdk / 'cmake' / version / 'bin'
+            bindir.mkdir(parents=True)
+            for tool in tools:
+                dead = bindir / tool
+                dead.write_text('#!/bin/sh\nexit 1\n')
+                dead.chmod(0o755)
+        funcs = '\n'.join([
+            _bash_function(self.post_install, 'backup_ndk_file'),
+            _bash_function(self.post_install, 'setup_sdk_cmake'),
+        ])
+        call = ('export ANDROID_SDK="$1"; export PREFIX="$2"; export BACKUP_DIR="$3"; '
+                'setup_sdk_cmake')
+        result = _run_bash(funcs, call, str(sdk), str(prefix), str(Path(tmp) / 'backups'))
+        return result, sdk, prefix
+
+    def test_repoints_dead_package_tools_at_termux(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result, sdk, prefix = self._run(tmp, packages={'4.0.0': ('cmake', 'ninja')})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for tool in ('cmake', 'ninja'):
+                link = sdk / 'cmake' / '4.0.0' / 'bin' / tool
+                self.assertTrue(link.is_symlink(), f'{link} not repointed')
+                self.assertEqual(link.resolve(), (prefix / 'bin' / tool).resolve())
+
+    def test_provisions_default_cmake_3_22_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result, sdk, prefix = self._run(tmp, packages={})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for tool in ('cmake', 'ninja'):
+                link = sdk / 'cmake' / '3.22.1' / 'bin' / tool
+                self.assertTrue(link.is_symlink(), f'{link} not provisioned')
+                self.assertEqual(link.resolve(), (prefix / 'bin' / tool).resolve())
 
 
 class PackageManifestTest(unittest.TestCase):
