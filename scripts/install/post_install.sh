@@ -490,6 +490,29 @@ if [ "$MODE" == "status" ] || [ "$MODE" == "check" ]; then
 	exit 0
 fi
 
+# Helper: does this NDK ship a clang driver that actually runs on this device?
+#
+# The official Android NDK for Linux is x86_64-only, and AGP downloads it under
+# the same version number as the aarch64 repack this project ships. Its
+# toolchains/llvm, build/cmake/android.toolchain.cmake and source.properties are
+# all present, so every existence check passes, but each tool is an x86_64 ELF:
+# execve() fails with ENOEXEC, the shell re-parses the bytes as a script, and the
+# CMake compiler probe dies with
+#     .../prebuilt/bin/clang: 1: Syntax error: ")" unexpected
+# Running a driver is the only reliable discriminator, so callers treat an NDK
+# with no runnable clang as unusable (issue #29).
+ndk_clang_runs() {
+	local ndk_dir="$1"
+	local driver
+	for driver in "$ndk_dir"/toolchains/llvm/prebuilt/*/bin/clang-[0-9]*; do
+		[ -x "$driver" ] || continue
+		if "$driver" --version >/dev/null 2>&1; then
+			return 0
+		fi
+	done
+	return 1
+}
+
 # Helper: validate/repair an NDK directory so AGP can use it.
 # AGP refuses to configure native modules when <sdk>/ndk/<version>/source.properties
 # is absent, failing with "[CXX1101] NDK at ... did not have a source.properties
@@ -509,6 +532,12 @@ repair_ndk_metadata() {
 	if [ ! -d "$NDK_PATH/toolchains/llvm" ] ||
 		[ ! -f "$NDK_PATH/build/cmake/android.toolchain.cmake" ]; then
 		echo "  ⚠ Removing incomplete NDK directory $NDK_NAME (missing toolchains/llvm or CMake toolchain file)"
+		rm -rf "$NDK_PATH" 2>/dev/null || true
+		return
+	fi
+
+	if ! ndk_clang_runs "$NDK_PATH"; then
+		echo "  ⚠ Removing unusable NDK directory $NDK_NAME (no clang driver runs on this device)"
 		rm -rf "$NDK_PATH" 2>/dev/null || true
 		return
 	fi
@@ -562,6 +591,11 @@ setup_ndk_clang_wrappers() {
 
 	if [ ! -d "$NDK_PATH/toolchains/llvm" ]; then
 		echo "    ⚠ Skipping $NDK_NAME (no toolchains/llvm directory)"
+		return
+	fi
+
+	if ! ndk_clang_runs "$NDK_PATH"; then
+		echo "    ⚠ Skipping $NDK_NAME (no clang driver runs on this device)"
 		return
 	fi
 
@@ -1161,6 +1195,57 @@ else
 	echo "  ⚠ NDK directory not found. Clang wrappers will be created when NDK is installed."
 	echo "    Re-run this script after installing NDK: bash $PREFIX/share/flutter/post_install.sh"
 fi
+
+# Repair the Android SDK's own CMake/Ninja packages.
+#
+# Google ships only x86_64 Linux host tools, so every binary the SDK carries in
+# cmake/<v>/bin is an ELF that cannot run on this aarch64 device: execve() fails
+# with ENOEXEC, the shell re-parses the bytes, and Gradle's CMake step dies with
+#     .../cmake/<v>/bin/ninja: 1: ELF...: not found
+# AGP downloads that package whenever it wants 3.22.1 and the directory is
+# missing, so an empty directory is not enough either - it has to contain a
+# runnable cmake. Every installed package's host tools are repointed at the
+# Termux-native ones (install_flutter_complete.sh only linked 3.22.1, only at
+# first install, and AGP's own download replaces those links). source.properties
+# is left untouched so AGP keeps recognising the package it finds.
+setup_sdk_cmake() {
+	local SDK_CMAKE="$ANDROID_SDK/cmake"
+	local pkg f tool replaced=0
+	if [ -d "$SDK_CMAKE" ]; then
+		for pkg in "$SDK_CMAKE"/*; do
+			[ -d "$pkg/bin" ] || continue
+			for f in cmake ninja cpack ctest; do
+				tool="$pkg/bin/$f"
+				if [ -x "$tool" ] && "$tool" --version >/dev/null 2>&1; then
+					continue
+				fi
+				[ -x "$PREFIX/bin/$f" ] || continue
+				backup_ndk_file "$tool"
+				rm -f "$tool" 2>/dev/null || true
+				ln -sfn "$PREFIX/bin/$f" "$tool"
+				echo "    ✓ $(basename "$pkg")/bin/$f -> Termux native"
+				replaced=1
+			done
+		done
+	fi
+	# AGP asks for cmake 3.22.1 by default (jni, path_provider_android, ...).
+	# Without the package already on disk it downloads Google's x86_64 build
+	# again, so pre-create it from the Termux tools, the same way
+	# install_flutter_complete.sh does.
+	if [ ! -d "$SDK_CMAKE/3.22.1" ]; then
+		mkdir -p "$SDK_CMAKE/3.22.1/bin"
+		ln -sfn "$PREFIX/bin/cmake" "$SDK_CMAKE/3.22.1/bin/cmake"
+		ln -sfn "$PREFIX/bin/ninja" "$SDK_CMAKE/3.22.1/bin/ninja"
+		echo "    ✓ cmake/3.22.1 provisioned from Termux tools"
+		replaced=1
+	fi
+	if [ "$replaced" = 1 ]; then
+		echo "  ✓ Android SDK CMake/Ninja usable"
+	fi
+}
+
+echo "  Repairing Android SDK CMake/Ninja..."
+setup_sdk_cmake
 
 # Helper function to setup build-tools symlinks for any version
 setup_build_tools_symlinks() {
