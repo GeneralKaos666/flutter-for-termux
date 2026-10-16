@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   gate:
@@ -102,6 +102,11 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && needs.gate.outputs.should_build == 'true')
     timeout-minutes: 360
 
+    # This job publishes the release and pushes the pin-sync commit, so it
+    # needs write access; the gate job only reads and inherits contents: read.
+    permissions:
+      contents: write
+
     steps:
       - name: checkout
         uses: actions/checkout@v7.0.1
@@ -125,7 +130,7 @@ jobs:
 
       - name: Set up sccache
         if: github.event.inputs.no-sccache != 'true'
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad  # v0.0.9
         with:
           version: 'v0.10.0'
 
@@ -340,7 +345,7 @@ jobs:
 
       - name: release
         if: steps.release_guard.outputs.should_publish == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
           tag_name: ${{ steps.parser.outputs.TAG }}
           name: ${{ steps.parser.outputs.TITLE }}
@@ -388,4 +393,4 @@ jobs:
             docs/guides/BUILD_GUIDE.md docs/guides/INSTALL_GUIDE.md \
             docs/releases/RELEASE_NOTES.md docs/CI_CD.md
           git commit -m "chore(release): sync installer pins to ${{ steps.parser.outputs.TAG }}"
-          git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
+          git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main || true
