@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 # Flutter Termux Post-Install Script
 # Run this script after installing the deb package to configure the APK build environment
 
@@ -194,6 +194,13 @@ apply_patches() {
 	fi
 }
 
+# NOTE: This is the simple variant of the NDK backup/restore helper pair, kept
+# in sync with the rich copy in install_flutter_complete.sh (which maps both
+# ANDROID_HOME and NDK_PATH and tracks absent preimages). Both copies are
+# intentionally different implementations, but they share a contract: the
+# `BACKUP_DIR`/`ndk_backups` preimage directory plus the exact `cp -a`
+# backup/restore commands. scripts/ci/check_repo.py (check_ndk_helper_drift)
+# fails CI when a copy loses that contract, so update both copies together.
 backup_ndk_file() {
 	local file="$1"
 	if [ -f "$file" ] || [ -L "$file" ]; then
@@ -267,8 +274,11 @@ patch_ndk_version_dart() {
 }
 register_patch "ndk_version_dart" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/gradle_utils.dart" patch_ndk_version_dart
 
+# No early-return idempotency guard here on purpose: this patch rewrites the
+# whole file with a heredoc, and re-entrancy is handled by apply_patches()
+# (cmp -s "$target_file" "$target_file.tmp" and the state-hash skip). Do not
+# "restore" a removed guard.
 patch_plugin_constants() {
-	if grep -F -q "PLATFORM_ARM64" "$1" && ! grep -F -q "PLATFORM_ARM32 = \"android-arm\"" "$1"; then return 0; fi
 	cat >"$1" <<'INNER_EOF'
 package com.flutter.gradle
 
@@ -369,7 +379,7 @@ patch_flutter_cache() {
 register_patch "flutter_cache" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/flutter_cache.dart" patch_flutter_cache
 
 patch_artifacts() {
-	if grep -F -q "platform.isAndroid" "$1"; then return 0; fi
+	if grep -F -q "if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts." "$1"; then return 0; fi
 	grep -q "if (platform.isLinux)" "$1" || return 1
 	sed -i "s#if (platform.isLinux) {#if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts.#" "$1"
 }
@@ -383,7 +393,7 @@ patch_build_info() {
 register_patch "build_info" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/build_info.dart" patch_build_info
 
 patch_chrome() {
-	if grep -F -q "platform.isAndroid" "$1"; then return 0; fi
+	if grep -F -q "if (platform.isLinux || platform.isAndroid) { // Termux: use Linux Chrome lookup on Android host." "$1"; then return 0; fi
 	grep -q "if (platform.isLinux)" "$1" || return 1
 	sed -i "s#if (platform.isLinux) {#if (platform.isLinux || platform.isAndroid) { // Termux: use Linux Chrome lookup on Android host.#" "$1"
 }
@@ -983,9 +993,15 @@ if [ ! -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
 	) || true
 	if [ -f dart-sdk.zip ]; then
 		echo "  Extracting snapshots..."
-		unzip -o -j dart-sdk.zip 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null || true
+		# Claim success only when the archive actually unpacked the key snapshot;
+		# on a download or unzip failure the snapshots bundled in the deb are used.
+		if unzip -o -j dart-sdk.zip 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null \
+			&& [ -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
+			echo "  ✓ Dart SDK snapshots installed"
+		else
+			echo "  ⚠ Dart SDK snapshots unavailable (using the snapshots bundled in the deb)"
+		fi
 		rm -f dart-sdk.zip
-		echo "  ✓ Dart SDK snapshots installed"
 	else
 		echo "  ⚠ Network unavailable, skipping Dart SDK snapshots download"
 	fi
@@ -1172,7 +1188,7 @@ setup_build_tools_symlinks() {
 		echo "    ✓ Retaining Mode B custom static split-select symlink"
 	else
 		cat >"$BUILD_TOOLS/split-select" <<'SPLITEOF'
-#!/bin/sh
+#!/data/data/com.termux/files/usr/bin/sh
 echo "split-select is not available on Termux ARM64"
 exit 1
 SPLITEOF
@@ -1321,10 +1337,40 @@ echo "  ✓ Android licenses accepted"
 echo "[13/17] Setting Android SDK path in Flutter config..."
 mkdir -p "$HOME" 2>/dev/null || true
 if [ -f "$HOME/.flutter_settings" ]; then
-	grep -v '"android-sdk"' "$HOME/.flutter_settings" 2>/dev/null | grep -v '^[[:space:]]*}$' >"$HOME/.flutter_settings.tmp" 2>/dev/null || true
-	echo '  ,"android-sdk": "'"$ANDROID_SDK"'"' >>"$HOME/.flutter_settings.tmp"
-	echo '}' >>"$HOME/.flutter_settings.tmp"
-	mv "$HOME/.flutter_settings.tmp" "$HOME/.flutter_settings" 2>/dev/null || true
+	# Rewrite via python3 so the result is always valid JSON. The previous
+	# grep/append approach dropped the closing brace, then appended a leading
+	# comma, producing a doubled comma whenever "android-sdk" was the last key
+	# (e.g. `false,\n  ,"android-sdk": ...`) and corrupting the file.
+	if ! python3 - "$HOME/.flutter_settings" "$ANDROID_SDK" <<'PYEOF'
+import json
+import os
+import sys
+
+path, sdk = sys.argv[1], sys.argv[2]
+try:
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+except (OSError, ValueError):
+    data = {}
+if not isinstance(data, dict):
+    data = {}
+data["android-sdk"] = sdk
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+os.replace(tmp, path)
+PYEOF
+	then
+		# python3 unavailable or failed: fall back to writing a fresh, valid
+		# settings file (the same shape as the no-file branch below).
+		cat >"$HOME/.flutter_settings" <<SETTINGS
+{
+  "android-sdk": "$ANDROID_SDK",
+  "analytics": false
+}
+SETTINGS
+	fi
 else
 	cat >"$HOME/.flutter_settings" <<SETTINGS
 {

@@ -14,6 +14,7 @@
 
 - Green gates per PR (exact commands): `ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/`; `python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/*.py`; `pytest test_build.py`; `bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh`; `shellcheck --severity=error install_flutter_complete.sh <scripts/**/*.sh with a bash/sh shebang>`; `python scripts/ci/check_repo.py`; `python scripts/ci/check_version_drift.py`; `python scripts/ci/generate_versions.py --check`; `git diff --check`.
 - Version drift is enforced repo-wide. PR1 bumps `build.toml [package] pkg_rel` from `4` to `5`; every `3.47.7-4` / `flutter_3.47.7-4_aarch64.deb` / `PKG_REL=4` reference must match afterwards. Do **not** pin a new deb SHA256 (unknown until the next build).
+- **Exception — asset-pinned values.** Anything that pins a *published* deb deliberately keeps the previous revision until the post-publish `sync_release_pins.py` commit (`6dc3911`) refreshes it, and `check_version_drift.py` deliberately does not scan them. This covers the `Size`/`SHA256` doc rows, `EXPECTED_SHA256`, and `scripts/device/run_termux_smoke.ps1`'s `$DebUrl` / `$ExpectedSha256` defaults (`sync_release_pins.py:37,80` own those; `device-smoke.yml` passes `-DebPath`, so the `$DebUrl` default is unused in CI). Do **not** "fix" them — a bump here would point at an asset that does not exist yet. Verified empirically: with `pkg_rel = '5'` these still say `-4` and `check_version_drift.py` still passes.
 - PR1 sets `build.toml [package] path = 'release'`.
 - openjdk is resolved **docs-only** — no `Depends`/`Recommends` change in `package.yaml`.
 - NDK backup/restore duplication is kept; it gains cross-reference comments plus a CI drift check.
@@ -153,7 +154,49 @@ git add install_flutter_complete.sh scripts/device/termux_smoke.sh
 git commit -m "fix(installer): stop reporting snapshot success after failure"
 ```
 
-### Task 4: Honour non-interactive mode in the prompt
+### Task 4: Report snapshot installs honestly in the deb-shipped post-install
+
+> Added during execution: Task 3's review found the same honesty defect, unfixed, in the
+> script that actually runs during `dpkg -i`.
+
+**Files:**
+- Modify: `scripts/install/post_install.sh:976-997`
+
+**Interfaces:**
+- Consumes: `$SNAPSHOTS_DIR` (`$DART_SDK/bin/snapshots`), the downloaded `dart-sdk.zip`.
+- Produces: the `✓ Dart SDK snapshots installed` banner only when the extracted key snapshot
+  exists; a warning otherwise. The `else` ("already exist") branch already reports truthfully and
+  must keep its message.
+
+- [ ] **Step 1: Write the failing check**
+
+`scripts/device/termux_smoke.sh` already records `DART_SNAPSHOT_STATUS` by probing
+`$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/snapshots/dds_aot.dart.snapshot` (Task 3). Reuse that
+as the end-state assertion; for the failure path, extract the modified block into a harness and
+feed it a truncated `dart-sdk.zip` to prove the banner is suppressed. Record the observation.
+
+- [ ] **Step 2: Implement**
+
+Gate the banner on the extraction result: print `✓ Dart SDK snapshots installed` only when
+`unzip` succeeded **and** `$SNAPSHOTS_DIR/dds_aot.dart.snapshot` (or at least one entry under
+`$SNAPSHOTS_DIR/*.snapshot`) exists; otherwise print a `⚠` warning stating the bundled snapshots
+are used. Keep `rm -f dart-sdk.zip` on every path. Do not add a checksum check here — this script
+has no `verify_sha256` helper and fetching one is out of scope; checking existence is the honest
+minimum and matches what Task 3 does in the sibling script.
+
+- [ ] **Step 3: Verify**
+
+Run: `bash -n scripts/install/post_install.sh`; `shellcheck --severity=error scripts/install/post_install.sh`
+Expected: both exit 0.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/install/post_install.sh
+git commit -m "fix(installer): gate deb post-install snapshot banner on extraction success"
+```
+
+### Task 5: Honour non-interactive mode in the prompt
 
 **Files:**
 - Modify: `install_flutter_complete.sh:416-421`
@@ -192,7 +235,7 @@ git add install_flutter_complete.sh scripts/test/gh_e2e_test.sh
 git commit -m "fix(installer): respect --yes and non-interactive stdin"
 ```
 
-### Task 5: Ship `flutter_project_config.sh` in the deb
+### Task 6: Ship `flutter_project_config.sh` in the deb
 
 **Files:**
 - Modify: `package.yaml` (add a resource block after `post_install`)
@@ -247,7 +290,7 @@ git add package.yaml scripts/install/flutter_project_config.sh test_build.py
 git commit -m "fix(package): ship flutter_project_config script in the deb"
 ```
 
-### Task 6: Route deb output to `release/`
+### Task 7: Route deb output to `release/`
 
 **Files:**
 - Modify: `build.toml:94-96`
@@ -256,6 +299,13 @@ git commit -m "fix(package): ship flutter_project_config script in the deb"
 **Interfaces:**
 - Consumes: `build.toml [package] path`.
 - Produces: `Build().output('arm64')` under `release/`.
+
+> Amended during execution (gap G2): setting `path = 'release'` alone is **not** enough.
+> `build.py`'s `output()` returns the deb filename only when `self.release` already exists as a
+> directory (`if self.release.is_dir(): … else: return self.release`), and nothing creates it.
+> `path = '.'` worked solely because the repo root always exists. With `release/` absent,
+> `output()` returns the directory, so the test fails and `debuild` would target a file literally
+> named `release`.
 
 - [ ] **Step 1: Adjust the test**
 
@@ -272,7 +322,12 @@ Expected: FAIL (parent is the repo root).
 
 - [ ] **Step 3: Implement**
 
-Set `path = 'release'` in `build.toml [package]`.
+Set `path = 'release'` in `build.toml [package]` (`release/` is already gitignored), **and** make
+`Build.output()` unconditionally return `self.release/<name>` instead of falling back to returning
+`self.release` when the directory does not exist yet, creating the directory if needed
+(`mkdir(parents=True, exist_ok=True)`). Keep the deb filename format unchanged. If you conclude a
+different location is the right place to create the directory, say so in your report rather than
+silently choosing.
 
 - [ ] **Step 4: Verify**
 
@@ -286,12 +341,13 @@ git add build.toml test_build.py
 git commit -m "fix(package): emit the deb under release/"
 ```
 
-### Task 7: Bump `pkg_rel` to 5 and sync every version reference
+### Task 8: Bump `pkg_rel` to 5 and sync every version reference
 
 **Files:**
-- Modify: `build.toml` (`pkg_rel`)
-- Modify: `docs/releases/CHANGELOG.md`
-- Modify: whatever `check_version_drift.py --fix` rewrites (AGENTS.md, README.md, installers, `.github/ISSUE_TEMPLATE/bug_report.yml` placeholder)
+- Modify: `build.toml` (`pkg_rel` + its trailing comment)
+- Modify: `docs/releases/RELEASE_NOTES.md` (new `## Fixed in 3.47.7-5` section, mirroring the `-4` section)
+- Modify: `docs/releases/CHANGELOG.md` (entries under `## [Unreleased]`)
+- Modify: exactly the 12 files `check_version_drift.py --fix` rewrites (AGENTS.md, README.md, the 3 `docs/guides/*` files, RELEASE_NOTES.md, the 4 installer scripts, versions_common.sh, gh_e2e_test.sh). It does **not** touch `docs/CI_CD.md` or `.github/ISSUE_TEMPLATE/*`.
 
 **Interfaces:**
 - Consumes: the `pkg_rel` value.
@@ -301,9 +357,14 @@ git commit -m "fix(package): emit the deb under release/"
 
 Edit `build.toml`: `pkg_rel = '5'` and update its trailing comment. Then run `python scripts/ci/check_version_drift.py --fix`.
 
-- [ ] **Step 2: Add the CHANGELOG entry**
+- [ ] **Step 2: Write the release docs**
 
-Add a `## 3.47.7-5` section listing the shipping fixes (manifest newline, flutter_settings JSON, snapshot honesty, non-interactive install, config script packaging).
+Mirror precedent commit `282c729` (the `pkg_rel` 3→4 bump):
+
+- `docs/releases/RELEASE_NOTES.md` — add a `## Fixed in 3.47.7-5` section immediately before `## Package`, describing this batch's shipping fixes (engine-version newline, valid `~/.flutter_settings` JSON, honest snapshot banners in both installers, non-interactive `--yes`, `flutter_project_config.sh` now shipped, deb emitted under `release/`), and stating it is a drop-in replacement over the previous revision.
+- `docs/releases/CHANGELOG.md` — add the same items under the existing `## [Unreleased]` heading in its Keep-a-Changelog subsections (`### Fixed`, `### Added`, `### Changed` as appropriate). Do **not** invent a released `## [3.47.7-5]` heading; the release process cuts released sections from this changelog.
+- Do **not** edit the `Size` / `SHA256` values. `build.toml` has no such keys, and the post-publish `sync_release_pins.py` commit fills them (precedent: `282c729` left them stale, `6dc3911` synced them).
+- Do **not** edit `docs/CI_CD.md` or `.github/ISSUE_TEMPLATE/*` — the checker does not scan them; PR2 (Task 10) and PR4 (Task 19) own them.
 
 - [ ] **Step 3: Verify drift is clean**
 
@@ -312,16 +373,20 @@ Expected: all pass.
 
 - [ ] **Step 4: Commit**
 
+Confirm `git status --porcelain` lists only files you expect (no stray artifacts), then:
+
 ```bash
 git add -A
-git commit -m "chore(release): bump pkg_rel to 5 and sync version pins"
+git commit -m "chore(release): bump pkg_rel to 5 for the review-fix batch"
 ```
+
+Give it a body like `282c729`'s: why the bump is needed (the fixes live in files that ship inside the deb), that references were synced with `check_version_drift.py --fix`, and that `CI_CD.md` / `EXPECTED_SHA256` are synced post-publish by `sync_release_pins.py`.
 
 ---
 
 ## PR2 — `docs(contract)`: align documentation with the code
 
-### Task 8: Correct the build-output and dependency claims
+### Task 9: Correct the build-output and dependency claims
 
 **Files:**
 - Modify: `docs/guides/BUILD_GUIDE.md:195,205,213,384-386,564`
@@ -333,7 +398,7 @@ git commit -m "chore(release): bump pkg_rel to 5 and sync version pins"
 
 - [ ] **Step 1: Fix the android/ output claims**
 
-Replace every `android_release_arm64/` / `android_profile_arm64/` reference with the three real `linux_{release,debug,profile}_arm64/` dirs, and point the "verify gen_snapshot" step at `linux_release_arm64/clang_arm64/gen_snapshot`.
+Replace every `android_release_arm64/` / `android_profile_arm64/` reference with the three real `linux_{release,debug,profile}_arm64/` dirs, and point the "verify gen_snapshot" step at `linux_release_arm64/gen_snapshot` — **not** `linux_release_arm64/clang_arm64/gen_snapshot`. There is no `clang_*` sub-directory in this repo's build: `Output.any` (`package.py:279-288`) resolves `$any` to a single `flutter/engine/src/out/linux_<mode>_<arch>` directory and `package.yaml` globs `$any/gen_snapshot` / `$out/gen_snapshot` at that root; `AGENTS.md:118` likewise lists `gen_snapshot` alongside `dart-sdk` and `libflutter_linux_gtk.so` at the output-dir root. `clang_arm64/` is an upstream *Android* engine layout and does not apply here. Report it if any tracked file contradicts this.
 
 - [ ] **Step 2: Fix the openjdk claim**
 
@@ -355,30 +420,42 @@ git add docs/guides docs/releases
 git commit -m "docs(guides): align build output and dependency claims with the code"
 ```
 
-### Task 9: Correct the CI/CD documentation
+### Task 10: Correct the CI/CD documentation
 
 **Files:**
-- Modify: `docs/CI_CD.md:45,127-128,182-187,215-228,258`
-- Modify: `AGENTS.md:88`
+- Modify: `docs/CI_CD.md` (marker block ~:216-228, publish list ~:140-142, device-smoke inputs ~:185, manual example ~:286, review policy ~:45/:258)
+- Modify: `AGENTS.md` (the "PR + review + resolved threads, strict `CI` checks" sentence)
 
 **Interfaces:** none (docs only).
 
+Line numbers in `docs/CI_CD.md` are still accurate (nothing else has touched it). `AGENTS.md` line numbers are **not** — the version bump rewrote version strings there, so search by content.
+
 - [ ] **Step 1: Fix the marker list**
 
-Replace the 13-marker list with the 16 `run_termux_smoke.ps1:384-400` enforces (add `APT_REPAIR_STATUS`, `CONFIG_VERIFY_STATUS`, `BUILD_AAB_STATUS`, `AAB_COPY_STATUS`).
+`docs/CI_CD.md`'s required-marker block (lines 216-228) lists 12 `*_STATUS` markers plus `DONE`. `run_termux_smoke.ps1`'s `$required` list (lines 385-401) enforces **16** `*_STATUS` markers plus `DONE`. Add the four missing entries, in the ps1's order: `APT_REPAIR_STATUS`, `CONFIG_VERIFY_STATUS`, `BUILD_AAB_STATUS`, `AAB_COPY_STATUS`.
 
 - [ ] **Step 2: Fix the device-smoke inputs and publish list**
 
-Document `artifact_run_id` / `artifact_name` / `expected_sha256` (no `deb_url`), and list the 6 published assets. Add the `pull_request` trigger for the release check.
+Three concrete corrections, all verified against the workflows:
+
+- `docs/CI_CD.md:185` documents a `deb_url` input. `device-smoke.yml` has no such input; its `workflow_dispatch` inputs are `runner_labels_json`, `adb_path`, `device_serial`, `artifact_run_id`, `artifact_name`, `expected_sha256`, `promote_release`, `release_tag`, `timeout_minutes`. Replace the `deb_url:` line with the three required artifact inputs (`artifact_run_id`, `artifact_name`, `expected_sha256`).
+- `docs/CI_CD.md:140-142` lists 3 published assets. `build.yml`'s release `files:` publishes **6**: the deb, `<deb>.sha256`, `<deb>.size.txt`, `inventory.txt`, `build_metadata.json`, `build_evidence.json`. List all six.
+- `docs/CI_CD.md:286` shows a `-DebUrl "…3.47.7-4…"` manual invocation. `device-smoke.yml` invokes the script with `-DebPath $env:RESOLVED_DEB`. Show `-DebPath` (as the workflow does) so the example matches what actually gates. Leave `run_termux_smoke.ps1`'s own `$DebUrl` / `$ExpectedSha256` defaults **alone** — `sync_release_pins.py:37,80` own them and refresh them post-publish (see the plan's PR1 constraints).
+- Add the `pull_request` trigger for the release check (verified present in `release-check.yml`).
 
 - [ ] **Step 3: Document the review policy and PR-check scope**
 
-State that the ruleset requires resolved threads but **0** approvals, and that `release-check.yml` runs in `LIGHTWEIGHT_CHECK=1` mode on PRs (manifest syntax/structure only) while strict verification runs on release events. Adjust `AGENTS.md:88` ("PR + review + resolved threads") to match.
+Read `.github/rulesets/main_protection_ruleset.json`, `release-check.yml`, and `ci.yml`, and document what they **actually** say — verify each claim rather than trusting these notes:
+
+- `required_approving_review_count` is **0** while `required_review_thread_resolution` is **true**: the ruleset requires *resolved threads*, not approvals.
+- The required status checks are `Repository sanity` and `Verify release metadata` (with strict policy), not "CI" generically.
+- `release-check.yml` triggers on `pull_request`, `workflow_dispatch`, and `release` — the PR path is lightweight and the release path strict. Confirm the `LIGHTWEIGHT_CHECK` mechanism in the workflow before asserting it.
+- Adjust the `AGENTS.md` sentence to match. `AGENTS.md` **is** scanned by `check_version_drift.py`, so do not alter any version string in it.
 
 - [ ] **Step 4: Verify**
 
-Run: `python scripts/ci/check_repo.py`; `git diff --check`
-Expected: pass.
+Run: `python scripts/ci/check_repo.py`; `python scripts/ci/check_version_drift.py`; `python scripts/ci/generate_versions.py --check`; `git diff --check`
+Expected: all pass.
 
 - [ ] **Step 5: Commit**
 
@@ -391,7 +468,7 @@ git commit -m "docs(ci): document review policy, device-smoke inputs, and marker
 
 ## PR3 — `refactor(python)`: smells, behavior-preserving
 
-### Task 10: Give the template renderer an honest name
+### Task 11: Give the template renderer an honest name
 
 **Files:**
 - Modify: `package.py:313` and its internal callers (`322,363,368,371,399,400`)
@@ -416,7 +493,7 @@ def test_package_exposes_render(self):
 
 - [ ] **Step 5: Commit** — `refactor(package): rename Package.__format__ to render`
 
-### Task 11: Bundle the release metadata clump
+### Task 12: Bundle the release metadata clump
 
 **Files:**
 - Modify: `build.py:250-257`
@@ -432,7 +509,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `pytest test_build.py -q` → pass.
 - [ ] **Step 5: Commit** — `refactor(build): bundle release metadata into one payload`
 
-### Task 12: De-duplicate the resource dispatch
+### Task 13: De-duplicate the resource dispatch
 
 **Files:**
 - Modify: `package.py:325-335,349-350,379-389,397-398`
@@ -446,7 +523,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `pytest test_build.py -q`; `ruff check`.
 - [ ] **Step 5: Commit** — `refactor(package): share resource dispatch between gen and test`
 
-### Task 13: Replace asserts, fix TODOs, names, and cache state
+### Task 14: Replace asserts, fix TODOs, names, and cache state
 
 **Files:**
 - Modify: `package.py:115,127,179-180,194,202,288,295`
@@ -464,7 +541,7 @@ def test_package_exposes_render(self):
 
 ## PR4 — `chore(ci)`: shell and CI hardening
 
-### Task 14: Make strict release verification reachable
+### Task 15: Make strict release verification reachable
 
 **Files:**
 - Modify: `scripts/ci/verify_release_asset.py:401-453`
@@ -476,7 +553,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — new test passes; `ruff check`.
 - [ ] **Step 5: Commit** — `fix(ci): treat device smoke evidence as optional in release verification`
 
-### Task 15: Wire the missing version check into CI
+### Task 16: Wire the missing version check into CI
 
 **Files:**
 - Modify: `.github/workflows/ci.yml:98-102`
@@ -492,7 +569,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `python scripts/ci/check_version_drift.py`; `python scripts/ci/generate_versions.py --check`.
 - [ ] **Step 5: Commit** — `chore(ci): gate version generation and narrow pin sync`
 
-### Task 16: Fix the shell defects
+### Task 17: Fix the shell defects
 
 **Files:**
 - Modify: `scripts/device/termux_smoke.sh:164-165`
@@ -507,7 +584,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 3: Verify** — `bash -n`; `shellcheck --severity=error`.
 - [ ] **Step 4: Commit** — `fix(scripts): correct smoke status, guards, and shebangs`
 
-### Task 17: Guard the duplicated NDK helpers
+### Task 18: Guard the duplicated NDK helpers
 
 **Files:**
 - Modify: `install_flutter_complete.sh:43-149` (comment)
@@ -520,7 +597,7 @@ def test_package_exposes_render(self):
 - [ ] **Step 4: Verify** — `python scripts/ci/check_repo.py`.
 - [ ] **Step 5: Commit** — `chore(ci): detect drift in duplicated NDK helpers`
 
-### Task 18: Remaining CI hygiene and hardening
+### Task 19: Remaining CI hygiene and hardening
 
 **Files:**
 - Modify: `.gitignore:160`
@@ -538,7 +615,7 @@ def test_package_exposes_render(self):
 
 ## Self-review checklist (run before PR handoff)
 
-- [ ] Every spec finding maps to a task (46 findings → Tasks 1-18).
+- [ ] Every spec finding maps to a task (46 findings + 1 found during execution → Tasks 1-19).
 - [ ] No task leaves an open choice that decides behavior.
 - [ ] `Package.render`, `Build.metadata` names are consistent across tasks.
 - [ ] Review Focus items 1-5 each have a test in the owning task.

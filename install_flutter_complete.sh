@@ -40,6 +40,13 @@ if command -v parse_installer_args >/dev/null 2>&1; then
 	parse_installer_args "$@"
 fi
 
+# NOTE: This is the rich variant of the NDK backup/restore helper pair, kept in
+# sync with the simpler copy in scripts/install/post_install.sh (which maps
+# against ANDROID_SDK only and has no absent-preimage list). Both copies are
+# intentionally different implementations, but they share a contract: the
+# `backup_dir`/`ndk_backups` preimage directory plus the exact `cp -a`
+# backup/restore commands. scripts/ci/check_repo.py (check_ndk_helper_drift)
+# fails CI when a copy loses that contract, so update both copies together.
 backup_ndk_file() {
 	local file="$1"
 	local backup_dir="${BACKUP_DIR:-${WORK_DIR:-.}/backup}"
@@ -379,7 +386,6 @@ fi
 
 # Version/toolchain constants come from lib_common.sh -> versions_common.sh
 # (FLUTTER_VERSION, NDK_VERSION, the download URLs, and their SHA256 pins).
-REPO_BASE="https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main"
 
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════════════════════════╗"
@@ -413,8 +419,15 @@ echo "  • Total ~1.8GB"
 echo ""
 echo -e "${YELLOW}Estimated time:${NC} 10-30 minutes (depending on network speed)"
 echo ""
-read -p "Continue? [Y/n] " -n 1 -r
-echo
+# Skip the prompt when running unattended: --yes/-y, --non-interactive, or a
+# non-TTY stdin (e.g. CI, curl | bash). Take the affirmative default instead of
+# blocking forever on a read that can never receive input.
+if [ "${OPT_YES:-false}" != "true" ] && [ "${OPT_NON_INTERACTIVE:-false}" != "true" ] && [ "${NON_INTERACTIVE:-false}" != "true" ] && [ -t 0 ]; then
+	read -p "Continue? [Y/n] " -n 1 -r
+	echo
+else
+	REPLY=Y
+fi
 if [[ $REPLY =~ ^[Nn]$ ]]; then
 	echo "Installation canceled"
 	exit 0
@@ -474,7 +487,7 @@ mkdir -p "$WORK_DIR/apt_staging"
 
 # Pre-download and verify all packages (Staging Phase)
 echo "Pre-downloading and verifying all packages..."
-FLUTTER_DEB_NAME="${FLUTTER_DEB_NAME:-flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL:-4}_aarch64.deb}"
+FLUTTER_DEB_NAME="${FLUTTER_DEB_NAME:-flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL:-5}_aarch64.deb}"
 FLUTTER_DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${FLUTTER_DEB_NAME}"
 
 
@@ -667,13 +680,16 @@ if [ -n "$ENGINE_VERSION" ] && [ ! -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; 
 	dart_zip="$WORK_DIR/dart-sdk.zip"
 	wget -q --show-progress "$SNAPSHOTS_URL" -O "$dart_zip" || true
 	if [ -f "$dart_zip" ]; then
-		verify_sha256 "$dart_zip" "$SNAPSHOT_EXPECTED_SHA256" || {
-			rm -f "$dart_zip"
-			echo "  ⚠ Dart SDK snapshots checksum mismatch (using the snapshots bundled in the deb)"
-		}
-		unzip -o -j "$dart_zip" 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null || true
+		# Claim success only when the verified archive actually unpacked a snapshot;
+		# on a checksum or unzip failure the snapshots bundled in the deb are used.
+		if verify_sha256 "$dart_zip" "$SNAPSHOT_EXPECTED_SHA256" \
+			&& unzip -o -j "$dart_zip" 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null \
+			&& [ -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
+			echo "  ✓ Dart SDK snapshots installed"
+		else
+			echo "  ⚠ Dart SDK snapshots unavailable (using the snapshots bundled in the deb)"
+		fi
 		rm -f "$dart_zip"
-		echo "  ✓ Dart SDK snapshots installed"
 	fi
 else
 	echo "  ✓ Dart SDK snapshots already present or no update needed"
@@ -1019,12 +1035,10 @@ else
 fi
 
 # Test Linux build (if gtk3 installed)
-LINUX_BUILD_SUCCESS=false
 if command -v pkg-config &>/dev/null && pkg-config --exists gtk+-3.0 2>/dev/null; then
 	echo "Building Linux app (requires gtk3)..."
 	flutter build linux 2>&1 | tail -5 || true
 	if [ -f "build/linux/arm64/release/bundle/flutter_test_app" ]; then
-		LINUX_BUILD_SUCCESS=true
 		echo "  ✓ Linux build successful"
 	else
 		echo "  ⚠ Linux build skipped (install gtk3 to enable)"
