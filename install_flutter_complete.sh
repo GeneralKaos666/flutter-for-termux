@@ -393,10 +393,59 @@ cleanup_and_exit() {
 	if [ -n "${WORK_DIR:-}" ] && [ -d "${WORK_DIR:-}" ]; then
 		rm -rf "$WORK_DIR"
 	fi
+	# The JSON summary must carry the run outcome: stage statuses alone printed
+	# "preflight": "success" even when the installer had aborted mid-run (#29).
+	if [ "$exit_code" -eq 0 ]; then
+		record_stage run success
+	else
+		record_stage run failed
+	fi
 	print_summary
 	exit $exit_code
 }
 trap cleanup_and_exit EXIT INT TERM HUP
+
+# Best-effort rollback backup for an installed dpkg package, in descending
+# order of fidelity:
+#   1. dpkg-repack  — rebuilds a .deb from the installed package state. Not
+#                     packaged for Termux, so this tier is skipped there.
+#   2. apt-get download pkg=ver — works only when the package came from an apt
+#                     repo; this project's debs ship via GitHub Releases.
+#   3. Re-download of the published release asset for the installed version —
+#                     the realistic backup source on Termux.
+# Returns 0 when a ${pkg}*.deb exists in dest_dir. Tool errors stay visible:
+# the original gate silenced every stderr line (hiding "E: Unable to locate
+# package dpkg-repack" — the actual reason no backup ever existed) (#29).
+attempt_package_backup() {
+	local pkg="$1"
+	local old_ver="$2"
+	local dest_dir="$3"
+	local release_url="$4"
+
+	if command -v dpkg-repack >/dev/null 2>&1; then
+		(cd "$dest_dir" && dpkg-repack "$pkg") || true
+	fi
+	if ls "$dest_dir"/"${pkg}"*.deb 1>/dev/null 2>&1; then
+		return 0
+	fi
+	if [ -n "$old_ver" ]; then
+		(cd "$dest_dir" && apt-get download "${pkg}=${old_ver}") || true
+	fi
+	if ls "$dest_dir"/"${pkg}"*.deb 1>/dev/null 2>&1; then
+		return 0
+	fi
+	if [ -n "$old_ver" ] && [ -n "$release_url" ]; then
+		echo -e "    ${pkg} not rebuilt by repack/apt; fetching published release asset backup..."
+		wget -q --show-progress -O "$dest_dir/${pkg}_${old_ver}_aarch64.deb" "$release_url" || {
+			rm -f "$dest_dir/${pkg}_${old_ver}_aarch64.deb"
+			echo -e "${YELLOW}    Release asset download failed for ${pkg} (${release_url}).${NC}"
+		}
+	fi
+	if ls "$dest_dir"/"${pkg}"*.deb 1>/dev/null 2>&1; then
+		return 0
+	fi
+	return 1
+}
 
 if [ "${TERMUX_TEST_MODE:-false}" = "true" ]; then
 	return 0 2>/dev/null || exit 0
@@ -534,44 +583,53 @@ fi
 BACKUP_DIR="$WORK_DIR/backup"
 mkdir -p "$BACKUP_DIR"
 
+# dpkg-repack is not packaged for Termux; only try to install it when a
+# configured apt repo actually provides it, so the impossible attempt no longer
+# runs (with its real error silenced) on every install.
 if [ "$FLUTTER_WAS_INSTALLED" = true ] || [ "$ANDROID_SDK_WAS_INSTALLED" = true ]; then
-	if ! command -v dpkg-repack >/dev/null 2>&1; then
+	if ! command -v dpkg-repack >/dev/null 2>&1 && apt-cache show dpkg-repack >/dev/null 2>&1; then
 		echo -e "${YELLOW}[SETUP] Installing dpkg-repack prerequisite for rollback backup...${NC}"
-		pkg install -y dpkg-repack 2>/dev/null || apt-get install -y dpkg-repack 2>/dev/null || true
+		pkg install -y dpkg-repack || apt-get install -y dpkg-repack || true
 	fi
 fi
 
+# This project's debs are published on GitHub Releases, never in an apt repo,
+# so the fallback backup re-fetches the release asset for the *installed*
+# version: <tag>-<pkg_rel> maps to releases/download/<tag>/flutter_<ver>_aarch64.deb.
+FLUTTER_RELEASE_URL=""
+if [ -n "$FLUTTER_OLD_VER" ]; then
+	FLUTTER_RELEASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${FLUTTER_OLD_VER%-*}/flutter_${FLUTTER_OLD_VER}_aarch64.deb"
+fi
+ANDROID_SDK_RELEASE_URL=""
+if [ -n "$ANDROID_SDK_OLD_VER" ]; then
+	ANDROID_SDK_RELEASE_URL="${ANDROID_SDK_DEB_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}/android-sdk_${ANDROID_SDK_OLD_VER}_aarch64.deb"
+fi
+
+# A missing backup degrades the rollback safety net; it must not abort the
+# install. On Termux neither dpkg-repack nor an apt-hosted flutter package
+# exists, so the old hard gate (exit 35) made this installer unusable for
+# every user who had the deb installed (#29, comment 6235200540).
 if [ "$FLUTTER_WAS_INSTALLED" = true ]; then
-	if command -v dpkg-repack >/dev/null 2>&1; then
-		(cd "$BACKUP_DIR" && dpkg-repack flutter 2>/dev/null) || true
-	fi
-	if ! ls "$BACKUP_DIR"/flutter*.deb 1>/dev/null 2>&1; then
-		# Fallback to apt-get download if dpkg-repack did not produce .deb
-		(cd "$BACKUP_DIR" && apt-get download "flutter=$FLUTTER_OLD_VER" 2>/dev/null) || true
-	fi
-	if ! ls "$BACKUP_DIR"/flutter*.deb 1>/dev/null 2>&1; then
+	if ! attempt_package_backup flutter "$FLUTTER_OLD_VER" "$BACKUP_DIR" "$FLUTTER_RELEASE_URL"; then
+		record_stage backup failed
 		if [ "${ALLOW_NO_ROLLBACK:-false}" != "true" ]; then
-			echo -e "${RED}[ERROR] Cannot backup existing Flutter package for rollback restoration.${NC}"
-			INSTALL_FAILED=false
-			exit 35
+			echo -e "${YELLOW}[WARN] Cannot back up the installed Flutter package; continuing WITHOUT rollback safety.${NC}"
 		fi
 	fi
 fi
 if [ "$ANDROID_SDK_WAS_INSTALLED" = true ]; then
-	if command -v dpkg-repack >/dev/null 2>&1; then
-		(cd "$BACKUP_DIR" && dpkg-repack android-sdk 2>/dev/null) || true
-	fi
-	if ! ls "$BACKUP_DIR"/android-sdk*.deb 1>/dev/null 2>&1; then
-		# Fallback to apt-get download if dpkg-repack did not produce .deb
-		(cd "$BACKUP_DIR" && apt-get download "android-sdk=$ANDROID_SDK_OLD_VER" 2>/dev/null) || true
-	fi
-	if ! ls "$BACKUP_DIR"/android-sdk*.deb 1>/dev/null 2>&1; then
+	if ! attempt_package_backup android-sdk "$ANDROID_SDK_OLD_VER" "$BACKUP_DIR" "$ANDROID_SDK_RELEASE_URL"; then
+		record_stage backup failed
 		if [ "${ALLOW_NO_ROLLBACK:-false}" != "true" ]; then
-			echo -e "${RED}[ERROR] Cannot backup existing Android SDK package for rollback restoration.${NC}"
-			INSTALL_FAILED=false
-			exit 35
+			echo -e "${YELLOW}[WARN] Cannot back up the installed Android SDK package; continuing WITHOUT rollback safety.${NC}"
 		fi
 	fi
+fi
+# Record explicit success too: an absent `backup` key in the summary would be
+# indistinguishable from "stage never ran" (fresh install).
+if { [ "$FLUTTER_WAS_INSTALLED" = true ] || [ "$ANDROID_SDK_WAS_INSTALLED" = true ]; } \
+	&& [ "${STAGE_STATUS[backup]:-}" != "failed" ]; then
+	record_stage backup success
 fi
 
 FLUTTER_DEB="$WORK_DIR/${FLUTTER_DEB_NAME}"
