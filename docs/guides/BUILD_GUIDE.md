@@ -1,6 +1,16 @@
-# Flutter Termux Complete Build Guide
+# Build Guide — Flutter for Termux from Source
 
-This document explains how to build a Flutter deb package that includes Android gen_snapshot from scratch.
+This guide explains how to build the Flutter deb package (including Android
+gen_snapshot) from scratch on a Linux x86-64 host. It is organized as a quick
+start, then numbered step-by-step instructions, then troubleshooting.
+
+Related guides:
+
+- Installing the finished deb on a device: [Install guide](INSTALL_GUIDE.md)
+- Moving to a new Flutter version: [Upgrade guide](UPGRADE_GUIDE.md)
+- How the build works internally (patches, GN configs, sysroot):
+  [Build process](BUILD_PROCESS.md)
+- CI workflows and the device lab: [CI/CD](../CI_CD.md)
 
 ## Current Version Status (3.47.7 / 2026-08-15)
 
@@ -15,13 +25,23 @@ This document explains how to build a Flutter deb package that includes Android 
 
 3.47.7 introduces three new points that require special attention:
 
-1. **Dart VM/tool split**: The Flutter CLI uses the Termux JIT `dart`, but engine snapshots still need the accompanying `dartvm` / `dartaotruntime`, so the package validator must check all three. The dart SDK is produced by the standard build's `dart_sdk_archive` target.
-2. **Flutter Tools Android host**: On Termux, Dart reports `Platform.operatingSystem == "android"`, so the host artifact lookup must be mapped to Linux ARM64.
-3. **Flutter Gradle plugin**: Flutter 3.44's `FlutterPlugin.kt` imports `PLATFORM_ABI_LIST` directly, so the post-install ARM64-only `FlutterPluginConstants.kt` template must keep this symbol, and the Gradle included-build cache must be cleaned.
+1. **Dart VM/tool split**: The Flutter CLI uses the Termux JIT `dart`, but
+   engine snapshots still need the accompanying `dartvm` / `dartaotruntime`,
+   so the package validator must check all three. The dart SDK is produced by
+   the standard build's `dart_sdk_archive` target.
+2. **Flutter Tools Android host**: On Termux, Dart reports
+   `Platform.operatingSystem == "android"`, so the host artifact lookup must be
+   mapped to Linux ARM64.
+3. **Flutter Gradle plugin**: Flutter 3.44's `FlutterPlugin.kt` imports
+   `PLATFORM_ABI_LIST` directly, so the post-install ARM64-only
+   `FlutterPluginConstants.kt` template must keep this symbol, and the Gradle
+   included-build cache must be cleaned.
 
-`debuild` repackages the entire SDK (about 6-8 minutes) but does not recompile the engine; don't confuse its duration with that of the `ninja` build.
+> **Note:** `debuild` repackages the entire SDK (about 6-8 minutes) but does
+> **not** recompile the engine — don't confuse its duration with that of the
+> `ninja` build (hours).
 
-## CI/CD and Device Validation
+## CI/CD Summary
 
 The full engine build runs on the free GitHub-hosted `ubuntu-latest` runner
 (`build.yml`); PRs run lightweight checks first:
@@ -36,90 +56,58 @@ git diff --check
 GitHub Actions is currently split into these tracks:
 
 - `.github/workflows/ci.yml`: GitHub-hosted sanity checks for PRs/pushes.
-- `.github/workflows/build.yml`: GitHub-hosted full `.deb` build, auto-triggered on CI success on `main` (or manual); a `gate` job skips the build unless the `build.toml` tag is unreleased (version bump), publishes a release.
-- `.github/workflows/build-deb.yml`: self-hosted fallback full `.deb` build with evidence/artifact collection.
-- `.github/workflows/device-smoke.yml`: manual self-hosted Windows + ADB tablet smoke test.
-- `.github/workflows/release-check.yml`: Release asset metadata / SHA256 checks.
+- `.github/workflows/build.yml`: GitHub-hosted full `.deb` build,
+  auto-triggered on CI success on `main` (or manual); a `gate` job skips the
+  build unless the `build.toml` tag is unreleased (version bump), publishes a
+  release.
+- `.github/workflows/build-deb.yml`: self-hosted fallback full `.deb` build
+  with evidence/artifact collection.
+- `.github/workflows/device-smoke.yml`: manual self-hosted Windows + ADB
+  tablet smoke test.
+- `.github/workflows/release-check.yml`: Release asset metadata / SHA256
+  checks.
 
 See [`docs/CI_CD.md`](../CI_CD.md) for details.
 
-## Technical Architecture Overview
-
-### Components We Compile (WSL cross-compilation)
-
-| Component | File | Size | Purpose |
-|------|------|------|------|
-| **Dart CLI** | `dart-sdk/bin/dart` | ~50MB | Flutter CLI; post-install replaces it with Termux JIT Dart |
-| **Dart VM** | `dart-sdk/bin/dartvm`, `dartaotruntime` | ~50MB | Runs engine snapshots / AOT runtime |
-| **Flutter Engine** | `libflutter_linux_gtk.so` | ~106MB | Linux desktop runtime |
-| **gen_snapshot** | `linux-arm64/gen_snapshot` | ~30MB | `flutter build linux` directly; `flutter build apk` via the on-device `post_install.sh` symlink |
-| **impellerc** | `impellerc` | ~20MB | Shader compiler |
-| **const_finder** | `const_finder.dart.snapshot` | ~1MB | Icon tree shaking |
-
-### Downloaded Precompiled Components (third-party)
-
-| Source | Component | Purpose |
-|------|------|------|
-| [mumumusuc/termux-android-sdk](https://github.com/mumumusuc/termux-android-sdk) | aapt2, d8, build-tools | Android build tools |
-| [lzhiyong/termux-ndk](https://github.com/lzhiyong/termux-ndk) | ARM64 NDK (clang, linker) | Native compilation |
-| Google Storage | Dart snapshots (dds_aot, etc.) | Hot reload support |
-
-### Applied Patches
-
-| Patch file | Problem solved |
-|----------|-----------|
-| `patches/engine.patch` | Bionic TLS alignment, `-llog -lm` linking, dynamic linker path, NDK clang runtime detection |
-| `patches/dart.patch` | Dart VM / profiler shutdown Termux adaptation |
-| `post_install.sh` → `FlutterPluginConstants.kt` | Compile ARM64 only by default, and keep Flutter 3.44 `PLATFORM_ABI_LIST` |
-| `post_install.sh` | NDK wrapper, sysroot symlinks, official snapshots, Flutter Tools Android-host patches, cache cleanup |
-
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         WSL Build Environment                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ Dart SDK    │  │ Flutter     │  │ gen_snapshot            │  │
-│  │ (ARM64)     │  │ Engine      │  │ (Linux ARM64, reused    │  │
-│  │             │  │ (ARM64)     │  │  on-device for Android) │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-│         │               │                    │                   │
-│         └───────────────┴────────────────────┘                   │
-│                         │                                        │
-│                    [Package deb]                                │
-│                         │                                        │
-└─────────────────────────┼────────────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Termux Runtime Environment               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ Our deb     │  │ Android SDK │  │ ARM64 NDK               │  │
-│  │ (built)     │  │ (downloaded)│  │ (downloaded)            │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-│         │               │                    │                   │
-│         └───────────────┴────────────────────┘                   │
-│                         │                                        │
-│              [post_install.sh integration]                      │
-│                         │                                        │
-│                         ▼                                        │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ flutter doctor ✅  flutter build apk ✅  flutter run ✅  │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 ---
 
-## Build Environment Requirements
+## 1. Build Environment Requirements
 
-- Windows 11 + WSL2 (Ubuntu 22.04+)
+- Windows 11 + WSL2 (Ubuntu 22.04+), or any Linux x86-64 host
 - At least 100GB of free disk space
 - At least 16GB RAM
 - Stable network connection
 
-## Complete Build Process
+---
 
-### 1. Install WSL Dependencies
+## 2. Quick Start (One-Command Build)
+
+If the environment is already set up (steps 1-4 below), the entire pipeline
+is:
+
+```bash
+python3 build.py
+```
+
+This command automatically completes:
+
+1. Configure the Linux release build
+2. Compile the Flutter engine
+3. Compile the dart binary (critical!)
+4. Package the deb
+
+A full run takes roughly 2-4 hours on 24 threads. Patches are applied
+automatically during `sync` via the `.gclient` `custom_hooks`, so no explicit
+`patch_*` step is needed — in fact, running one right after `sync` fails with
+"already exists" (see [Troubleshooting](#patch-already-exists-error)).
+
+---
+
+## 3. Step-by-Step Build
+
+Run each step in order.
+
+### Step 1: Install Host Dependencies
 
 ```bash
 # Run in Ubuntu WSL
@@ -128,7 +116,10 @@ sudo apt install -y git curl python3 python3-pip ninja-build pkg-config
 pip3 install fire loguru toml pyyaml
 ```
 
-### 2. Set Up depot_tools
+You also need `gclient` (installed in the next step), `vpython3`, `dpkg`
+(`sysroot.py` runs `dpkg -x`), and `ar` (`package.py` runs `ar rc`).
+
+### Step 2: Set Up depot_tools
 
 ```bash
 cd ~
@@ -137,7 +128,7 @@ export PATH="$HOME/depot_tools:$PATH"
 echo 'export PATH="$HOME/depot_tools:$PATH"' >> ~/.bashrc
 ```
 
-### 3. Clone the Project
+### Step 3: Clone the Project
 
 ```bash
 mkdir -p ~/projects
@@ -146,7 +137,7 @@ git clone https://github.com/GeneralKaos666/flutter-for-termux.git termux-flutte
 cd termux-flutter
 ```
 
-### 4. Sync Flutter Engine Source
+### Step 4: Sync Flutter Engine Source
 
 ```bash
 python3 build.py clone   # Clone Flutter
@@ -155,47 +146,70 @@ python3 build.py sync    # Sync dependencies; the .gclient custom_hooks apply
                          # automatically. Takes several hours (~30GB).
 ```
 
-### 5. One-Command Build (recommended)
+> **About patches:** patches are applied during `sync` — no explicit
+> `patch_*` step is needed. The `patch` helper is only for re-applying a
+> patch to a fresh checkout, e.g. when rebasing on a new Flutter version.
 
-Patches are applied during `sync` — no explicit `patch_*` step is needed.
-Running one right after `sync` fails with "already exists". The `patch` helper
-is only for re-applying a patch to a fresh checkout, e.g. when rebasing on a
-new Flutter version. To build everything, just run:
+### Step 5: Assemble the Sysroot
 
 ```bash
-python3 build.py
+python3 build.py sysroot --arch=arm64
 ```
 
-This command automatically completes:
-1. Configure the Linux release build
-2. Compile the Flutter engine
-3. Compile the dart binary (critical!)
-4. Package the deb
+This downloads the required Termux runtime libraries from the official
+Termux apt repo (skip if `sysroot/` is already assembled for this version).
 
-There is no separate Android gen_snapshot build step — the same Linux
-`gen_snapshot` produced by step 2 is reused on-device for `flutter build apk`
-(see [deb Package Contents](#deb-package-contents)).
-
-Or build step-by-step manually:
+### Step 6: Configure and Compile
 
 ```bash
 # Linux release (also builds the gen_snapshot used by flutter build linux and,
 # on-device, flutter build apk)
 python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
+```
 
-# Package the deb
+There is no separate Android gen_snapshot build step — the same Linux
+`gen_snapshot` produced here is reused on-device for `flutter build apk`
+(see [What Ships in the deb](#5-what-ships-in-the-deb)).
+
+> **Note:** the `build()` ninja invocation includes
+> `flutter/build/archives:dart_sdk_archive` (plus `flutter_patched_sdk` and
+> `flutter_gtk`), so the dart binary is produced as part of the standard
+> build — `ninja flutter` alone would **not** compile it.
+
+### Step 7: Package the deb
+
+```bash
 python3 build.py debuild --arch=arm64
 ```
 
-### 8. Output Files
+### Step 8: Output Files
 
 After the build completes, the deb package is located at:
-```
+
+```text
 release/flutter_3.47.7-5_aarch64.deb
 ```
 
-## deb Package Contents
+---
+
+## 4. Verify the Build
+
+1. Check that the required host-side artifacts exist:
+
+   ```bash
+   # Check all required files
+   ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart  # Critical!
+   ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
+   ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
+   ```
+
+2. Deploy to Termux and run the on-device checklist — see
+   [Test Verification Checklist](#9-test-verification-checklist) below.
+
+---
+
+## 5. What Ships in the deb
 
 | Component | Path | Purpose |
 |------|------|------|
@@ -204,78 +218,18 @@ release/flutter_3.47.7-5_aarch64.deb
 | Linux gen_snapshot | .../engine/linux-arm64/gen_snapshot | flutter run -d linux |
 | Android gen_snapshot | .../engine/android-arm64-release/linux-arm64/gen_snapshot | flutter build apk (on-device path; created by post_install.sh after precache, not a separate deb payload) |
 
-Only the Linux `gen_snapshot` ships in the deb. The Android row is the on-device
-path that `post_install.sh` creates (a symlink to the Linux artifact) once
-`flutter precache --android` has made the `android-arm64-release` directory exist.
+Only the Linux `gen_snapshot` ships in the deb. The Android row is the
+on-device path that `post_install.sh` creates (a symlink to the Linux
+artifact) once `flutter precache --android` has made the
+`android-arm64-release` directory exist.
 
-## Verify the Build
+---
 
-```bash
-# Check all required files
-ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart  # Critical!
-ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
-ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
-```
+## 6. On-Device Setup After Building
 
-## Problem Analysis and Solution (2025-12-28)
-
-### Original Problem
-- `flutter run -d linux` ✓ works
-- `flutter build apk --release` ✗ fails (dart version issue)
-
-### Root Cause
-**`ninja flutter` alone does not compile the dart binary!**
-
-The `bin/cache/dart-sdk/bin/dart` binary must ship in the deb package, otherwise:
-- The flutter command fails to execute properly
-- gen_snapshot version mismatch errors
-
-### Solution
-The FFT `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive` (plus `flutter_patched_sdk` and `flutter_gtk`), so the dart binary is produced as part of the standard build:
-
-```bash
-python3 build.py build --arch=arm64 --mode=release
-```
-
-Or use the one-command build:
-
-```bash
-python3 build.py
-```
-
-### deb Package Contents Confirmation (after fix)
-```
-✓ bin/cache/dart-sdk/bin/dart (102MB)
-✓ bin/cache/artifacts/engine/linux-arm64/gen_snapshot (6.9MB)
-✓ bin/cache/artifacts/engine/android-arm64-release/linux-arm64/gen_snapshot (6.4MB; on-device symlink created by post_install.sh)
-```
-
-## Common Problems
-
-### Build fails: ninja error
-Make sure the patches were applied correctly:
-```bash
-cd flutter/engine/src/flutter
-git diff shell/platform/embedder/BUILD.gn
-```
-
-### Missing dependencies
-```bash
-python3 build.py sysroot --arch=arm64
-```
-
-### vpython3 not found
-Make sure depot_tools is in the PATH:
-```bash
-export PATH="$HOME/depot_tools:$PATH"
-```
-
-### Insufficient disk space
-The Flutter Engine source is about 30GB and the build output about 20GB, so you need at least 60GB of space.
-
-## Termux Setup Before Use (3.47.7)
-
-After installing the deb, run the following in Termux:
+Installing your freshly built deb works exactly like the release install —
+follow [Install guide](INSTALL_GUIDE.md) (the manual deb method), or in
+short:
 
 ```bash
 dpkg -i flutter_3.47.7-5_aarch64.deb
@@ -285,305 +239,419 @@ source $PREFIX/etc/profile.d/flutter.sh
 flutter doctor -v
 ```
 
-`post_install.sh` handles most of the things that had to be done manually in older build versions: Android API 34/36, cmdline-tools, build-tools symlinks, NDK clang driver configuration, CMake toolchain patches, Dart snapshots, Flutter Tools Android-host patches, Gradle plugin ARM64-only ABI, ELF cleaner, shebang fixes, and cache cleanup.
-
-### Per-APK-Project Manual Setup Still Required
-
-```bash
-flutter create myapp
-cd myapp
-sed -i '1s|#!/usr/bin/env bash|#!/data/data/com.termux/files/usr/bin/bash|' android/gradlew
-cat >> android/gradle.properties <<'EOF'
-android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
-EOF
-```
-
-`android/app/build.gradle.kts`:
-
-```kotlin
-android {
-    compileSdk = 36
-    defaultConfig {
-        targetSdk = 36
-        ndk { abiFilters += listOf("arm64-v8a") }
-    }
-}
-```
-
-Build:
-
-```bash
-flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
-```
-
-### Per-Linux-Desktop-Project Manual Setup Still Required
-
-```bash
-flutter create mylinux --platforms=linux
-cd mylinux
-sed -i '1i set(CMAKE_SYSTEM_NAME Linux)' linux/CMakeLists.txt
-flutter build linux --release
-```
-
-## Build Common Problems and Solutions (Pitfalls) 🔥
-
-This section records the various problems and their solutions encountered during the build, to avoid repeating the same mistakes.
-
-### 1. vpython3 not found (depot_tools issue)
-
-**Problem description:**
-```
-/bin/sh: vpython3: not found
-```
-
-ninja cannot find vpython3 during compilation. This is because depot_tools' vpython3 is a symlink pointing to vpython, and vpython is also broken.
-
-**Solution:**
-Manually create a vpython3 wrapper script:
-
-```bash
-cd flutter/engine/src/flutter/third_party/depot_tools/.cipd_bin
-
-# Delete the broken symlink
-rm -f vpython3
-
-# Create the wrapper script
-cat > vpython3 << 'EOF'
-#!/bin/bash
-exec python3 "$@"
-EOF
-
-chmod +x vpython3
-```
-
-**Note:** If you are on Windows/WSL, make sure the script uses LF line endings, not CRLF:
-```bash
-# Fix the CRLF issue
-cat vpython3 | tr -d '\r' > vpython3.tmp && mv vpython3.tmp vpython3
-chmod +x vpython3
-```
-
-### 2. openjdk-17 does not exist (Termux package issue)
-
-> **Deprecated:** modern installers pull a single JDK (`openjdk-21`) plus `7zip`;
-> `openjdk-17` is no longer referenced anywhere in the project.
-
-**Problem description:**
-```
-android-sdk depends on openjdk-17; however:
-  Package openjdk-17 is not installed.
-```
-
-The android-sdk package depends on openjdk-17, but Termux only has openjdk-21.
-
-**Solution:**
-```bash
-# Install openjdk-21
-pkg install openjdk-21
-
-# Force-configure android-sdk (ignore dependencies)
-dpkg --force-depends --configure android-sdk
-```
-
-**Permanent fix:** the one-command installer (`install_flutter_complete.sh`)
-installs `openjdk-21` itself (overridable with the `JAVA_PACKAGE` environment
-variable), so a normal install pulls Java in. `package.yaml` does **not**
-declare it, so a manual `apt install ./<deb>` must have a JDK present first:
-
-```yaml
-Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
-```
-
-### 3. libflutter_linux_gtk.so missing (Linux desktop support)
-
-**Problem description:**
-```
-flutter build linux --debug
-Error: Could not find libflutter_linux_gtk.so
-```
-
-`flutter build linux` requires `libflutter_linux_gtk.so`, but the default build does not compile this target.
-
-**Solution:**
-Enable the flutter_gtk target in the `build()` method of `build.py`:
-
-```python
-cmd = [
-    'ninja', '-C', utils.target_output(root, arch, mode),
-    'flutter',
-    # Must enable this line to build Linux desktop support
-    'flutter/shell/platform/linux:flutter_gtk',
-]
-```
-
-Then rebuild:
-```bash
-python3 build.py build --arch=arm64 --mode=debug
-```
-
-### 4. dartaotruntime missing
-
-**Problem description:**
-```
-Error: dartaotruntime not found
-```
-
-`flutter build apk --release` requires dartaotruntime.
-
-**Solution:**
-```bash
-# Copy dartaotruntime_product to dart-sdk/bin
-cp flutter/engine/src/out/linux_debug_arm64/dartaotruntime_product \
-   flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dartaotruntime
-```
-
-### 5. CRLF line-ending issue (Windows/WSL)
-
-**Problem description:**
-```
-C:/Program: No such file or directory
-```
-
-Shell scripts created on Windows may have CRLF line endings, causing execution to fail.
-
-**Solution:**
-```bash
-# Convert to LF
-cat script.sh | tr -d '\r' > script.tmp && mv script.tmp script.sh
-chmod +x script.sh
-
-# Or use dos2unix
-dos2unix script.sh
-```
-
-### 6. ADB remote installation fails
-
-**Problem description:**
-Commands sent to Termux using `am broadcast` do not execute.
-
-**Solution:**
-External app execution permission must be enabled in Termux:
-
-```bash
-# Run in Termux
-echo "allow-external-apps=true" >> ~/.termux/termux.properties
-termux-reload-settings
-```
-
-Or just run the installation commands manually in Termux.
-
-### 7. X11-related dependencies
-
-**Problem description:**
-`flutter run -d linux` requires an X11 environment.
-
-**Solution:**
-Install the X11 repo and related packages in Termux:
-```bash
-pkg install x11-repo
-pkg install termux-x11-nightly
-
-# Start Termux:X11
-termux-x11 &
-
-# Set DISPLAY
-export DISPLAY=:0
-
-# Then run the Flutter app
-flutter run -d linux
-```
-
-### 8. gen_snapshot version mismatch
-
-**Problem description:**
-```
-version differs from vm's version
-```
-
-The dart and gen_snapshot versions are inconsistent.
-
-**Solution:**
-Make sure to run the full pipeline so dart and gen_snapshot come from the same build:
-```bash
-python3 build.py
-```
-
-### 9. ninja: error: 'xxx' does not exist
-
-**Problem description:**
-Building immediately after configuring reports a file-does-not-exist error.
-
-**Solution:**
-Make sure the configuration completes before building:
-```bash
-# Configure first
-python3 build.py configure --arch=arm64 --mode=debug
-
-# Wait for configuration to finish, then build
-python3 build.py build --arch=arm64 --mode=debug
-```
-
-### 10. TLS segment underaligned (Bionic linker issue)
-
-**Problem description:**
-```
-error: "dart": executable's TLS segment is underaligned: alignment is 8 (skew 0), needs to be at least 64 for ARM64 Bionic
-```
-
-This error appears when running `flutter doctor` or any dart command on Termux.
-
-**Cause:**
-The dart binary was compiled using glibc's dynamic linker (`/lib/ld-linux-aarch64.so.1`) instead of Android Bionic's (`/system/bin/linker64`). Android Bionic requires the TLS (Thread Local Storage) segment to be aligned to 64 bytes.
-
-**Solution:**
-Add the bionic linker to the `executable_ldconfig` config in `build/config/termux/BUILD.gn`:
-
-```gn
-config("executable_ldconfig") {
-  if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {
-    ldflags = [
-      "-Bdynamic",
-      "-Wl,-z,nocopyreloc",
-      "-Wl,--dynamic-linker=/system/bin/linker64",  # Must add!
-    ]
-  } else {
-    configs = ["//build/config/gcc:executable_ldconfig"]
-  }
-}
-```
-
-Then reconfigure and rebuild dart:
-```bash
-python3 build.py configure --arch=arm64 --mode=debug
-ninja -C flutter/engine/src/out/linux_debug_arm64 exe.unstripped/dart -j24
-```
+`post_install.sh` handles most of the things that had to be done manually in
+older build versions: Android API 34/36, cmdline-tools, build-tools symlinks,
+NDK clang driver configuration, CMake toolchain patches, Dart snapshots,
+Flutter Tools Android-host patches, Gradle plugin ARM64-only ABI, ELF
+cleaner, shebang fixes, and cache cleanup.
+
+Per-project setup (the APK `gradle.properties` / `build.gradle.kts` pins and
+the Linux desktop `CMakeLists.txt` tweak) is covered step-by-step in the
+[Install guide](INSTALL_GUIDE.md#build-your-first-android-apk) — your own
+build needs exactly the same per-project settings.
 
 ---
 
-## Test Verification Checklist
+## 7. Troubleshooting
 
-After the build completes, verify with the following checklist:
+Each entry shows the exact error (**Symptom**), why it happens (**Cause**),
+and the fix (**Fix**).
 
-```bash
-# 1. Check required files exist
-ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart
-ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
-ls -la flutter/engine/src/out/linux_debug_arm64/libflutter_linux_gtk.so
-ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
+### ninja build error
 
-# 2. After deploying to Termux (after running post_install.sh)
-flutter doctor -v               # ✅ verified
-flutter create test_app         # ✅ verified
-cd test_app
-flutter build apk --release     # ✅ verified
-flutter build apk --debug       # ✅ verified
-flutter build linux --debug     # ✅ verified (requires Termux:X11)
-flutter run                     # ✅ verified (Hot Reload supported)
+- **Symptom:** the `ninja` build fails in a shell/platform file.
+- **Cause:** the patches were not applied correctly.
+- **Fix:** verify the patch is present:
+
+  ```bash
+  cd flutter/engine/src/flutter
+  git diff shell/platform/embedder/BUILD.gn
+  ```
+
+### Patch "already exists" error
+
+- **Symptom:** running `python3 build.py patch_*` right after `sync` fails
+  with "already exists".
+- **Cause:** the `.gclient` `custom_hooks` already applied the patches during
+  `sync`.
+- **Fix:** this is expected — do not re-apply. Use `gclient sync -D` or reset
+  the checkout first if you really need to re-test a patch manually.
+
+### Missing dependencies at compile time
+
+- **Symptom:** headers or libraries are missing while compiling.
+- **Cause:** the sysroot was not assembled (or is stale).
+- **Fix:**
+
+  ```bash
+  python3 build.py sysroot --arch=arm64
+  ```
+
+### vpython3 not found (depot_tools issue)
+
+- **Symptom:**
+
+  ```text
+  /bin/sh: vpython3: not found
+  ```
+
+- **Cause:** depot_tools is not on the PATH, or depot_tools' `vpython3` is a
+  symlink pointing to `vpython`, and `vpython` is also broken.
+- **Fix:** first make sure depot_tools is on the PATH:
+
+  ```bash
+  export PATH="$HOME/depot_tools:$PATH"
+  ```
+
+  If ninja still cannot find vpython3 during compilation, manually create a
+  vpython3 wrapper script:
+
+  ```bash
+  cd flutter/engine/src/flutter/third_party/depot_tools/.cipd_bin
+
+  # Delete the broken symlink
+  rm -f vpython3
+
+  # Create the wrapper script
+  cat > vpython3 << 'EOF'
+  #!/bin/bash
+  exec python3 "$@"
+  EOF
+
+  chmod +x vpython3
+  ```
+
+  > **Note:** if you are on Windows/WSL, make sure the script uses LF line
+  > endings, not CRLF:
+  >
+  > ```bash
+  > # Fix the CRLF issue
+  > cat vpython3 | tr -d '\r' > vpython3.tmp && mv vpython3.tmp vpython3
+  > chmod +x vpython3
+  > ```
+
+### openjdk-17 does not exist (Termux package issue)
+
+> **Deprecated:** modern installers pull a single JDK (`openjdk-21`) plus
+> `7zip`; `openjdk-17` is no longer referenced anywhere in the project.
+
+- **Symptom:**
+
+  ```text
+  android-sdk depends on openjdk-17; however:
+    Package openjdk-17 is not installed.
+  ```
+
+- **Cause:** the android-sdk package depends on openjdk-17, but Termux only
+  has openjdk-21.
+- **Fix:**
+
+  ```bash
+  # Install openjdk-21
+  pkg install openjdk-21
+
+  # Force-configure android-sdk (ignore dependencies)
+  dpkg --force-depends --configure android-sdk
+  ```
+
+  **Permanent fix:** the one-command installer (`install_flutter_complete.sh`)
+  installs `openjdk-21` itself (overridable with the `JAVA_PACKAGE`
+  environment variable), so a normal install pulls Java in.
+  `package.yaml` does **not** declare it, so a manual `apt install ./<deb>`
+  must have a JDK present first:
+
+  ```yaml
+  Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
+  ```
+
+### libflutter_linux_gtk.so missing (Linux desktop support)
+
+- **Symptom:**
+
+  ```text
+  flutter build linux --debug
+  Error: Could not find libflutter_linux_gtk.so
+  ```
+
+- **Cause:** `flutter build linux` requires `libflutter_linux_gtk.so`, but an
+  older build configuration did not compile this target.
+- **Fix:** enable the flutter_gtk target in the `build()` method of
+  `build.py` (already included in the current pipeline):
+
+  ```python
+  cmd = [
+      'ninja', '-C', utils.target_output(root, arch, mode),
+      'flutter',
+      # Must enable this line to build Linux desktop support
+      'flutter/shell/platform/linux:flutter_gtk',
+  ]
+  ```
+
+  Then rebuild:
+
+  ```bash
+  python3 build.py build --arch=arm64 --mode=debug
+  ```
+
+### dartaotruntime missing
+
+- **Symptom:**
+
+  ```text
+  Error: dartaotruntime not found
+  ```
+
+- **Cause:** `flutter build apk --release` requires dartaotruntime.
+- **Fix:** copy it into the dart-sdk bin directory:
+
+  ```bash
+  # Copy dartaotruntime_product to dart-sdk/bin
+  cp flutter/engine/src/out/linux_debug_arm64/dartaotruntime_product \
+     flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dartaotruntime
+  ```
+
+### CRLF line-ending issue (Windows/WSL)
+
+- **Symptom:**
+
+  ```text
+  C:/Program: No such file or directory
+  ```
+
+- **Cause:** shell scripts created on Windows may have CRLF line endings,
+  causing execution to fail.
+- **Fix:**
+
+  ```bash
+  # Convert to LF
+  cat script.sh | tr -d '\r' > script.tmp && mv script.tmp script.sh
+  chmod +x script.sh
+
+  # Or use dos2unix
+  dos2unix script.sh
+  ```
+
+### ADB remote installation fails
+
+- **Symptom:** commands sent to Termux using `am broadcast` do not execute.
+- **Cause:** external app execution permission is not enabled in Termux.
+- **Fix:**
+
+  ```bash
+  # Run in Termux
+  echo "allow-external-apps=true" >> ~/.termux/termux.properties
+  termux-reload-settings
+  ```
+
+  Or just run the installation commands manually in Termux.
+
+### X11-related dependencies (`flutter run -d linux` has no display)
+
+- **Symptom:** `flutter run -d linux` requires an X11 environment.
+- **Cause:** no X server is available inside Termux.
+- **Fix:** install the X11 repo and related packages in Termux:
+
+  ```bash
+  pkg install x11-repo
+  pkg install termux-x11-nightly
+
+  # Start Termux:X11
+  termux-x11 &
+
+  # Set DISPLAY
+  export DISPLAY=:0
+
+  # Then run the Flutter app
+  flutter run -d linux
+  ```
+
+### gen_snapshot version mismatch
+
+- **Symptom:**
+
+  ```text
+  version differs from vm's version
+  ```
+
+- **Cause:** the dart and gen_snapshot binaries come from different builds.
+- **Fix:** make sure to run the full pipeline so dart and gen_snapshot come
+  from the same build:
+
+  ```bash
+  python3 build.py
+  ```
+
+### ninja: error: 'xxx' does not exist
+
+- **Symptom:** building immediately after configuring reports a
+  file-does-not-exist error.
+- **Cause:** the build started before the configuration finished.
+- **Fix:** make sure the configuration completes before building:
+
+  ```bash
+  # Configure first
+  python3 build.py configure --arch=arm64 --mode=debug
+
+  # Wait for configuration to finish, then build
+  python3 build.py build --arch=arm64 --mode=debug
+  ```
+
+### TLS segment underaligned (Bionic linker issue)
+
+- **Symptom:**
+
+  ```text
+  error: "dart": executable's TLS segment is underaligned: alignment is 8 (skew 0), needs to be at least 64 for ARM64 Bionic
+  ```
+
+  This error appears when running `flutter doctor` or any dart command on
+  Termux.
+- **Cause:** the dart binary was compiled using glibc's dynamic linker
+  (`/lib/ld-linux-aarch64.so.1`) instead of Android Bionic's
+  (`/system/bin/linker64`). Android Bionic requires the TLS (Thread Local
+  Storage) segment to be aligned to 64 bytes.
+- **Fix:** add the bionic linker to the `executable_ldconfig` config in
+  `build/config/termux/BUILD.gn` (already in the current
+  `patches/engine.patch`):
+
+  ```gn
+  config("executable_ldconfig") {
+    if (current_toolchain == "//build/toolchain/termux:${current_cpu}") {
+      ldflags = [
+        "-Bdynamic",
+        "-Wl,-z,nocopyreloc",
+        "-Wl,--dynamic-linker=/system/bin/linker64",  # Must add!
+      ]
+    } else {
+      configs = ["//build/config/gcc:executable_ldconfig"]
+    }
+  }
+  ```
+
+  Then reconfigure and rebuild dart:
+
+  ```bash
+  python3 build.py configure --arch=arm64 --mode=debug
+  ninja -C flutter/engine/src/out/linux_debug_arm64 exe.unstripped/dart -j24
+  ```
+
+### Insufficient disk space
+
+- **Symptom:** the build fails with no space left on device/host.
+- **Cause:** the Flutter Engine source is about 30GB and the build output
+  about 20GB.
+- **Fix:** keep at least 60GB free (the environment requirements above
+  recommend 100GB to be safe).
+
+---
+
+## 8. Known Limitations
+
+### Android APK only supports ARM64
+
+- **Problem:** `flutter build apk --release` only supports the
+  `android-arm64` platform.
+- **Cause:** we can only compile the ARM64 version of gen_snapshot:
+  - `android-arm` (32-bit): BoringSSL has a 32-bit shift overflow compile error
+  - `android-x64`: The ARM64 sysroot cannot be used for x64 cross-compilation
+- **Impact:** the built APK can only run on ARM64 devices and does not support
+  ARM32 or x86 emulators.
+- **Usage:** explicitly specify ARM64 to avoid the old cache or project
+  settings being misdetected:
+
+  ```bash
+  flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
+  ```
+
+### Debug vs Release mode mismatch (technical background)
+
+The current deb package uses binaries built in **release mode**:
+
+- `dart` - release mode
+- `dartaotruntime` - release mode
+- `frontend_server_aot.dart.snapshot` - release mode
+- `gen_snapshot` - release mode
+
+This is because the deb packages only the modes listed in
+`build.toml [build] runtime`.
+
+**Impact on users:**
+
+- `flutter doctor` ✅ runs normally
+- `flutter build apk --release` ✅ runs normally (uses the android gen_snapshot)
+- `flutter run -d linux --release` / `flutter build linux --release` ✅ run normally
+- `flutter run -d linux` (debug) ⚠️ needs a debug-mode engine, so pass
+  `--release` or `--profile`, or rebuild with `--mode=debug`
+
+### Release-mode build problems (developer reference)
+
+If you try to build release mode, you may encounter:
+
+**sysroot header conflict**
+
+```text
+error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbstate_t')
 ```
 
-## Target Version Status (3.47.7)
+- **Cause:** the sysroot contains both glibc and bionic headers:
+  - `/sysroot/usr/include/` - glibc headers
+  - `/sysroot/data/data/com.termux/files/usr/include/` - Termux/bionic headers
+- **Resolution direction:** the sysroot needs to be cleaned to keep only the
+  bionic headers.
 
-### Feature Test Results (updated 2026-08-15)
+**BoringSSL getrandom syscall issue**
+
+```text
+error: This system call is not available on Android
+```
+
+- **Cause:** BoringSSL detects that the getrandom() syscall is unavailable.
+- **Resolution direction:** a `__ANDROID__` define needs to be added or
+  BoringSSL needs to be patched.
+
+**dedup_instructions snapshot flag error**
+
+```text
+Flag dedup_instructions is false in snapshot, but dedup_instructions is always true in product mode
+```
+
+- **Cause:** `dartaotruntime_product` expects a product-mode snapshot, but
+  `frontend_server_aot.dart.snapshot` was built in debug mode.
+- **Resolution direction:** build a release-mode
+  `frontend_server_aot.dart.snapshot`.
+
+---
+
+## 9. Test Verification Checklist
+
+After the build completes, verify with the following checklist.
+
+1. Check required files exist on the build host:
+
+   ```bash
+   # 1. Check required files
+   ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart
+   ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
+   ls -la flutter/engine/src/out/linux_debug_arm64/libflutter_linux_gtk.so
+   ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
+   ```
+
+2. After deploying to Termux (after running post_install.sh):
+
+   ```bash
+   # 2. After deploying to Termux (after running post_install.sh)
+   flutter doctor -v               # ✅ verified
+   flutter create test_app         # ✅ verified
+   cd test_app
+   flutter build apk --release     # ✅ verified
+   flutter build apk --debug       # ✅ verified
+   flutter build linux --debug     # ✅ verified (requires Termux:X11)
+   flutter run                     # ✅ verified (Hot Reload supported)
+   ```
+
+---
+
+## 10. Feature Test Results (3.47.7, updated 2026-08-15)
 
 | Feature | Status | Description |
 |------|------|------|
@@ -596,197 +664,78 @@ flutter run                     # ✅ verified (Hot Reload supported)
 | `flutter build linux --release` | ✅ OK | Produces an ARM64 ELF bundle |
 | `flutter run` (Android) | ✅ Supported | A device is only shown after ADB connects within Termux |
 
-### Known Limitations
+---
 
-#### 1. Android APK only supports ARM64
+## 11. Upgrading the Flutter Version
 
-**Problem:** `flutter build apk --release` only supports the `android-arm64` platform.
+The upgrade runbook (bump `build.toml`, rebase patches, rebuild, test,
+publish) lives in the [Upgrade guide](UPGRADE_GUIDE.md). The one-command
+pipeline also handles upgrades when the patches apply cleanly:
 
-**Cause:** We can only compile the ARM64 version of gen_snapshot:
-- `android-arm` (32-bit): BoringSSL has a 32-bit shift overflow compile error
-- `android-x64`: The ARM64 sysroot cannot be used for x64 cross-compilation
-
-**Impact:** The built APK can only run on ARM64 devices and does not support ARM32 or x86 emulators.
-
-**Usage:** Explicitly specify ARM64 to avoid the old cache or project settings being misdetected:
 ```bash
-flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
+python3 build.py
 ```
 
-#### 2. Debug vs Release mode mismatch (technical background)
+### Patch maintenance tips
 
-The current deb package uses binaries built in **release mode**:
-- `dart` - release mode
-- `dartaotruntime` - release mode
-- `frontend_server_aot.dart.snapshot` - release mode
-- `gen_snapshot` - release mode
-
-This is because the deb packages only the modes listed in `build.toml [build] runtime`.
-
-**Impact on users:**
-- `flutter doctor` ✅ runs normally
-- `flutter build apk --release` ✅ runs normally (uses the android gen_snapshot)
-- `flutter run -d linux --release` / `flutter build linux --release` ✅ run normally
-- `flutter run -d linux` (debug) ⚠️ needs a debug-mode engine, so pass `--release` or `--profile`, or rebuild with `--mode=debug`
-
-### Release mode build problems (developer reference)
-
-If you try to build release mode, you may encounter:
-
-#### sysroot header conflict
-```
-error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbstate_t')
-```
-
-**Cause:** The sysroot contains both glibc and bionic headers:
-- `/sysroot/usr/include/` - glibc headers
-- `/sysroot/data/data/com.termux/files/usr/include/` - Termux/bionic headers
-
-**Resolution direction:** The sysroot needs to be cleaned to keep only the bionic headers.
-
-#### BoringSSL getrandom syscall issue
-```
-error: This system call is not available on Android
-```
-
-**Cause:** BoringSSL detects that the getrandom() syscall is unavailable.
-
-**Resolution direction:** A `__ANDROID__` define needs to be added or BoringSSL needs to be patched.
+1. **Keep patches minimal**: only modify what is necessary
+2. **Add comments**: explain in the patch why the modification is needed
+3. **Version isolation**: each Flutter version has its own patch directory
+4. **Record changes**: update docs/releases/CHANGELOG.md
 
 ---
 
-## Termux APK Build Complete Setup Guide (3.47.7)
+## History
 
-> **📌 Important: the runtime layer is handled automatically by `post_install.sh`; this section only lists the settings that must be kept in each Flutter project.**
+<details>
+<summary><b>Problem analysis (2025-12-28): why `ninja flutter` alone was not enough</b></summary>
 
-### 1. Pin Android API / ABI
+### Original problem
 
-```kotlin
-android {
-    compileSdk = 36
+- `flutter run -d linux` ✓ works
+- `flutter build apk --release` ✗ fails (dart version issue)
 
-    defaultConfig {
-        targetSdk = 36
-        ndk { abiFilters += listOf("arm64-v8a") }
-    }
-}
-```
+### Root cause
 
-### 2. Specify the Termux aapt2
+**`ninja flutter` alone does not compile the dart binary!**
 
-```properties
-android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
-```
+The `bin/cache/dart-sdk/bin/dart` binary must ship in the deb package,
+otherwise:
 
-### 3. Fix the Gradle wrapper shebang
+- The flutter command fails to execute properly
+- gen_snapshot version mismatch errors
 
-```bash
-sed -i '1s|#!/usr/bin/env bash|#!/data/data/com.termux/files/usr/bin/bash|' android/gradlew
-```
+### Solution
 
-### 4. Build and verify
+The FFT `build()` ninja invocation includes
+`flutter/build/archives:dart_sdk_archive` (plus `flutter_patched_sdk` and
+`flutter_gtk`), so the dart binary is produced as part of the standard build:
 
 ```bash
-flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
-ls -lh build/app/outputs/flutter-apk/app-release.apk
+python3 build.py build --arch=arm64 --mode=release
 ```
 
-If you hit a Kotlin error from the Flutter 3.44 Gradle plugin (e.g. `PLATFORM_ABI_LIST` unresolved), the post-install template or the Gradle cache is stale:
+Or use the one-command build:
 
 ```bash
-bash $PREFIX/share/flutter/post_install.sh
-./android/gradlew --stop || true
-rm -rf ~/.gradle/caches .gradle android/.gradle build android/app/build
-flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
-```
-
-### 5. Linux desktop build
-
-```bash
-sed -i '1i set(CMAKE_SYSTEM_NAME Linux)' linux/CMakeLists.txt
-flutter build linux --release
-```
-
-## Upgrading the Flutter Version
-
-When Flutter releases a new version, upgrade with the following steps:
-
-### 1. Rebase the patches
-
-Patches live flat in `patches/` (engine.patch, dart.patch, skia.patch). After
-`clone` + `sync` the `.gclient` `custom_hooks` try to apply them automatically.
-To test whether they still apply cleanly against the new tag, run the apply
-helpers manually on a fresh checkout (skip if `sync` already applied them):
-
-```bash
-python3 build.py patch --file=./patches/engine.patch
-python3 build.py patch --file=./patches/dart.patch --path=engine/src/flutter/third_party/dart
-python3 build.py patch --file=./patches/skia.patch --path=engine/src/flutter/third_party/skia
-```
-
-> Re-applying right after a `sync` that already applied them fails with
-> "already exists"; use `gclient sync -D` or reset the checkout first.
-
-### 2. Update build.toml
-
-```toml
-[flutter]
-tag = '<NEW_TAG>'  # Update the version number
-```
-
-### 3. Sync the new version
-
-```bash
-python3 build.py clone
-python3 build.py sync  # Downloads the new version's engine; the .gclient
-                       # custom_hooks try to apply the rebased patches
-```
-
-### 4. Confirm the patches applied
-
-The `sync` above already attempted the patches via the `.gclient`
-`custom_hooks`. To re-check a specific one on a clean tree (e.g. after fixing
-a conflict), apply it manually — but only if the hook did not already apply it
-(a fresh `git checkout` / `gclient sync -D` first):
-
-```bash
-python3 build.py patch --file=./patches/engine.patch
-python3 build.py patch --file=./patches/dart.patch --path=engine/src/flutter/third_party/dart
-python3 build.py patch --file=./patches/skia.patch --path=engine/src/flutter/third_party/skia
-```
-
-**If a patch fails:**
-
-1. Look at the error message and find where the conflict is
-2. Manually fix the patch files in `patches/`
-3. Re-run the patch command
-
-### 5. Build the new version
-
-```bash
-python3 build.py sysroot --arch=arm64
 python3 build.py
-python3 build.py debuild --arch=arm64
 ```
 
-### 6. Test
+### deb package contents confirmation (after fix)
 
-Test all functionality in a clean Termux environment:
-
-```bash
-# Install
-dpkg -i flutter_<NEW_TAG>_aarch64.deb
-apt-get install -f
-bash $PREFIX/share/flutter/post_install.sh
-
-# Test
-flutter doctor -v
-flutter create test_app && cd test_app
-flutter build apk --release
-flutter build linux
+```text
+✓ bin/cache/dart-sdk/bin/dart (102MB)
+✓ bin/cache/artifacts/engine/linux-arm64/gen_snapshot (6.9MB)
+✓ bin/cache/artifacts/engine/android-arm64-release/linux-arm64/gen_snapshot (6.4MB; on-device symlink created by post_install.sh)
 ```
 
-### 7. Release
+</details>
+
+<details>
+<summary><b>Historical manual release flow (pre-automation)</b></summary>
+
+Before the `Build` workflow auto-published releases (see
+[CI/CD](../CI_CD.md#release-policy)), upgrades were released by hand:
 
 ```bash
 # Commit changes
@@ -804,18 +753,31 @@ gh release create v<NEW_TAG>-termux \
   flutter_<NEW_TAG>_aarch64.deb
 ```
 
-### Patch maintenance tips
+Test all functionality in a clean Termux environment before tagging:
 
-1. **Keep patches minimal**: only modify what is necessary
-2. **Add comments**: explain in the patch why the modification is needed
-3. **Version isolation**: each Flutter version has its own patch directory
-4. **Record changes**: update docs/releases/CHANGELOG.md
+```bash
+# Install
+dpkg -i flutter_<NEW_TAG>_aarch64.deb
+apt-get install -f
+bash $PREFIX/share/flutter/post_install.sh
 
----
+# Test
+flutter doctor -v
+flutter create test_app && cd test_app
+flutter build apk --release
+flutter build linux
+```
 
-## Update Log
+</details>
+
+<details>
+<summary><b>Update log</b></summary>
+
+Version history lives in [docs/releases/CHANGELOG.md](../releases/CHANGELOG.md).
+Historical build-guide milestones:
 
 ### 2026-06-01 v3.44.0
+
 - ✅ Flutter 3.44.0 / Dart 3.12 deb packaged and passed the artifact validator
 - ✅ Termux smoke: doctor / create / build apk / build linux
 - ✅ Added the Flutter Gradle plugin `PLATFORM_ABI_LIST` and cache cleanup
@@ -824,6 +786,7 @@ gh release create v<NEW_TAG>-termux \
 - 📝 Reorganized the 3.44.0 status of README, docs/guides/INSTALL_GUIDE, docs/releases/RELEASE_NOTES, and docs/releases/CHANGELOG
 
 ### 2025-12-29 v5
+
 - ✅ Full `flutter run` + Hot Reload support
 - ✅ `post_install.sh` automatically downloads official Dart SDK snapshots (required for hot reload)
 - ✅ `post_install.sh` automatically runs termux-elf-cleaner (fixes linker warnings)
@@ -831,6 +794,7 @@ gh release create v<NEW_TAG>-termux \
 - 📝 Updated the feature status table
 
 ### 2025-12-29 v4
+
 - ✅ `flutter build apk --release` fully working
 - ✅ `flutter build apk --debug` fully working
 - ✅ `flutter build apk --profile` fully working
@@ -838,13 +802,17 @@ gh release create v<NEW_TAG>-termux \
 - 📝 Fully documented all the steps required for APK builds
 
 ### 2025-12-29 v3
+
 - ✅ `flutter doctor` fully working
 - ✅ `flutter build apk --release` working (android-arm64 only)
 - ⚠️ Documented the current debug/release mode limitation
 - ⚠️ Documented the sysroot conflict issue for future fixes
 
 ### 2025-12-28 v2
+
 - ✅ Old record: previously changed `flutter build apk --release` to default to ARM64; from 3.44.0 on it is still recommended to explicitly add `--target-platform android-arm64`
 - ✅ Added flutter_gtk build support for `flutter build linux`
 - ✅ Added common build problems and their solutions
 - ✅ Updated the dependency from openjdk-17 to openjdk-21
+
+</details>

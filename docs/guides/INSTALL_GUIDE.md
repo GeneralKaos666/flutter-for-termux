@@ -1,6 +1,8 @@
-# Termux Flutter 3.47.7 Installation Guide
+# Install Guide — Flutter 3.47.7 on Termux
 
-This guide covers `flutter_3.47.7-5_aarch64.deb`, targeting the following on ARM64 Termux:
+This guide walks you through installing `flutter_3.47.7-5_aarch64.deb` on an
+ARM64 Termux device, verifying it, and building your first app. After
+installing you will have:
 
 - `flutter doctor -v`
 - `flutter create`
@@ -30,40 +32,93 @@ This guide covers `flutter_3.47.7-5_aarch64.deb`, targeting the following on ARM
 | Storage | At least 5GB; 8GB+ recommended for a full Android SDK/NDK + Gradle cache |
 | Java | `openjdk-21` |
 
+> **Before you start:** run `pkg update && pkg upgrade`, and install the
+> `x11-repo` package — the installer and the manual steps both need it:
+>
+> ```bash
+> pkg update && pkg upgrade
+> pkg install x11-repo
+> ```
+
+---
+
 ## Method 1: One-Command Install (Recommended)
 
-```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh
-bash ~/install.sh
-```
+1. Download and run the installer:
 
-This script installs Flutter, the Android SDK/NDK, the required Termux packages, and runs post-install. The first run downloads a large amount of data, so keep the screen on and the network stable.
+   ```bash
+   curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh
+   bash ~/install.sh
+   ```
+
+   This script installs Flutter, the Android SDK/NDK, the required Termux
+   packages, and runs post-install for you.
+
+2. Wait for it to finish. The first run downloads a large amount of data, so
+   keep the screen on and the network stable.
+
+3. Continue with [Verify the Installation](#verify-the-installation).
+
+---
 
 ## Method 2: Manual deb Install
 
-```bash
-pkg update -y
-pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
+Run each step in order inside Termux.
 
-cd ~
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-5_aarch64.deb
-sha256sum flutter_3.47.7-5_aarch64.deb
-# Confirm the output matches: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
+1. Install the prerequisites:
 
-dpkg -i flutter_3.47.7-5_aarch64.deb
-apt --fix-broken install -y
+   ```bash
+   pkg update -y
+   pkg install -y x11-repo git wget curl unzip openjdk-21 aapt2 android-tools cmake ninja clang
+   ```
 
-# Required: dpkg only installs files; this step patches the Termux runtime.
-bash $PREFIX/share/flutter/post_install.sh
+2. Download the deb and verify its checksum:
 
-source $PREFIX/etc/profile.d/flutter.sh
-flutter doctor -v
-```
+   ```bash
+   cd ~
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-5_aarch64.deb
+   sha256sum flutter_3.47.7-5_aarch64.deb
+   ```
 
-These warnings in `flutter doctor` are expected:
+   Expected output — the hash must match exactly:
 
-- unknown channel / unknown upstream source: the Flutter SDK in the deb is not an official git remote checkout.
-- no connected device: no ADB device connected in Termux yet; this does not affect `flutter build apk`.
+   ```text
+   3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.7-5_aarch64.deb
+   ```
+
+3. Install the package and repair any missing dependencies:
+
+   ```bash
+   dpkg -i flutter_3.47.7-5_aarch64.deb
+   apt --fix-broken install -y
+   ```
+
+4. Run post-install. **This step is required** — `dpkg` only copies files;
+   post-install patches the Termux runtime so Flutter actually works:
+
+   ```bash
+   bash $PREFIX/share/flutter/post_install.sh
+   ```
+
+5. Load the Flutter environment into your shell and check the install:
+
+   ```bash
+   source $PREFIX/etc/profile.d/flutter.sh
+   flutter doctor -v
+   ```
+
+6. Continue with [Verify the Installation](#verify-the-installation).
+
+### Expected `flutter doctor` warnings (not errors)
+
+These two warnings are normal and can be ignored:
+
+- **unknown channel / unknown upstream source** — the Flutter SDK in the deb
+  is not an official git remote checkout.
+- **no connected device** — no ADB device is connected in Termux yet; this
+  does not affect `flutter build apk`.
+
+---
 
 ## What post_install.sh Does
 
@@ -76,14 +131,11 @@ These warnings in `flutter doctor` are expected:
 | NDK | Configures the clang driver and host-tag aliases, patches the CMake toolchain, replaces objcopy/strip |
 | Linux desktop | Enables `flutter build linux` to run on the Termux host |
 
-If you still see old Gradle or Kotlin errors after upgrading, re-run:
-
-```bash
-bash $PREFIX/share/flutter/post_install.sh
-rm -rf ~/.gradle/caches ~/.gradle/daemon
-```
+---
 
 ## Verify the Installation
+
+Run all four checks:
 
 ```bash
 flutter --version
@@ -97,184 +149,257 @@ Expected highlights:
 - `flutter --version` shows Flutter 3.47.7.
 - `dart --version` shows `android_arm64` (Termux JIT Dart).
 - `dartvm --version` shows `linux_arm64` (engine VM).
+- `flutter doctor -v` may show the two expected warnings listed above.
 
-## Create an Android APK Project (Mode A: Local Build as an Example)
+---
 
-Create the project and fix the shebang:
+## Build Your First Android APK
 
-```bash
-flutter create myapp
-cd myapp
-sed -i '1s|#!/usr/bin/env bash|#!/data/data/com.termux/files/usr/bin/bash|' android/gradlew
-```
+1. Create the project and fix the Gradle wrapper shebang:
 
-1. Set the project Gradle properties (in `android/gradle.properties`):
+   ```bash
+   flutter create myapp
+   cd myapp
+   sed -i '1s|#!/usr/bin/env bash|#!/data/data/com.termux/files/usr/bin/bash|' android/gradlew
+   ```
 
-```properties
-android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
-android.enableResourceOptimizations=false
-shrink=false
-org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
-```
+2. Set the project Gradle properties (in `android/gradle.properties`):
 
-2. Edit `android/app/build.gradle.kts` (set the SDK and disable minification/shrinking):
+   ```properties
+   android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
+   android.enableResourceOptimizations=false
+   shrink=false
+   org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
+   ```
 
-```kotlin
-android {
-    compileSdk = 36
+3. Edit `android/app/build.gradle.kts` — set the SDK versions and disable
+   minification/shrinking:
 
-    defaultConfig {
-        targetSdk = 36
-        ndk { abiFilters += listOf("arm64-v8a") }
-    }
+   ```kotlin
+   android {
+       compileSdk = 36
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            isShrinkResources = false
-        }
-    }
-}
-```
+       defaultConfig {
+           targetSdk = 36
+           ndk { abiFilters += listOf("arm64-v8a") }
+       }
 
-3. Build (note: you must bypass the icon tree shaking restricted by JIT Dart):
+       buildTypes {
+           release {
+               isMinifyEnabled = false
+               isShrinkResources = false
+           }
+       }
+   }
+   ```
 
-```bash
-flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
-```
+4. Build. You must bypass icon tree shaking, which is restricted by JIT Dart:
 
-Artifacts:
+   ```bash
+   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
+   ```
 
-```text
-build/app/outputs/flutter-apk/app-release.apk
-```
+   Expected artifact:
 
-## Create a Linux Desktop Project
+   ```text
+   build/app/outputs/flutter-apk/app-release.apk
+   ```
 
-```bash
-flutter create mylinux --platforms=linux
-cd mylinux
-sed -i '1i set(CMAKE_SYSTEM_NAME Linux)' linux/CMakeLists.txt
-flutter build linux --release
-```
+> **Tip:** `bash $PREFIX/share/flutter/flutter_project_config.sh` applies the
+> `gradle.properties` and `build.gradle.kts` settings above automatically —
+> run it once per new project instead of editing by hand.
 
-Artifacts:
+---
 
-```text
-build/linux/arm64/release/bundle/
-```
+## Build Your First Linux Desktop App
+
+1. Create the project, mark it as a Linux build, and build:
+
+   ```bash
+   flutter create mylinux --platforms=linux
+   cd mylinux
+   sed -i '1i set(CMAKE_SYSTEM_NAME Linux)' linux/CMakeLists.txt
+   flutter build linux --release
+   ```
+
+   Expected artifact directory:
+
+   ```text
+   build/linux/arm64/release/bundle/
+   ```
+
+2. To see the app on screen, use [Termux:X11](https://github.com/termux/termux-x11/releases):
+
+   ```bash
+   export DISPLAY=:0
+   termux-x11 :0 >/dev/null 2>&1 &
+   flutter run -d linux
+   ```
+
+---
 
 ## flutter run / Hot Reload
 
-`flutter run` requires ADB inside Termux to see the Android device. If you are using the same tablet/phone, Android "wireless debugging" is recommended:
+`flutter run` requires ADB inside Termux to see the Android device. If you
+are using the same tablet/phone, Android "wireless debugging" is recommended:
 
-```bash
-pkg install android-tools
-adb pair 127.0.0.1:<pair_port>
-adb connect 127.0.0.1:<connect_port>
-flutter devices
-flutter run -d <device_id>
-```
+1. Install ADB (already included by both install methods, listed here for
+   completeness):
 
-If `flutter doctor` shows no connected device, it only means ADB is not connected yet, not that the SDK is broken.
+   ```bash
+   pkg install android-tools
+   ```
 
-## Common Problems
+2. Pair and connect to the device:
+
+   ```bash
+   adb pair 127.0.0.1:<pair_port>
+   adb connect 127.0.0.1:<connect_port>
+   ```
+
+3. List devices and run:
+
+   ```bash
+   flutter devices
+   flutter run -d <device_id>
+   ```
+
+If `flutter doctor` shows no connected device, it only means ADB is not
+connected yet, not that the SDK is broken.
+
+---
+
+## Troubleshooting
+
+Each entry below shows the exact error (**Symptom**), why it happens
+(**Cause**), and the fix.
 
 ### `PLATFORM_ABI_LIST` unresolved
 
-This means the post-install Flutter Gradle plugin template or the Gradle cache is stale. After updating to the 3.47.7 deb, run:
+- **Symptom:** a Kotlin unresolved-reference error for `PLATFORM_ABI_LIST`
+  while building an APK.
+- **Cause:** the post-install Flutter Gradle plugin template or the Gradle
+  cache is stale — common after updating to the 3.47.7 deb.
+- **Fix:** re-run post-install and clear the Gradle caches, then rebuild:
 
-```bash
-bash $PREFIX/share/flutter/post_install.sh
-./android/gradlew --stop || true
-rm -rf ~/.gradle/caches .gradle android/.gradle build android/app/build
-flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
-```
+  ```bash
+  bash $PREFIX/share/flutter/post_install.sh
+  ./android/gradlew --stop || true
+  rm -rf ~/.gradle/caches .gradle android/.gradle build android/app/build
+  flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
+  ```
 
-### AAPT2 / compileSdk Errors
+### AAPT2 / compileSdk errors
 
-Always use API 36 and point to the Termux ARM64 aapt2 (post-install falls back to 35/34 if aapt2 cannot load android-36):
+- **Symptom:** `aapt2` or `compileSdk` related errors while building an APK.
+- **Cause:** the project is not pinned to API 36 and the Termux ARM64 aapt2.
+- **Fix:** always use API 36 and point to the Termux ARM64 aapt2 (post-install
+  falls back to 35/34 if aapt2 cannot load android-36):
 
-```properties
-android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
-```
+  ```properties
+  android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
+  ```
 
-```kotlin
-compileSdk = 36
-defaultConfig { targetSdk = 36 }
-```
+  ```kotlin
+  compileSdk = 36
+  defaultConfig { targetSdk = 36 }
+  ```
 
-### NDK or CMake Cannot Find the Compiler
+### NDK or CMake cannot find the compiler
 
-Gradle may have downloaded a new NDK or build-tools. Re-run post-install:
+- **Symptom:** native plugin compilation fails with a missing compiler error.
+- **Cause:** Gradle may have downloaded a new NDK or build-tools that
+  post-install has not configured yet.
+- **Fix:** re-run post-install:
 
-```bash
-bash $PREFIX/share/flutter/post_install.sh
-```
+  ```bash
+  bash $PREFIX/share/flutter/post_install.sh
+  ```
 
 ### `did not have a source.properties file` (NDK metadata error)
 
-If `flutter build apk`/`flutter build appbundle` fails while configuring a native plugin with:
+- **Symptom:** `flutter build apk` / `flutter build appbundle` fails while
+  configuring a native plugin with:
 
-```text
-[CXX1101] NDK at .../ndk/<version> did not have a source.properties file
-```
+  ```text
+  [CXX1101] NDK at .../ndk/<version> did not have a source.properties file
+  ```
 
-the installed NDK directory is incomplete. AGP requires
-`<sdk>/ndk/<version>/source.properties` to identify the NDK, and an
-interrupted or partially extracted install can leave that file missing.
-Re-run post-install, which validates every installed NDK and regenerates the
-missing metadata when the rest of the directory is usable:
+- **Cause:** the installed NDK directory is incomplete. AGP requires
+  `<sdk>/ndk/<version>/source.properties` to identify the NDK, and an
+  interrupted or partially extracted install can leave that file missing.
+- **Fix:** re-run post-install, which validates every installed NDK and
+  regenerates the missing metadata when the rest of the directory is usable:
 
-```bash
-bash $PREFIX/share/flutter/post_install.sh
-```
+  ```bash
+  bash $PREFIX/share/flutter/post_install.sh
+  ```
 
-If the directory is incomplete (no `toolchains/llvm`, or no CMake toolchain
-file), post-install removes it rather than stamping it healthy. Re-running
-post-install cannot rebuild a removed directory — the full installer is what
-downloads and extracts the NDK:
+  If the directory is incomplete (no `toolchains/llvm`, or no CMake toolchain
+  file), post-install removes it rather than stamping it healthy. Re-running
+  post-install cannot rebuild a removed directory — the full installer is
+  what downloads and extracts the NDK:
 
-```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
-```
+  ```bash
+  curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
+  ```
 
 ### `Could not find toolchain file` (incomplete NDK)
 
-If `flutter build apk`/`flutter build appbundle` fails while configuring a
-native plugin (`:jni`, or any plugin using `externalNativeBuild`) with:
+- **Symptom:** `flutter build apk` / `flutter build appbundle` fails while
+  configuring a native plugin (`:jni`, or any plugin using
+  `externalNativeBuild`) with:
 
-```text
-CMake Error at .../CMakeDetermineSystem.cmake:165 (message):
-  Could not find toolchain file:
-  ".../ndk/<version>/build/cmake/android.toolchain.cmake"
-```
+  ```text
+  CMake Error at .../CMakeDetermineSystem.cmake:165 (message):
+    Could not find toolchain file:
+    ".../ndk/<version>/build/cmake/android.toolchain.cmake"
+  ```
 
-the NDK directory is only partially extracted: it still has `toolchains/llvm`,
-but the CMake toolchain files are gone. This is a different failure from the
-`source.properties` error above and it appears *after* that metadata exists, so
-re-running post-install will not repair it — post-install detects the directory
-as incomplete and removes it. Re-provision the NDK with the full installer:
+- **Cause:** the NDK directory is only partially extracted: it still has
+  `toolchains/llvm`, but the CMake toolchain files are gone. This is a
+  different failure from the `source.properties` error above, and it appears
+  *after* that metadata exists — so re-running post-install will not repair
+  it. Post-install detects the directory as incomplete and removes it.
+- **Fix:** re-provision the NDK with the full installer:
 
-```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
-```
+  ```bash
+  curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
+  ```
 
-This re-downloads the NDK (~550 MB). A complete NDK is verified to configure,
-compile, and link an `arm64-v8a` CMake module (`jni` 1.0.0) on-device, so the
-build proceeds once the toolchain file is back.
+  This re-downloads the NDK (~550 MB). A complete NDK is verified to configure,
+  compile, and link an `arm64-v8a` CMake module (`jni` 1.0.0) on-device, so
+  the build proceeds once the toolchain file is back.
 
-### Out of Storage Space
+### Stale Gradle or Kotlin errors after upgrading
 
-```bash
-rm -rf ~/.gradle/caches ~/.gradle/wrapper ~/.pub-cache/hosted
-pkg clean
-```
+- **Symptom:** old Gradle or Kotlin errors persist after installing a new deb.
+- **Cause:** cached Gradle state from the previous version.
+- **Fix:** re-run post-install and clear the Gradle caches:
+
+  ```bash
+  bash $PREFIX/share/flutter/post_install.sh
+  rm -rf ~/.gradle/caches ~/.gradle/daemon
+  ```
+
+### Out of storage space
+
+- **Symptom:** the build fails with no space left on device.
+- **Cause:** Gradle caches and downloaded packages grow large.
+- **Fix:**
+
+  ```bash
+  rm -rf ~/.gradle/caches ~/.gradle/wrapper ~/.pub-cache/hosted
+  pkg clean
+  ```
 
 ### Need an arm / x64 APK
 
-Not supported at the moment. This project only provides the ARM64 Android target, so use:
+- **Symptom:** you need a 32-bit ARM or x86_64 APK.
+- **Cause:** not supported at the moment — this project only provides the
+  ARM64 Android target.
+- **Fix:** build explicitly for ARM64:
 
-```bash
-flutter build apk --release --target-platform android-arm64
-```
+  ```bash
+  flutter build apk --release --target-platform android-arm64
+  ```
