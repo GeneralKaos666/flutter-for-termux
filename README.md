@@ -207,10 +207,10 @@ See [CI/CD and device lab](docs/CI_CD.md).
 
 ## Documentation
 
-- [Install guide](docs/guides/INSTALL_GUIDE.md) — on-device setup, prerequisites, troubleshooting.
-- [Build guide](docs/guides/BUILD_GUIDE.md) — end-to-end source build and packaging.
+- [Install guide](docs/guides/INSTALL_GUIDE.md) — on-device setup, first projects, troubleshooting.
+- [Build guide](docs/guides/BUILD_GUIDE.md) — end-to-end source build, step-by-step commands, and troubleshooting.
 - [Upgrade guide](docs/guides/UPGRADE_GUIDE.md) — moving to a new Flutter release.
-- [Build process](docs/guides/BUILD_PROCESS.md) — historical build notes.
+- [Build process](docs/guides/BUILD_PROCESS.md) — build internals: pipeline stages, patches, GN toolchain, and sysroot design.
 - [Changelog](docs/releases/CHANGELOG.md) — version history and notable fixes.
 - [Release notes](docs/releases/RELEASE_NOTES.md) — GitHub release body.
 

@@ -1,23 +1,31 @@
 # Flutter Version Upgrade Guide
 
-This document explains how to upgrade Termux Flutter from the current 3.47.7 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle plugins that must be re-checked after 3.47.7.
+This document explains how to upgrade Termux Flutter from the current 3.47.7
+to a new version, and lists the risk points in Dart / Flutter Tools / Gradle
+plugins that must be re-checked after 3.47.7.
+
+Build commands and their expected behavior are explained in the
+[Build guide](BUILD_GUIDE.md); build internals (patches, GN configs,
+sysroot) are documented in the [Build process](BUILD_PROCESS.md).
 
 ---
 
-## 📋 Upgrade Checklist
+## Upgrade Checklist
 
-```
-□ Step 1: Update the version in build.toml
-□ Step 2: Clone the new Flutter version
-□ Step 3: Run gclient sync
-□ Step 4: Create the patch directory for the new version and rebase the patches
-□ Step 5: Apply the patches (engine / dart / skia)
-□ Step 6: Assemble the sysroot
-□ Step 7: configure + build (modes from `build.toml [build] runtime`, currently `['release']`; debug/profile need explicit `--mode=debug|profile`)
-□ Step 8: Run debuild to produce the .deb
-□ Step 9: Push to the device and test
+Each checklist item maps to one step below:
+
+```text
+□ Step 1:  Update the version in build.toml
+□ Step 2:  Clone the new Flutter version
+□ Step 3:  Run gclient sync (patches apply automatically)
+□ Step 4:  Rebase the patches if they no longer apply
+□ Step 5:  Confirm the patches are applied
+□ Step 6:  Assemble the sysroot
+□ Step 7:  Configure + build (per runtime mode)
+□ Step 8:  Package the .deb
+□ Step 9:  Push to the device and test
 □ Step 10: Update post_install.sh (if necessary)
-□ Step 11: Publish a GitHub Release
+□ Step 11: Publish the GitHub Release
 ```
 
 ## Must-Check Items After 3.47.7
@@ -161,7 +169,7 @@ so that the default `targetPlatform` is `[arm64]` only (disables arm/x64 gen_sna
 
 ---
 
-## Step 5: Apply the Patches
+## Step 5: Confirm the Patches Are Applied
 
 Patches are applied automatically by the `.gclient` `custom_hooks` during
 `python3 build.py sync` — no manual step is needed after a successful sync.
@@ -217,28 +225,22 @@ python3 build.py build --arch=arm64 --mode=profile
 > with release in the first position. `Output.any` picks the first existing directory,
 > so the release (product mode) dart-sdk snapshots drive the Flutter CLI. Do not reorder modes arbitrarily.
 
----
+**No extra tool steps are needed:**
 
-## Step 8: Build the Extra Tools
-
-```bash
-# Dart binary is produced by the standard build via flutter/build/archives:dart_sdk_archive
-# (no separate build_dart step in the FFT pipeline)
-```
-
-> ✔️ `dart_sdk_archive`, `flutter_patched_sdk`, and `flutter_gtk` are all included in the `build()` ninja invocation.
-
----
-
-## Step 9: Android gen_snapshot
-
-> In the FFT pipeline the standard `build()` produces the Linux engine targets; Android APK builds on Termux
-> use the gen_snapshot shipped in the deb package's artifacts.
-> Only ARM64 → ARM64 works; ARM32 and x64 targets cannot be compiled (see the README).
+> ✔️ `dart_sdk_archive`, `flutter_patched_sdk`, and `flutter_gtk` are all
+> included in the `build()` ninja invocation — the Dart binary is produced by
+> the standard build via `flutter/build/archives:dart_sdk_archive` (no
+> separate `build_dart` step in the FFT pipeline).
+>
+> ✔️ Android gen_snapshot needs no separate build either: the standard
+> `build()` produces the Linux engine targets, and Android APK builds on
+> Termux use the gen_snapshot shipped in the deb package's artifacts.
+> Only ARM64 → ARM64 works; ARM32 and x64 targets cannot be compiled
+> (see the [Build guide](BUILD_GUIDE.md#8-known-limitations)).
 
 ---
 
-## Step 10: Package the .deb
+## Step 8: Package the .deb
 
 ```bash
 python3 build.py debuild --arch=arm64
@@ -253,7 +255,7 @@ This will:
 
 ---
 
-## Step 11: Device Testing
+## Step 9: Device Testing
 
 ```powershell
 # Copy from WSL to Windows
@@ -277,7 +279,7 @@ flutter build linux --release
 
 ---
 
-## Step 12: Update post_install.sh (If Necessary)
+## Step 10: Update post_install.sh (If Necessary)
 
 `scripts/install/post_install.sh` contains many `sed` modifications against the Flutter source code.
 If the new Flutter version changes any of these locations, they need to be updated:
@@ -295,7 +297,7 @@ If the new Flutter version changes any of these locations, they need to be updat
 
 ---
 
-## Step 13: Publish the GitHub Release
+## Step 11: Publish the GitHub Release
 
 ```powershell
 # Update version
@@ -315,9 +317,13 @@ Remember to update:
 - `FLUTTER_VERSION` in `scripts/install/install_termux_flutter.sh`
 - The version number in `install_flutter_complete.sh`
 
+> CI enforces version consistency via `scripts/ci/check_version_drift.py` —
+> if a reference was missed, the `Repository sanity` job fails and names the
+> file.
+
 ---
 
-## 🔄 One-Command Upgrade (If the Patches Apply Cleanly)
+## One-Command Upgrade (If the Patches Apply Cleanly)
 
 If the patches can be applied directly, the whole process can be run with a single command:
 
@@ -336,76 +342,53 @@ python3 build.py
 
 ---
 
-## ⚠️ Common Upgrade Problems
+## Common Upgrade Problems
+
+Each entry shows the exact error (**Symptom**), why it happens (**Cause**),
+and the fix (**Fix**).
 
 ### 1. Patch conflicts
 
-**Symptom**: `git apply` fails
-
-**Cause**: upstream changed files covered by the patch
-
-**Fix**: modify the source manually and regenerate the patch (see Step 4)
+- **Symptom**: `git apply` fails
+- **Cause**: upstream changed files covered by the patch
+- **Fix**: modify the source manually and regenerate the patch (see Step 4)
 
 ### 2. New system dependencies
 
-**Symptom**: a header or library is missing at compile time
-
-**Fix**: add the new package to `[sysroot.termux-main]` or `[sysroot.termux-x11]` in `build.toml`
+- **Symptom**: a header or library is missing at compile time
+- **Cause**: the new Flutter version needs a system package the sysroot does not ship yet
+- **Fix**: add the new package to `[sysroot.termux-main]` or `[sysroot.termux-x11]` in `build.toml`
 
 ### 3. GN flag changes
 
-**Symptom**: `gn gen` errors with an unknown variable
-
-**Cause**: Flutter refactored BUILD.gn
-
-**Fix**: check the `build/config/` structure of the new engine and adjust `engine.patch`
+- **Symptom**: `gn gen` errors with an unknown variable
+- **Cause**: Flutter refactored BUILD.gn
+- **Fix**: check the `build/config/` structure of the new engine and adjust `engine.patch`
 
 ### 4. Dart SDK version mismatch
 
-**Symptom**: `package_config.json` language version error
-
-**Fix**: `build.py sync` handles this automatically, but if the version number changed, check the download URL
+- **Symptom**: `package_config.json` language version error
+- **Cause**: the prebuilt dart-sdk replacement no longer matches the new engine
+- **Fix**: `build.py sync` handles this automatically, but if the version number changed, check the download URL
 
 ### 5. post_install.sh sed failure
 
-**Symptom**: `sed` cannot find the target string
-
-**Cause**: the new Flutter version changed the Dart source code that was being modified
-
-**Fix**: manually inspect the target files on the device and update the `sed` search patterns
+- **Symptom**: `sed` cannot find the target string
+- **Cause**: the new Flutter version changed the Dart source code that was being modified
+- **Fix**: manually inspect the target files on the device and update the `sed` search patterns
 
 ---
 
-## 📁 Project Structure Reference
+## Patch Maintenance Tips
 
-```
-flutter-for-termux/
-├── build.py                  # Main CLI (Python Fire)
-├── build.toml                # All config: version, NDK, sync paths
-├── package.py                # .deb packaging logic
-├── package.yaml              # Declarative: build output → deb install paths
-├── sysroot.py                # Downloads Termux apt packages to assemble the sysroot
-├── utils.py                  # arch mapping, output paths
-├── .gclient                  # gclient sync config
-│
-├── patches/
-│       └── engine.patch       # Flat, tag-agnostic patches
-│           dart.patch
-│           skia.patch
-│
-├── scripts/
-│   ├── install/
-│   │   ├── post_install.sh   # On-device post-install configuration
-│   │   └── install_termux_flutter.sh  # One-command install script
-│   ├── ci/check_repo.py      # Lightweight repo contract check
-│   ├── device/               # ADB → Termux smoke automation
-│   ├── test/gh_e2e_test.sh   # GitHub Release E2E test script
-│   └── ...
-│
-├── install_flutter_complete.sh # Complete install script (includes Android SDK)
-│
-├── README.md                 # English (primary) documentation
-├── docs/guides/UPGRADE_GUIDE.md # ← This file
-├── docs/releases/CHANGELOG.md   # Version changelog
-└── docs/releases/RELEASE_NOTES.md # Release notes
-```
+1. **Keep patches minimal**: only modify what is necessary
+2. **Add comments**: explain in the patch why the modification is needed
+3. **Version isolation**: each Flutter version has its own patch directory
+4. **Record changes**: update docs/releases/CHANGELOG.md
+
+---
+
+## Project Structure Reference
+
+See the merged tree in
+[Build process — File Structure Reference](BUILD_PROCESS.md#file-structure-reference).
