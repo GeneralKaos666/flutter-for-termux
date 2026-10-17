@@ -10,9 +10,9 @@ instructions).
 
 ## Guides
 
-- [Install guide](guides/INSTALL_GUIDE.md) — Termux install flow and runtime prerequisites.
+- [Install guide](guides/INSTALL_GUIDE.md) — Termux install flow, runtime prerequisites, first projects, and troubleshooting.
 - [Build guide](guides/BUILD_GUIDE.md) — end-to-end build commands, troubleshooting, and packaging notes.
-- [Build process](guides/BUILD_PROCESS.md) — historical build steps and process notes.
+- [Build process](guides/BUILD_PROCESS.md) — build internals: pipeline stages, patches, GN toolchain, sysroot, testing, and release process.
 - [Upgrade guide](guides/UPGRADE_GUIDE.md) — checklist for moving to a new Flutter release.
 
 ## Releases

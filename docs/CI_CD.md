@@ -7,6 +7,19 @@ This repository uses GitHub Actions for both lightweight validation and the full
 
 The goal is to keep pull requests cheap and safe while still making release builds reproducible.
 
+In this document:
+
+1. [GitHub Actions cost and limits](#github-actions-cost-and-limits)
+2. [Workflow map](#workflow-map)
+3. [PR / push CI](#pr--push-ci)
+4. [Full deb build](#full-deb-build)
+5. [Release policy](#release-policy)
+6. [Device smoke](#device-smoke)
+7. [Release check](#release-check)
+8. [Security model](#security-model)
+9. [Branch protection and repository governance](#branch-protection-and-repository-governance)
+10. [Local equivalents](#local-equivalents)
+
 ## GitHub Actions cost and limits
 
 This is a public open-source repository, so standard GitHub-hosted runner
@@ -278,15 +291,37 @@ The repository governance rules for the `main` branch are codified in `.github/r
 
 ## Local equivalents
 
-Fast local checks:
+Run the same checks CI runs, in this order:
 
-```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
-bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
-python scripts/ci/check_repo.py
-python scripts/ci/check_version_drift.py
-git diff --check
-```
+1. Compile-check the Python entry points and CI scripts:
+
+   ```bash
+   python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
+   ```
+
+2. Syntax-check the shell scripts:
+
+   ```bash
+   bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
+   ```
+
+3. Run the repository contract check — expected output: `Repository sanity check passed.`
+
+   ```bash
+   python scripts/ci/check_repo.py
+   ```
+
+4. Run the version drift check — expected output: `Version drift check PASSED (all files aligned with build.toml).`
+
+   ```bash
+   python scripts/ci/check_version_drift.py
+   ```
+
+5. Check for whitespace errors:
+
+   ```bash
+   git diff --check
+   ```
 
 Manual Termux release E2E test inside Termux:
 

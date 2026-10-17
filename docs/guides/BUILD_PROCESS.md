@@ -1,116 +1,136 @@
-# Flutter Termux Build Process Document
+# Build Process Internals — How the Termux Build Works
 
-This document records in detail the complete process of building Flutter for Termux, to serve as a reference for future version upgrades.
+This document explains **why** the Flutter-for-Termux build is put together
+the way it is: the pipeline stages, the patches, the GN toolchain
+configuration, the sysroot, and the known issues behind them. It is a
+reference for future version upgrades.
+
+For copy-pasteable build commands, use the [Build guide](BUILD_GUIDE.md);
+for bumping to a new Flutter release, use the
+[Upgrade guide](UPGRADE_GUIDE.md).
 
 ## Table of Contents
 
 1. [Build Environment](#build-environment)
-2. [Complete Build Process](#complete-build-process)
-3. [Key Modification Notes](#key-modification-notes)
-4. [Known Issues and Solutions](#known-issues-and-solutions)
-5. [Testing Process](#testing-process)
-6. [Release Process](#release-process)
+2. [Pipeline Overview](#pipeline-overview)
+3. [Architecture](#architecture)
+4. [Key Modification Notes](#key-modification-notes)
+5. [Known Issues and Solutions](#known-issues-and-solutions)
+6. [Testing Process](#testing-process)
+7. [Release Process](#release-process)
+8. [File Structure Reference](#file-structure-reference)
 
 ---
 
 ## Build Environment
 
-### WSL Environment Requirements
+The concrete setup steps live in the
+[Build guide §1-3](BUILD_GUIDE.md#1-build-environment-requirements). The
+constraints they exist to satisfy:
 
 ```
-OS: Windows 11 + WSL2 (Ubuntu 22.04+)
+OS: Windows 11 + WSL2 (Ubuntu 22.04+), or any Linux x86-64 host
 RAM: 16GB+ (32GB recommended)
 Disk: 100GB+ of free space
-CPU: Multi-core recommended (build uses -j24)
+CPU: Multi-core recommended (build uses -j24; override with --jobs=N)
 ```
 
-### Required Tools
+Required toolchain roles:
 
-```bash
-# Ubuntu packages
-sudo apt update
-sudo apt install -y git curl python3 python3-pip ninja-build pkg-config
-
-# Python packages
-pip3 install -r requirements.txt
-
-# depot_tools
-cd ~
-git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-export PATH="$HOME/depot_tools:$PATH"
-echo 'export PATH="$HOME/depot_tools:$PATH"' >> ~/.bashrc
-```
+- **Ubuntu packages** (`git curl python3 python3-pip ninja-build pkg-config`) —
+  host basics.
+- **Python packages** (`pip3 install -r requirements.txt`, equivalent to the
+  per-package list in the Build guide) — `build.py` and its tooling.
+- **depot_tools** — provides `gclient` / `vpython3` for the engine source
+  sync.
+- **`dpkg` and `ar`** — `sysroot.py` runs `dpkg -x`; `package.py` runs
+  `ar rc` when assembling the deb.
 
 ---
 
-## Complete Build Process
+## Pipeline Overview
 
-### Stage 1: Sync Source Code
+Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-build):
 
-```bash
-cd ~/projects/termux-flutter
+| Stage | Command | Notes |
+|-------|---------|-------|
+| 1. Sync source | `build.py clone` then `build.py sync` | ~30GB, several hours. The `.gclient` `custom_hooks` apply the patches automatically — no separate patch step |
+| 2. Patches | (automatic during `sync`) | Manual `build.py patch --file=...` only to re-test/rebase against a fresh checkout |
+| 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
+| 4. Build Linux components | `build.py configure --arch=arm64 --mode=release` + `build.py build --arch=arm64 --mode=release` | The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
+| 5. Android gen_snapshot | (none) | Standard builds ship gen_snapshot in the deb artifacts; no separate Android configure/build step is required |
+| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.47.7-5_aarch64.deb` |
 
-# Clone Flutter (if this is a new environment)
-python3 build.py clone
+---
 
-# Sync dependencies (~30GB, takes several hours). This also applies the
-# patches via the .gclient custom_hooks; no separate patch step is needed.
-python3 build.py sync
+## Architecture
+
+### Build-to-device flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         WSL Build Environment                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Dart SDK    │  │ Flutter     │  │ gen_snapshot            │  │
+│  │ (ARM64)     │  │ Engine      │  │ (Linux ARM64, reused    │  │
+│  │             │  │ (ARM64)     │  │  on-device for Android) │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│         │               │                    │                   │
+│         └───────────────┴────────────────────┘                   │
+│                         │                                        │
+│                    [Package deb]                                │
+│                         │                                        │
+└─────────────────────────┼────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       Termux Runtime Environment               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Our deb     │  │ Android SDK │  │ ARM64 NDK               │  │
+│  │ (built)     │  │ (downloaded)│  │ (downloaded)            │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│         │               │                    │                   │
+│         └───────────────┴────────────────────┘                   │
+│                         │                                        │
+│              [post_install.sh integration]                      │
+│                         │                                        │
+│                         ▼                                        │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ flutter doctor ✅  flutter build apk ✅  flutter run ✅  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Stage 2: Patches
+### Components We Compile (WSL cross-compilation)
 
-Patches are applied automatically during `sync` (see above) via the `.gclient`
-`custom_hooks`. Applying them manually is only needed to re-test or rebase a
-patch against a fresh checkout — and only after a `git checkout` / fresh
-`gclient sync -D` if the hook already applied them:
+| Component | File | Size | Purpose |
+|------|------|------|------|
+| **Dart CLI** | `dart-sdk/bin/dart` | ~50MB | Flutter CLI; post-install replaces it with Termux JIT Dart |
+| **Dart VM** | `dart-sdk/bin/dartvm`, `dartaotruntime` | ~50MB | Runs engine snapshots / AOT runtime |
+| **Flutter Engine** | `libflutter_linux_gtk.so` | ~106MB | Linux desktop runtime |
+| **gen_snapshot** | `linux-arm64/gen_snapshot` | ~30MB | `flutter build linux` directly; `flutter build apk` via the on-device `post_install.sh` symlink |
+| **impellerc** | `impellerc` | ~20MB | Shader compiler |
+| **const_finder** | `const_finder.dart.snapshot` | ~1MB | Icon tree shaking |
 
-```bash
-# Apply Termux adaptation patches
-python3 build.py patch --file=./patches/engine.patch
-python3 build.py patch --file=./patches/dart.patch --path=engine/src/flutter/third_party/dart
-python3 build.py patch --file=./patches/skia.patch --path=engine/src/flutter/third_party/skia
-```
+### Downloaded Precompiled Components (third-party)
 
-The patch files are located in the `patches/` directory; the main changes:
-- `patches/engine.patch` - Flutter Engine's Termux toolchain configuration
-- `patches/dart.patch` - Dart SDK / VM Termux adaptation
-- `patches/skia.patch` - Skia Android/bionic build adaptation
+| Source | Component | Purpose |
+|------|------|------|
+| [mumumusuc/termux-android-sdk](https://github.com/mumumusuc/termux-android-sdk) | aapt2, d8, build-tools | Android build tools |
+| [lzhiyong/termux-ndk](https://github.com/lzhiyong/termux-ndk) | ARM64 NDK (clang, linker) | Native compilation |
+| Google Storage | Dart snapshots (dds_aot, etc.) | Hot reload support |
 
-ARM64-only APK enforcement is done at install time by `post_install.sh`, not at build time.
+### Applied Patches
 
-### Stage 3: Build Sysroot
+| Patch file | Problem solved |
+|----------|-----------|
+| `patches/engine.patch` | Bionic TLS alignment, `-llog -lm` linking, dynamic linker path, NDK clang runtime detection |
+| `patches/dart.patch` | Dart VM / profiler shutdown Termux adaptation |
+| `patches/skia.patch` | Skia Android/bionic build adaptation |
+| `post_install.sh` → `FlutterPluginConstants.kt` | Compile ARM64 only by default, and keep Flutter 3.44 `PLATFORM_ABI_LIST` |
+| `post_install.sh` | NDK wrapper, sysroot symlinks, official snapshots, Flutter Tools Android-host patches, cache cleanup |
 
-```bash
-# Assemble Termux runtime dependencies
-python3 build.py sysroot --arch=arm64
-```
-
-This downloads the required library files from the official Termux repo.
-
-### Stage 4: Build Linux Components
-
-```bash
-# Configure the build
-python3 build.py configure --arch=arm64 --mode=debug
-
-# Build the Flutter Engine
-python3 build.py build --arch=arm64 --mode=debug --jobs=24
-```
-
-**Important**: The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step).
-
-### Stage 5: Build Android gen_snapshot (Optional, for APK Builds)
-
-> Standard builds ship gen_snapshot in the deb artifacts; no separate Android configure/build step is required.
-
-### Stage 6: Package the deb
-
-```bash
-python3 build.py debuild --arch=arm64
-```
-
-Output: `release/flutter_3.47.7-5_aarch64.deb`
+ARM64-only APK enforcement is done at install time by `post_install.sh`,
+not at build time.
 
 ---
 
@@ -140,17 +160,22 @@ config("executable_ldconfig") {
 ### 2. Bionic Linker Issue
 
 **Problem**: When the dart binary uses the glibc linker, the following appears:
-```
+
+```text
 error: "dart": executable's TLS segment is underaligned
 ```
 
-**Solution**: Add `--dynamic-linker=/system/bin/linker64` to `executable_ldconfig`
+**Solution**: Add `--dynamic-linker=/system/bin/linker64` to
+`executable_ldconfig` (see above). Full symptom/fix details, including the
+rebuild commands, are in the
+[Build guide troubleshooting](BUILD_GUIDE.md#tls-segment-underaligned-bionic-linker-issue).
 
 ### 3. Dependencies Issue
 
-**Problem**: `-llog` and `-lm` cannot be found at link time
+**Problem**: `-llog` and `-lm` cannot be found at link time.
 
 **Solution**: Add the following to the `runtime_library` configuration:
+
 ```gn
 ldflags = [
   "-stdlib=libstdc++",
@@ -164,53 +189,58 @@ ldflags = [
 
 ## Known Issues and Solutions
 
+Each entry below records the underlying cause and fix direction; matching
+symptom/fix entries live in the
+[Build guide troubleshooting](BUILD_GUIDE.md#7-troubleshooting).
+
 ### Issue 1: vpython3 not found
 
 **Symptoms**:
-```
+
+```text
 /bin/sh: vpython3: not found
 ```
 
-**Solution**:
-```bash
-cd flutter/engine/src/flutter/third_party/depot_tools/.cipd_bin
-rm -f vpython3
-cat > vpython3 << 'EOF'
-#!/bin/bash
-exec python3 "$@"
-EOF
-chmod +x vpython3
-```
+**Solution**: depot_tools' `vpython3` is a symlink pointing to a broken
+`vpython`; replace it with a wrapper script — see
+[vpython3 not found](BUILD_GUIDE.md#vpython3-not-found-depot_tools-issue).
 
 ### Issue 2: Release Mode Build Failure (sysroot Conflict)
 
 **Symptoms**:
-```
+
+```text
 error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbstate_t')
 ```
 
 **Cause**: The sysroot contains both glibc and bionic headers
 
-**Current Status**: Release mode is the shipped default — `build.toml [build] runtime = ['release']`, so the pipeline builds and packages release artifacts; debug/profile are opt-in via `--mode`
+**Current Status**: Release mode is the shipped default —
+`build.toml [build] runtime = ['release']`, so the pipeline builds and
+packages release artifacts; debug/profile are opt-in via `--mode`
 
 **Future Fix Direction**: Clean up the sysroot and keep only the bionic headers
 
 ### Issue 3: flutter build apk Failure (dedup_instructions Error)
 
 **Symptoms**:
-```
+
+```text
 Flag dedup_instructions is false in snapshot, but dedup_instructions is always true in product mode
 ```
 
 **Cause**:
+
 - `dartaotruntime_product` expects a product-mode snapshot
 - `frontend_server_aot.dart.snapshot` was built in debug mode
 
-**Future Fix Direction**: Need to build a release-mode `frontend_server_aot.dart.snapshot`
+**Future Fix Direction**: Need to build a release-mode
+`frontend_server_aot.dart.snapshot`
 
 ### Issue 4: android-arm/android-x64 gen_snapshot Cannot Be Built
 
 **Cause**:
+
 - android-arm: BoringSSL has a 32-bit shift overflow error
 - android-x64: The ARM64 sysroot is incompatible with x64 compilation
 
@@ -276,6 +306,11 @@ Confirm that the version numbers in the following files are consistent:
 - `README.md` - version badge and text
 - `package.yaml` - `Version: $package_version`
 
+> CI enforces this: `scripts/ci/check_version_drift.py` and
+> `scripts/ci/check_repo.py` fail the build on drift, and
+> `scripts/ci/generate_versions.py --check` requires `versions_common.sh` to
+> match `build.toml`.
+
 ### 2. Build Artifact
 
 ```bash
@@ -292,48 +327,13 @@ release/flutter_3.47.7-5_aarch64.deb
 ### 4. Verify the One-Click Install Script
 
 Test in a new Termux environment:
+
 ```bash
 curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
 ```
 
----
-
-## Version Upgrade Guide
-
-When Flutter releases a new version:
-
-### 1. Update Version Configuration
-
-Edit `build.toml`:
-```toml
-tag = "3.36.0"  # new version number
-```
-
-### 2. Sync Source Code
-
-```bash
-python3 build.py sync  # The .gclient custom_hooks try to apply the patches
-```
-
-### 3. Re-check Patches
-
-The `sync` above already applied the patches via the `.gclient` `custom_hooks`
-(or failed loudly if they no longer apply). To re-test a specific patch on a
-clean tree (reset first — the hooks may have applied it), run:
-
-```bash
-# You may need to update the patches to adapt to the new version
-python3 build.py patch --file=./patches/engine.patch
-```
-
-If patch application fails, you need to manually update `patches/engine.patch`:
-1. Review the conflicts
-2. Resolve them manually
-3. Regenerate the patch
-
-### 4. Full Build and Test
-
-Build and test by following the process described above.
+For upgrading to a new Flutter version, follow the
+[Upgrade guide](UPGRADE_GUIDE.md).
 
 ---
 
@@ -342,16 +342,25 @@ Build and test by following the process described above.
 ```
 flutter-for-termux/
 ├── .github/workflows/    # GitHub-hosted + self-hosted build / CI / device smoke workflows
-├── docs/CI_CD.md         # CI/CD and device-lab guide
+├── build.py              # Main CLI (Python Fire)
+├── build.toml            # All config: version, NDK, sync paths, sysroot package lists
+├── package.py            # .deb packaging logic
+├── package.yaml          # Declarative: build output → deb install paths
+├── sysroot.py            # Downloads Termux apt packages to assemble the sysroot
+├── utils.py              # arch mapping, output paths
+├── .gclient              # gclient sync config (its custom_hooks apply the patches)
+├── patches/              # Flat, tag-agnostic patches: engine.patch, dart.patch, skia.patch
+├── install_flutter_complete.sh  # Complete install script (includes Android SDK)
 ├── scripts/
-│   ├── ci/               # lightweight contract checks
+│   ├── ci/               # lightweight contract checks (e.g. check_repo.py)
 │   ├── device/           # ADB → Termux smoke automation
-│   ├── install/          # install and post-install patches
-│   └── test/             # Release E2E smoke scripts
-├── patches/ # Flutter Engine / Dart / Skia patches
-├── build.py              # main build script
-├── build.toml            # build configuration (version, etc.)
-├── package.yaml          # deb package definition
+│   ├── install/          # post_install.sh (on-device) + install_termux_flutter.sh
+│   └── test/             # Release E2E smoke scripts (gh_e2e_test.sh)
+├── docs/
+│   ├── CI_CD.md          # CI/CD and device-lab guide
+│   ├── guides/           # install / build / upgrade guides (you are here)
+│   └── releases/         # CHANGELOG.md, RELEASE_NOTES.md
+├── README.md             # English (primary) documentation
 ├── sysroot/              # Termux runtime deps (generated at build)
 ├── flutter/              # Flutter source (cloned at build)
 │   └── engine/src/out/   # build artifacts
@@ -361,6 +370,9 @@ flutter-for-termux/
 ---
 
 ## Update Log
+
+<details>
+<summary>Historical updates</summary>
 
 ### 2026-06-01
 - Updated this document to the Flutter 3.47.7 / Dart 3.13.5 state
@@ -376,3 +388,5 @@ flutter-for-termux/
 - First successful build of Flutter 3.35.0
 - Resolved the TLS alignment issue
 - Resolved the -llog/-lm dependency issue
+
+</details>
