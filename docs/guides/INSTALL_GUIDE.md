@@ -85,6 +85,7 @@ Run each step in order inside Termux.
    ```text
    3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.7-5_aarch64.deb
    ```
+   # Confirm the output matches: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
 
 3. Install the package and repair any missing dependencies:
 
