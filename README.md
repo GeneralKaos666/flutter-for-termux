@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Flutter Termux" width="80%"/>
-</p>
-
 # Flutter Termux
 
 Run the Flutter SDK right on your phone with
