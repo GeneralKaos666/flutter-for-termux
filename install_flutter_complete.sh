@@ -574,7 +574,7 @@ if dpkg-query -W -f='${Status} ${Version}' android-sdk 2>/dev/null | grep -q 'ok
 fi
 
 ANDROID_HOME="$PREFIX/opt/android-sdk"
-NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
+NDK_PATH="$ANDROID_HOME/ndk/${NDK_VERSION}"
 NDK_PREEXISTING=false
 if ndk_is_valid "$NDK_PATH"; then
 	NDK_PREEXISTING=true
@@ -602,7 +602,7 @@ if [ -n "$FLUTTER_OLD_VER" ]; then
 fi
 ANDROID_SDK_RELEASE_URL=""
 if [ -n "$ANDROID_SDK_OLD_VER" ]; then
-	ANDROID_SDK_RELEASE_URL="${ANDROID_SDK_DEB_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}/android-sdk_${ANDROID_SDK_OLD_VER}_aarch64.deb"
+	ANDROID_SDK_RELEASE_URL="${ANDROID_SDK_ARCHIVE_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}/android-sdk-aarch64-linux-android.tar.xz"
 fi
 
 # A missing backup degrades the rollback safety net; it must not abort the
@@ -633,8 +633,8 @@ if { [ "$FLUTTER_WAS_INSTALLED" = true ] || [ "$ANDROID_SDK_WAS_INSTALLED" = tru
 fi
 
 FLUTTER_DEB="$WORK_DIR/${FLUTTER_DEB_NAME}"
-ANDROID_SDK_DEB="$WORK_DIR/android-sdk_35.0.0_aarch64.deb"
-NDK_ARCHIVE="$WORK_DIR/android-ndk-r29-aarch64.tar.xz"
+ANDROID_SDK_DEB="$WORK_DIR/android-sdk-${ANDROID_SDK_VERSION:-37.0.0}-aarch64.tar.xz"
+NDK_ARCHIVE="$WORK_DIR/android-ndk-r${NDK_VERSION%%.*}-aarch64.tar.xz"
 
 echo "Downloading Flutter SDK..."
 wget -q --show-progress "$FLUTTER_DEB_URL" -O "$FLUTTER_DEB" || {
@@ -653,7 +653,7 @@ verify_sha256 "$FLUTTER_DEB" "$EXPECTED_SHA256" || {
 record_stage integrity success
 
 echo "Downloading Android SDK..."
-wget -q --show-progress "$ANDROID_SDK_DEB_URL" -O "$ANDROID_SDK_DEB" || {
+wget -q --show-progress "${ANDROID_SDK_ARCHIVE_URL:-$ANDROID_SDK_DEB_URL}" -O "$ANDROID_SDK_DEB" 2>/dev/null || {
 	INSTALL_FAILED=true
 	record_stage download failed
 	exit 20
@@ -666,7 +666,7 @@ verify_sha256 "$ANDROID_SDK_DEB" "$ANDROID_SDK_EXPECTED_SHA256" || {
 }
 
 ANDROID_HOME="$PREFIX/opt/android-sdk"
-NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
+NDK_PATH="$ANDROID_HOME/ndk/${NDK_VERSION}"
 if ! ndk_is_valid "$NDK_PATH"; then
 	echo "Downloading ARM64 NDK..."
 	wget -q --show-progress "$NDK_ARCHIVE_URL" -O "$NDK_ARCHIVE" || {
@@ -682,14 +682,23 @@ if ! ndk_is_valid "$NDK_PATH"; then
 	}
 fi
 
-# Pre-verify deb structure integrity (hard failure)
-echo "Verifying Android SDK deb structure integrity..."
-dpkg-deb --info "$ANDROID_SDK_DEB" >/dev/null 2>&1 || {
-	INSTALL_FAILED=true
-	record_stage integrity failed
-	echo "Android SDK deb is corrupt"
-	exit 30
-}
+# Pre-verify archive structure integrity (hard failure)
+echo "Verifying Android SDK archive integrity..."
+if command -v tar >/dev/null 2>&1; then
+	tar tzf "$ANDROID_SDK_DEB" >/dev/null 2>&1 || {
+		INSTALL_FAILED=true
+		record_stage integrity failed
+		echo "Android SDK archive is corrupt"
+		exit 30
+	}
+elif command -v 7z >/dev/null 2>&1; then
+	7z t "$ANDROID_SDK_DEB" >/dev/null 2>&1 || {
+		INSTALL_FAILED=true
+		record_stage integrity failed
+		echo "Android SDK archive is corrupt"
+		exit 30
+	}
+fi
 
 # All downloads and verifications succeeded; start installation
 echo "All downloads and verifications succeeded. Installing the SDK..."
@@ -701,14 +710,25 @@ MUTATION_STARTED=true
 echo ""
 echo -e "${GREEN}[3/${TOTAL_STEPS}]${NC} Installing Android SDK..."
 
-# Transactional: install new package directly (dpkg handles upgrade)
+# Transactional: extract archive (new releases are tar.xz)
 echo "Installing Android SDK..."
-dpkg -i --force-architecture "$ANDROID_SDK_DEB" || dpkg --force-depends --configure android-sdk || {
+ANDROID_HOME_TARGET="$PREFIX/opt/android-sdk"
+mkdir -p "$ANDROID_HOME_TARGET"
+if tar xzf "$ANDROID_SDK_DEB" -C "$ANDROID_HOME_TARGET" >/dev/null 2>&1 || tar xf "$ANDROID_SDK_DEB" -C "$ANDROID_HOME_TARGET" >/dev/null 2>&1; then
+	# If tar extracted with top-level android-sdk/, move contents up if needed
+	if [ -d "$ANDROID_HOME_TARGET/android-sdk" ] && [ ! -e "$ANDROID_HOME_TARGET/platform-tools" ]; then
+		shopt -s dotglob 2>/dev/null || true
+		mv "$ANDROID_HOME_TARGET/android-sdk"/* "$ANDROID_HOME_TARGET/" 2>/dev/null || true
+		mv "$ANDROID_HOME_TARGET/android-sdk"/.[^.]* "$ANDROID_HOME_TARGET/" 2>/dev/null || true
+		rmdir "$ANDROID_HOME_TARGET/android-sdk" 2>/dev/null || true
+		shopt -u dotglob 2>/dev/null || true
+	fi
+	echo "  ✓ Android SDK installed"
+else
 	INSTALL_FAILED=true
 	record_stage package failed
 	exit 40
-}
-echo "  ✓ Android SDK installed"
+fi
 
 # ========================================
 # Step 3: Install Flutter SDK
@@ -828,9 +848,13 @@ else
 	fi
 
 	EXTRACTED_NDK=""
-	if [ -d "$NDK_STAGE/android-ndk-r29" ]; then
-		EXTRACTED_NDK="$NDK_STAGE/android-ndk-r29"
-	else
+	for cand in android-ndk-r30 android-ndk-r30-aarch64-linux-android android-ndk-r30-aarch64 android-ndk-r29; do
+		if [ -d "$NDK_STAGE/$cand" ]; then
+			EXTRACTED_NDK="$NDK_STAGE/$cand"
+			break
+		fi
+	done
+	if [ -z "$EXTRACTED_NDK" ]; then
 		EXTRACTED_NDK=$(find "$NDK_STAGE" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 	fi
 
@@ -919,7 +943,7 @@ ln -sf $PREFIX/bin/cmake $ANDROID_HOME/cmake/3.22.1/bin/cmake
 ln -sf $PREFIX/bin/ninja $ANDROID_HOME/cmake/3.22.1/bin/ninja
 
 # Create build-tools symlinks (fix the "Build Tools is corrupted" error)
-BUILD_TOOLS=$ANDROID_HOME/build-tools/35.0.0
+BUILD_TOOLS=$ANDROID_HOME/build-tools/37.0.0
 mkdir -p $BUILD_TOOLS/lib
 for tool in aapt aapt2 apksigner d8 dx zipalign aidl; do
 	ln -sf $PREFIX/bin/$tool $BUILD_TOOLS/$tool 2>/dev/null || true
@@ -1059,7 +1083,7 @@ build1_log="$WORK_DIR/build1.log"
 build2_log="$WORK_DIR/build2.log"
 flutter build apk --release --target-platform android-arm64 2>&1 | tee "$build1_log" || true
 
-# Gradle may have downloaded new SDK components (e.g. build-tools/35.0.0-2); reconfigure
+# Gradle may have downloaded new SDK components (e.g. build-tools/37.0.0-2); reconfigure
 echo "Configuring SDK components downloaded by Gradle..."
 if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
 	bash "$PREFIX/share/flutter/post_install.sh" || {
