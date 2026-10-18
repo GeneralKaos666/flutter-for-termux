@@ -9,7 +9,7 @@ devtools_version = '2.60.0'
 
 [ndk]
 api = 26 # >=26
-version = '29.0.14206865' # r29; r30 (30.0.16248370) blocked upstream on lzhiyong/termux-ndk
+version = '30.0.14206865' # r30 from HomuHomu833
 # unset to use ANDROID_NDK from env
 # path = 'path/to/ndk'
 
