@@ -125,6 +125,10 @@ temp_*.*
 !scripts/**/*.ps1
 !scripts/**/*.sh
 
+# ----- Agent planning artifacts (local only) -----
+docs/plans/
+docs/specs/
+
 # ----- Agent / Orchestrator Metadata -----
 .agents/
 ORIGINAL_REQUEST.md
