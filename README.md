@@ -55,6 +55,10 @@ SDK/toolchain for you. When it finishes, check your setup:
 flutter doctor -v
 ```
 
+> **Never run `flutter upgrade` on this install.** The SDK here is a
+> patched, cross-built tree — not a stock upstream checkout — and
+> `flutter upgrade` will destroy it. See [Upgrading](#upgrading).
+
 Full walkthrough and troubleshooting live in the
 [Install guide](docs/guides/INSTALL_GUIDE.md).
 
@@ -82,6 +86,34 @@ bash $PREFIX/share/flutter/post_install.sh
 
 Flutter lands in `$PREFIX/opt/flutter`. To remove it later, run
 `apt remove flutter`.
+
+## Upgrading
+
+> **Never run stock `flutter upgrade` on this install.** It targets
+> upstream's git repository and artifact bucket — neither of which exists
+> for a Termux host — and it will break your SDK:
+>
+> - it checks out a fresh upstream `flutter/flutter` tree over the patched
+>   SDK in `$PREFIX/opt/flutter`, wiping every Termux fix (arm64-only
+>   artifacts, NDK pinning, Android→Linux host mapping, shebangs, ...);
+> - it then tries to download `linux-arm64` engine artifacts from Google's
+>   storage bucket, which are never published, leaving the SDK unusable;
+> - `dpkg` still believes the old package is installed, so the file tree
+>   and the package database no longer match.
+
+To upgrade, re-run the installer. It downloads the latest
+`flutter_<tag>-<pkg_rel>_aarch64.deb` from this repo's releases, verifies
+the checksums, and lets `dpkg` upgrade the existing package in place:
+
+```bash
+curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh \
+  -o install_flutter_complete.sh
+bash install_flutter_complete.sh
+```
+
+Moving to a brand-new Flutter version (maintainers rebuilding from source)
+is a different process — see the
+[Upgrade guide](docs/guides/UPGRADE_GUIDE.md).
 
 ## Build your first APK
 
