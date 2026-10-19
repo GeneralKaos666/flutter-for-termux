@@ -572,3 +572,97 @@ class StubControlTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, f"{cfg['version']} does not outrank {cfg['tag']}")
+
+
+def _control_member(deb: Path, into: Path) -> Path:
+    """Extract ``deb``'s control member into ``into`` and return the directory."""
+    subprocess.run(
+        ["dpkg-deb", "-e", str(deb), str(into)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return into
+
+
+class StubOverrideTest(unittest.TestCase):
+    """The ``pkg_rel`` override and the ``build_toml`` seam ``build_stub`` closes.
+
+    Both must be pinned by an input that cannot come from the repo config, or a
+    ``render_control``/``render_scripts`` that ignored the passed values and read
+    the repo-root ``build.toml`` itself would pass unnoticed.
+    """
+
+    def test_render_control_pins_the_passed_version(self):
+        # 9.9.9-7 cannot come from build.toml, so ignoring the parameter fails.
+        text = apt_repo.render_control("9.9.9-7", _PACKAGE_YAML)
+        self.assertIn("Version: 9.9.9-7", text)
+        self.assertNotIn(load_config()["version"], text)
+
+    @unittest.skipUnless(shutil.which("dpkg-deb"), "dpkg-deb not installed")
+    def test_build_stub_uses_the_pkg_rel_override(self):
+        tag = load_config()["tag"]
+        with tempfile.TemporaryDirectory() as td:
+            deb = apt_repo.build_stub(out_dir=Path(td) / "work", pkg_rel="9")
+            self.assertEqual(deb.name, f"flutter_{tag}-9_all.deb")
+            info = subprocess.run(
+                ["dpkg-deb", "-I", str(deb)], capture_output=True, text=True, check=True
+            ).stdout
+            self.assertIn(f"Version: {tag}-9", info)
+
+    @unittest.skipUnless(shutil.which("dpkg-deb"), "dpkg-deb not installed")
+    def test_stub_command_pkg_rel_override_reaches_control(self):
+        # Also a regression guard: Fire parses a numeric --pkg-rel as int.
+        tag = load_config()["tag"]
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "work"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/release/apt_repo.py",
+                    "stub",
+                    "--out",
+                    str(out),
+                    "--pkg-rel",
+                    "9",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            deb = out / f"flutter_{tag}-9_all.deb"
+            self.assertTrue(deb.is_file(), result.stdout + result.stderr)
+            info = subprocess.run(
+                ["dpkg-deb", "-I", str(deb)], capture_output=True, text=True, check=True
+            ).stdout
+            self.assertIn(f"Version: {tag}-9", info)
+
+    @unittest.skipUnless(shutil.which("dpkg-deb"), "dpkg-deb not installed")
+    def test_build_stub_forwards_build_toml_to_the_maintainer_scripts(self):
+        # A fixture config: the control version and the postinst URL tag must
+        # both come from it, not from the repo-root build.toml.
+        fixture_tag, fixture_rel = "9.9.9", "4"
+        with tempfile.TemporaryDirectory() as td:
+            build_toml = Path(td) / "build.toml"
+            build_toml.write_text(
+                f"[flutter]\ntag = '{fixture_tag}'\n\n"
+                "[installer]\njava = 'openjdk-21'\nzip_tool = '7zip'\n\n"
+                f"[package]\npkg_rel = '{fixture_rel}'\n",
+                encoding="utf-8",
+            )
+            deb = apt_repo.build_stub(out_dir=Path(td) / "work", build_toml=build_toml)
+            self.assertEqual(deb.name, f"flutter_{fixture_tag}-{fixture_rel}_all.deb")
+
+            control = _control_member(deb, Path(td) / "control")
+            self.assertIn(
+                f"Version: {fixture_tag}-{fixture_rel}",
+                (control / "control").read_text(encoding="utf-8"),
+            )
+            postinst = (control / "postinst").read_text(encoding="utf-8")
+            self.assertIn(f'VERSION="{fixture_tag}-{fixture_rel}"', postinst)
+            self.assertIn(f"releases/download/{fixture_tag}", postinst)
+            for name in ("preinst", "postinst", "postrm"):
+                self.assertIsNone(
+                    re.search(r"@[A-Z_]+@", (control / name).read_text(encoding="utf-8")),
+                    f"{name} kept an unrendered placeholder",
+                )
