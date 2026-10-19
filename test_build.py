@@ -898,8 +898,8 @@ class InstallerRollbackBackupTest(unittest.TestCase):
             self.installer,
         )
         self.assertIn(
-            '${ANDROID_SDK_DEB_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}'
-            '/android-sdk_${ANDROID_SDK_OLD_VER}_aarch64.deb',
+            '${ANDROID_SDK_ARCHIVE_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}'
+            '/android-sdk-aarch64-linux-android.tar.xz',
             self.installer,
         )
 
