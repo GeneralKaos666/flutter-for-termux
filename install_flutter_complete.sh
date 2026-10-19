@@ -429,6 +429,12 @@ attempt_package_backup() {
 		return 0
 	fi
 	if [ -n "$old_ver" ]; then
+		# Expected to fail for flutter/android-sdk: these debs ship on GitHub
+		# Releases, not in any apt repo, so apt prints
+		# "Can't find a source to download version ... of '<pkg>:aarch64'".
+		# That message is the apt tier declining, not an install failure;
+		# tier 3 (release asset fetch) below takes over.
+		echo -e "    (tier 2) ${pkg} not in apt repos — this apt error is expected..."
 		(cd "$dest_dir" && apt-get download "${pkg}=${old_ver}") || true
 	fi
 	if ls "$dest_dir"/"${pkg}"*.deb 1>/dev/null 2>&1; then
