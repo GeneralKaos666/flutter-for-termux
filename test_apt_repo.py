@@ -574,6 +574,78 @@ class StubControlTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, f"{cfg['version']} does not outrank {cfg['tag']}")
 
 
+def _primary_fingerprints(colons_output):
+    """Primary-key fingerprints from ``gpg --with-colons`` output.
+
+    Records arrive as a ``sec:``/``pub:`` line followed by its own ``fpr:`` line
+    and then one per subkey; only the ``fpr:`` directly after the primary record
+    is the key's fingerprint.
+    """
+    fingerprints, expecting = [], False
+    for line in colons_output.splitlines():
+        kind = line.split(":", 1)[0]
+        if kind in ("sec", "pub"):
+            expecting = True
+        elif kind == "fpr" and expecting:
+            fingerprints.append(line.split(":")[9])
+            expecting = False
+    return fingerprints
+
+
+def _gpg_test_key(home: Path) -> str:
+    """Create a throwaway empty-passphrase ed25519 signing key in ``home``.
+
+    Returns the new key's fingerprint. ``home`` is a disposable ``GNUPGHOME``, so
+    the user's real keyring is never touched.
+    """
+    env = {**os.environ, "GNUPGHOME": str(home)}
+    subprocess.run(
+        [
+            "gpg",
+            "--batch",
+            "--pinentry-mode",
+            "loopback",
+            "--passphrase",
+            "",
+            "--quick-generate-key",
+            "flutter-for-termux apt repo (test) <apt-repo@example.invalid>",
+            "ed25519",
+            "sign",
+            "never",
+        ],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    listing = subprocess.run(
+        ["gpg", "--batch", "--with-colons", "--list-secret-keys"],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return _primary_fingerprints(listing)[0]
+
+
+def _release_fields(text):
+    """Split a ``Release`` file into header fields and its ``SHA256`` block.
+
+    ``{path: (digest, size)}`` — the block's entries are the indented lines.
+    """
+    fields, hashes = {}, {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        if line.startswith(" "):
+            digest, size, relative = line.split()
+            hashes[relative] = (digest, size)
+        else:
+            key, _, value = line.partition(":")
+            fields[key] = value.strip()
+    return fields, hashes
+
+
 def _control_member(deb: Path, into: Path) -> Path:
     """Extract ``deb``'s control member into ``into`` and return the directory."""
     subprocess.run(
@@ -666,3 +738,206 @@ class StubOverrideTest(unittest.TestCase):
                     re.search(r"@[A-Z_]+@", (control / name).read_text(encoding="utf-8")),
                     f"{name} kept an unrendered placeholder",
                 )
+
+
+# The exact 16-item union the stub's Depends must carry into the Packages index.
+_STUB_DEPENDS = (
+    "git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config, "
+    "openjdk-21, wget, curl, unzip, 7zip, binutils, tar, xz-utils"
+)
+# Release lists index files relative to dists/<suite>/ (the component root).
+_PINNED_INDEX_FILES = (
+    "main/Contents-aarch64",
+    "main/Contents-aarch64.xz",
+    "main/binary-aarch64/Packages",
+    "main/binary-aarch64/Packages.xz",
+)
+
+
+@unittest.skipUnless(shutil.which("dpkg-deb"), "dpkg-deb not installed")
+@unittest.skipUnless(shutil.which("gpg"), "gpg not installed")
+@unittest.skipUnless(shutil.which("xz"), "xz not installed")
+class RepoTest(unittest.TestCase):
+    """The ``repo`` generator: indexes, clearsigned Release, key and site (§§3, 5).
+
+    One throwaway empty-passphrase signing key in a disposable ``GNUPGHOME`` and
+    one indexed stub deb serve every test in the class; ``GNUPGHOME`` is reset
+    afterwards so the user's real keyrings are never read or written.
+    """
+
+    @classmethod
+    def _build_site(cls) -> Path:
+        """Build one stub deb and index it with the throwaway key; returns the site root."""
+        cls.deb = apt_repo.build_stub(out_dir=cls.tmp / "work")
+        return Path(apt_repo.build_repo(cls.deb, out_dir=cls.tmp / "site", passphrase=""))
+
+    @classmethod
+    def _restore_gnupghome(cls):
+        if shutil.which("gpgconf"):
+            subprocess.run(
+                ["gpgconf", "--kill", "gpg-agent"],
+                env={**os.environ, "GNUPGHOME": str(cls.gnupghome)},
+                capture_output=True,
+            )
+        if cls._previous_gnupghome is None:
+            os.environ.pop("GNUPGHOME", None)
+        else:
+            os.environ["GNUPGHOME"] = cls._previous_gnupghome
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls._tmp.cleanup)
+        cls.tmp = Path(cls._tmp.name)
+        cls.gnupghome = cls.tmp / "gnupghome"
+        cls.gnupghome.mkdir(mode=0o700)
+        cls._previous_gnupghome = os.environ.get("GNUPGHOME")
+        os.environ["GNUPGHOME"] = str(cls.gnupghome)
+        cls.addClassCleanup(cls._restore_gnupghome)
+        cls.fingerprint = _gpg_test_key(cls.gnupghome)
+        cls.config = load_config()
+        cls.site = cls._build_site()
+
+    def _dists(self) -> Path:
+        return self.site / "dists" / "termux"
+
+    def _binary(self) -> Path:
+        return self._dists() / "main" / "binary-aarch64"
+
+    def _published_deb(self) -> Path:
+        return self._binary() / f"flutter_{self.config['version']}_all.deb"
+
+    def test_packages_index_stub_fields(self):
+        packages = (self._binary() / "Packages").read_text(encoding="utf-8")
+        deb = self._published_deb()
+        self.assertTrue(
+            deb.is_file(),
+            f"stub deb not published: {sorted(p.name for p in self._binary().iterdir())}",
+        )
+        for needle in (
+            "Package: flutter",
+            "Version: " + self.config["version"],
+            "Architecture: all",
+            "Maintainer: GeneralKaos666 <xkiller1177@gmail.com>",
+            "Pre-Depends: x11-repo",
+            "Depends: " + _STUB_DEPENDS,
+            f"Filename: dists/termux/main/binary-aarch64/{deb.name}",
+            f"Size: {deb.stat().st_size}",
+            "SHA256: " + hashlib.sha256(deb.read_bytes()).hexdigest(),
+        ):
+            self.assertIn(needle, packages)
+        # A blank line terminates the paragraph so apt can find the next entry.
+        self.assertTrue(packages.endswith("\n\n"), repr(packages[-20:]))
+
+    def test_release_sha256_block_covers_every_index_file(self):
+        fields, hashes = _release_fields((self._dists() / "Release").read_text(encoding="utf-8"))
+
+        self.assertEqual(fields["Codename"], "termux")
+        self.assertEqual(fields["Suite"], "termux")
+        self.assertEqual(fields["Components"], "main")
+        self.assertEqual(fields["Architectures"], "aarch64")
+        self.assertEqual(fields["Version"], "1")
+        self.assertEqual(fields["Description"], "flutter-for-termux apt repository")
+        self.assertTrue(fields["Date"], "Release carries no Date")
+
+        self.assertEqual(set(hashes), set(_PINNED_INDEX_FILES))
+        for relative, (digest, size) in hashes.items():
+            data = (self._dists() / relative).read_bytes()
+            self.assertEqual(digest, hashlib.sha256(data).hexdigest(), relative)
+            self.assertEqual(size, str(len(data)), relative)
+
+    def test_inrelease_is_a_valid_clearsign_of_release(self):
+        inrelease = (self._dists() / "InRelease").read_text(encoding="utf-8")
+        self.assertIn("-----BEGIN PGP SIGNED MESSAGE-----", inrelease)
+        self.assertIn("Codename: termux", inrelease)
+
+        verify_home = self.tmp / "verify-home"
+        verify_home.mkdir(mode=0o700)
+        env = {**os.environ, "GNUPGHOME": str(verify_home)}
+        subprocess.run(
+            ["gpg", "--batch", "--import", str(self.site / "key.gpg")],
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        result = subprocess.run(
+            ["gpg", "--batch", "--verify", str(self._dists() / "InRelease")],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Good signature", result.stderr)
+
+    def test_key_gpg_is_armored_export_of_signing_key(self):
+        text = (self.site / "key.gpg").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----"), text[:60])
+
+        show_home = self.tmp / "show-home"
+        show_home.mkdir(mode=0o700)
+        result = subprocess.run(
+            ["gpg", "--batch", "--show-keys", "--with-colons", str(self.site / "key.gpg")],
+            env={**os.environ, "GNUPGHOME": str(show_home)},
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(self.fingerprint, _primary_fingerprints(result.stdout))
+
+    def test_index_html_contains_quick_start_and_no_version(self):
+        page = (self.site / "index.html").read_text(encoding="utf-8")
+        for needle in (
+            "flutter-for-termux apt repository",
+            "pkg install flutter",
+            "key.gpg",
+            "termux main",
+            "https://github.com/GeneralKaos666/flutter-for-termux#quick-start",
+        ):
+            self.assertIn(needle, page)
+        # Version-free by construction: autorelease.yml must never have to sed it.
+        self.assertNotIn(self.config["tag"], page)
+        self.assertNotIn(self.config["version"], page)
+
+    def test_repo_cli_autodiscovers_the_stub_deb(self):
+        with tempfile.TemporaryDirectory() as td:
+            work = Path(td) / "apt-repo-work"
+            work.mkdir()
+            shutil.copyfile(self.deb, work / self.deb.name)
+            out = Path(td) / "site"
+            env = {
+                **os.environ,
+                "GNUPGHOME": str(self.gnupghome),
+                "APT_REPO_SIGNING_PASSPHRASE": "",
+            }
+            # An absolute script path: the cwd is the throwaway work directory.
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(apt_repo.__file__).resolve()),
+                    "repo",
+                    "--out",
+                    str(out),
+                    "--key",
+                    self.fingerprint,
+                ],
+                cwd=td,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            found = {str(p.relative_to(out)) for p in out.rglob("*") if p.is_file()}
+            expected = {
+                "index.html",
+                "key.gpg",
+                "dists/termux/InRelease",
+                "dists/termux/Release",
+                "dists/termux/main/Contents-aarch64",
+                "dists/termux/main/Contents-aarch64.xz",
+                "dists/termux/main/binary-aarch64/Packages",
+                "dists/termux/main/binary-aarch64/Packages.xz",
+                f"dists/termux/main/binary-aarch64/{self.deb.name}",
+            }
+            self.assertEqual(found, expected)
