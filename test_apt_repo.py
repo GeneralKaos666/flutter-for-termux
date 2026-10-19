@@ -984,3 +984,50 @@ class PagesWorkflowTest(unittest.TestCase):
         # actually reads (the file is asserted verbatim elsewhere in the contract).
         assert ("APT_REPO_SIGNING_KEY: ${{ secrets.APT_REPO_SIGNING_KEY }}"
                 in Path(".github/workflows/apt-repo.yml").read_text())
+
+
+class DocsContractTest(unittest.TestCase):
+    """The documented user-facing flow: apt first, installer deprecated (§6)."""
+
+    def test_readme_quick_start_is_apt_first_and_version_free(self):
+        readme = Path("README.md").read_text()
+        # `## Manual install` is the transparency/fallback path, so it terminates
+        # the quick start and is the sentinel for "still in the recommended flow".
+        quick = readme.split("## Quick start")[1].split("## Manual install")[0]
+        for needle in (
+            "https://GeneralKaos666.github.io/flutter-for-termux",
+            "key.gpg",
+            "sources.list.d/flutter.list",
+            "pkg install flutter",
+        ):
+            assert needle in quick
+        # Version-free by construction: check_version_drift.py never sees it.
+        assert re.search(r"\d+\.\d+\.\d+", quick) is None
+        # The apt command leads; the legacy installer download comes later.
+        assert readme.index("pkg install flutter") < readme.index(
+            "curl -sL https://raw.githubusercontent.com"
+        )
+
+    def test_guides_document_apt_flow(self):
+        install = Path("docs/guides/INSTALL_GUIDE.md").read_text()
+        assert install.index("pkg install flutter") < install.index("Method 2")
+        upgrade = Path("docs/guides/UPGRADE_GUIDE.md").read_text()
+        assert "apt upgrade flutter" in upgrade
+        assert "apt --fix-broken install" in upgrade
+        agents = Path("AGENTS.md").read_text()
+        assert "scripts/release/apt_repo.py" in agents
+        cicd = Path("docs/CI_CD.md").read_text()
+        assert "apt-repo.yml" in cicd and "APT_REPO_SIGNING_KEY" in cicd
+        assert "APT_REPO_SIGNING_PASSPHRASE" in cicd
+        assert "fingerprint" in cicd.lower()  # Task 1's value lands here
+
+    def test_installer_prints_deprecation_banner(self):
+        text = Path("install_flutter_complete.sh").read_text()
+        assert (
+            'echo "[!] DEPRECATED: use the apt repository instead: '
+            'pkg install flutter (see README)."' in text
+        )
+        assert (
+            'echo "[!] This installer keeps working but no longer receives new features."'
+            in text
+        )
