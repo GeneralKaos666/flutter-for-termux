@@ -1,0 +1,23 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+# postrm: remove the owned path groups and their stale snapshots on
+# remove|purge only; every other dpkg argument is a no-op guard so no dpkg
+# sequencing can wipe a payload a new postinst just installed.
+# Snapshot removal uses the exact per-group path (never a glob), so foreign
+# .flutter.old.* files in shared directories survive.
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+VERSION="@VERSION@"
+OWNED_PATHS=(@OWNED_PATHS@)
+
+case "${1:-}" in
+  remove|purge)
+    for group in "${OWNED_PATHS[@]}"; do
+      rm -rf "${PREFIX}/${group}"
+      rm -rf "${PREFIX}/$(dirname "${group}")/.flutter.old.$(basename "${group}")"
+    done
+    ;;
+  *)
+    exit 0
+    ;;
+esac
