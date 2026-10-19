@@ -602,7 +602,7 @@ if [ -n "$FLUTTER_OLD_VER" ]; then
 fi
 ANDROID_SDK_RELEASE_URL=""
 if [ -n "$ANDROID_SDK_OLD_VER" ]; then
-	ANDROID_SDK_RELEASE_URL="${ANDROID_SDK_ARCHIVE_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}/android-sdk-aarch64-linux-android.tar.xz"
+	ANDROID_SDK_RELEASE_URL="${ANDROID_SDK_ARCHIVE_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}/android-sdk-aarch64-linux-android.tar.xz" 2>/dev/null || ANDROID_SDK_RELEASE_URL="${ANDROID_SDK_DEB_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}/android-sdk-aarch64-linux-android.tar.xz" 2>/dev/null || ANDROID_SDK_RELEASE_URL="https://github.com/HomuHomu833/android-sdk-custom/releases/download/${ANDROID_SDK_OLD_VER}/android-sdk-aarch64-linux-android.tar.xz" 2>/dev/null || true
 fi
 
 # A missing backup degrades the rollback safety net; it must not abort the
@@ -1044,7 +1044,7 @@ plugins {
 android {
     namespace = "com.example.flutter_test_app"
     compileSdk = 36
-    ndkVersion = "29.0.14206865"
+    ndkVersion = "${NDK_VERSION}"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
