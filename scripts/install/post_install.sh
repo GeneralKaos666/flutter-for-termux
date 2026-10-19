@@ -1490,13 +1490,20 @@ fi
 echo "[15/17] Creating host platform symlinks..."
 ENG_ART=$FLUTTER_ROOT/bin/cache/artifacts/engine
 for dir in android-arm64-release android-arm64-profile; do
-	if [ ! -d "$ENG_ART/$dir" ]; then
-		echo "  ⚠ $dir missing (run flutter precache --android?), skipping"
+	if [ ! -f "$ENG_ART/linux-arm64/gen_snapshot" ]; then
+		echo "  ⚠ linux-arm64/gen_snapshot missing (deb incomplete?), skipping $dir"
 		continue
 	fi
-	if [ ! -f "$ENG_ART/linux-arm64/gen_snapshot" ]; then
-		echo "  ⚠ linux-arm64/gen_snapshot missing, skipping $dir"
-		continue
+	# On a fresh install these directories do not exist yet: flutter's cache
+	# only creates them on its first artifact download, which happens during
+	# the first `flutter build apk` - i.e. AFTER this script runs. Skipping
+	# them here made that first build fail with "Failed to find
+	# .../android-arm64-release/linux-arm64/gen_snapshot". Create the
+	# directories ourselves; flutter extracts its upstream linux-x64 files
+	# alongside without deleting our symlink.
+	if [ ! -d "$ENG_ART/$dir" ]; then
+		mkdir -p "$ENG_ART/$dir"
+		echo "  ✓ $dir/ created"
 	fi
 	if [ -e "$ENG_ART/$dir/linux-arm64" ] && [ ! -L "$ENG_ART/$dir/linux-arm64" ]; then
 		echo "  ⚠ $dir/linux-arm64 exists as a real directory, leaving untouched"

@@ -2220,5 +2220,95 @@ class CheckRepoNdkHelperDriftTest(unittest.TestCase):
                     )
 
 
+class HostPlatformSymlinkTest(unittest.TestCase):
+    """Fresh-install regression for post_install.sh step [15/17].
+
+    flutter_tools resolves the AOT gen_snapshot for android targets to
+    ``<engine>/android-arm64-{release,profile}/linux-arm64/gen_snapshot``,
+    while flutter's cache only creates those ``android-*`` directories on its
+    first artifact download - which happens during the first
+    ``flutter build apk``, i.e. *after* post_install.sh has run. Step 15 used
+    to skip missing directories, so the very first build of a fresh install
+    failed with ``Failed to find .../android-arm64-release/linux-arm64/
+    gen_snapshot``. It must now provision the directories itself.
+    """
+
+    STEP15_START = 'echo "[15/17] Creating host platform symlinks..."'
+    STEP16_START = '# 16.'
+
+    def setUp(self):
+        root = Path(__file__).parent
+        self.post_install = (
+            root / 'scripts' / 'install' / 'post_install.sh'
+        ).read_text(encoding='utf-8')
+        self.installer = (root / 'install_flutter_complete.sh').read_text(
+            encoding='utf-8'
+        )
+
+    def _step15(self):
+        start = self.post_install.index(self.STEP15_START)
+        end = self.post_install.index(self.STEP16_START, start)
+        return self.post_install[start:end]
+
+    def _fresh_engine_dir(self, root):
+        engine = Path(root) / 'bin' / 'cache' / 'artifacts' / 'engine'
+        (engine / 'linux-arm64').mkdir(parents=True)
+        (engine / 'linux-arm64' / 'gen_snapshot').write_text('fake')
+        return engine
+
+    def _run_step15(self, root):
+        return subprocess.run(
+            ['bash', '-c', self._step15()],
+            env={**os.environ, 'FLUTTER_ROOT': str(root)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def test_provisions_symlinks_when_android_dirs_do_not_exist_yet(self):
+        with tempfile.TemporaryDirectory() as root:
+            engine = self._fresh_engine_dir(root)
+            self._run_step15(root)
+            for name in ('android-arm64-release', 'android-arm64-profile'):
+                link = engine / name / 'linux-arm64'
+                self.assertTrue(link.is_symlink(), f'{name}/linux-arm64 missing')
+                self.assertEqual(os.readlink(link), '../linux-arm64')
+                self.assertEqual(
+                    (link / 'gen_snapshot').read_text(), 'fake'
+                )
+
+    def test_is_idempotent_and_leaves_real_directories_untouched(self):
+        with tempfile.TemporaryDirectory() as root:
+            engine = self._fresh_engine_dir(root)
+            self._run_step15(root)
+            second = self._run_step15(root)
+            self.assertIn('already present', second.stdout)
+            real = engine / 'android-arm64-release' / 'linux-arm64'
+            real.unlink()
+            real.mkdir()
+            third = self._run_step15(root)
+            self.assertIn('leaving untouched', third.stdout)
+            self.assertFalse(real.is_symlink())
+
+    def test_skips_when_deb_gen_snapshot_is_missing(self):
+        with tempfile.TemporaryDirectory() as root:
+            engine = Path(root) / 'bin' / 'cache' / 'artifacts' / 'engine'
+            engine.mkdir(parents=True)
+            self._run_step15(root)
+            self.assertFalse((engine / 'android-arm64-release').exists())
+
+    def test_installer_prefers_repo_post_install_over_deb_copy(self):
+        # The deb can only carry the post_install.sh that existed when it was
+        # built; fixes must reach users from the repo checkout without waiting
+        # for a new deb. Both execution sites must use the resolved variable.
+        self.assertIn(
+            'POST_INSTALL="$SCRIPT_DIR/scripts/install/post_install.sh"',
+            self.installer,
+        )
+        self.assertNotIn(
+            'bash "$PREFIX/share/flutter/post_install.sh"', self.installer
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
