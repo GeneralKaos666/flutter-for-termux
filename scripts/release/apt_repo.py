@@ -39,6 +39,8 @@ _DEFAULT_STUB_DIR = Path("apt-repo-work")
 _DEFAULT_SITE_DIR = Path("repo")
 
 _QUICK_START = (
+    "pkg install -y gnupg\n"
+    'mkdir -p "$PREFIX/etc/apt/keyrings"\n'
     "curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \\\n"
     '  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"\n'
     'echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] '
@@ -66,7 +68,8 @@ _INDEX_HTML = """<!DOCTYPE html>
 <h1>flutter-for-termux apt repository</h1>
 <p>
   This is the apt repository for <code>flutter</code> on Termux. The signing key is
-  <a href="key.gpg">key.gpg</a>; the snippet below installs it as
+  <a href="key.gpg">key.gpg</a>; the snippet below installs <code>gnupg</code>, creates the
+  apt keyrings directory, stores the key as
   <code>$PREFIX/etc/apt/keyrings/flutter.gpg</code> and adds the repository to
   <code>$PREFIX/etc/apt/sources.list.d/flutter.list</code>.
 </p>

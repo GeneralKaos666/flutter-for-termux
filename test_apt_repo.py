@@ -889,6 +889,10 @@ class RepoTest(unittest.TestCase):
         page = (self.site / "index.html").read_text(encoding="utf-8")
         for needle in (
             "flutter-for-termux apt repository",
+            # The canonical snippet must be runnable cold: install gpg, create
+            # the keyrings dir, then add the key and repository.
+            "pkg install -y gnupg",
+            'mkdir -p "$PREFIX/etc/apt/keyrings"',
             "pkg install flutter",
             "key.gpg",
             "termux main",
