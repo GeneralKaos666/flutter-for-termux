@@ -1,0 +1,22 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+# preinst: refuse to install on anything but aarch64 (spec section 4).
+# The version and owned-path placeholders are injected at render time so every
+# shipped maintainer script carries the same package identity.
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+VERSION="@VERSION@"
+OWNED_PATHS=(@OWNED_PATHS@)
+
+action="${1:-}"
+arch="$(uname -m)"
+
+if [ "${arch}" != "aarch64" ]; then
+  printf '%s\n' \
+    "flutter (${VERSION}): unsupported architecture '${arch}'" \
+    "flutter: this package requires an aarch64 device" \
+    "flutter: refusing to install (dpkg action: '${action}')" >&2
+  exit 1
+fi
+
+exit 0
