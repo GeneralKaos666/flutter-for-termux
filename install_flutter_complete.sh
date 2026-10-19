@@ -903,10 +903,19 @@ for ndk_dir in $ANDROID_HOME/ndk/*/; do
 	fi
 done
 
-# Also run post_install.sh (if present)
-if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
+# Also run post_install.sh (if present).
+# Prefer the repo checkout's copy over the deb-shipped one: the deb can only
+# carry the post_install.sh that existed when it was built, and post-install
+# fixes must land without waiting for a new deb release.
+POST_INSTALL="$PREFIX/share/flutter/post_install.sh"
+if [ -f "$SCRIPT_DIR/scripts/install/post_install.sh" ]; then
+	if ! cp -f "$SCRIPT_DIR/scripts/install/post_install.sh" "$POST_INSTALL" 2>/dev/null; then
+		POST_INSTALL="$SCRIPT_DIR/scripts/install/post_install.sh"
+	fi
+fi
+if [ -f "$POST_INSTALL" ]; then
 	echo "Running post_install.sh..."
-	bash "$PREFIX/share/flutter/post_install.sh" || {
+	bash "$POST_INSTALL" || {
 		INSTALL_FAILED=true
 		record_stage post-install failed
 		exit 50
@@ -1045,7 +1054,7 @@ PROPS
 # Update build.gradle.kts (set compileSdk=36, targetSdk=36, ndkVersion, AGP 9-compatible DSL)
 # NB: must match current Flutter template DSL — the old kotlinOptions/externalNativeBuild
 # accessors are deprecated and fail script compilation under AGP 9/Kotlin 2.4
-cat >android/app/build.gradle.kts <<'GRADLE'
+cat >android/app/build.gradle.kts <<GRADLE
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
@@ -1095,8 +1104,8 @@ flutter build apk --release --target-platform android-arm64 2>&1 | tee "$build1_
 
 # Gradle may have downloaded new SDK components (e.g. build-tools/37.0.0-2); reconfigure
 echo "Configuring SDK components downloaded by Gradle..."
-if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
-	bash "$PREFIX/share/flutter/post_install.sh" || {
+if [ -f "${POST_INSTALL:-$PREFIX/share/flutter/post_install.sh}" ]; then
+	bash "${POST_INSTALL:-$PREFIX/share/flutter/post_install.sh}" || {
 		INSTALL_FAILED=true
 		record_stage post-install failed
 		exit 50
