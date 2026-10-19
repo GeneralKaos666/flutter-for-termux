@@ -1,0 +1,171 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+# postinst: install the architecture-specific payload this architecture-any stub
+# stands in for (spec section 4). The order below is load-bearing:
+#   idempotency marker -> preflight free space -> download -> verify -> stage ->
+#   build-tool staging -> snapshot -> swap -> post_install.sh -> commit marker
+# Nothing outside the four owned path groups is ever created, moved or deleted,
+# and every failure after the snapshot step puts the previous payload back
+# through the EXIT trap, so dpkg never sees a half-written tree.
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+WORK="${TMPDIR:-$PREFIX/tmp}/apt-stub.$$"
+VERSION="@VERSION@"
+RELEASE_BASE="${FLUTTER_RELEASE_BASE:-https://github.com/GeneralKaos666/flutter-for-termux/releases/download/@TAG@}"
+OWNED_PATHS=(@OWNED_PATHS@)
+DEB="flutter_${VERSION}_aarch64.deb"
+MARKER="$PREFIX/share/flutter/.stub-version"
+
+# Set as the run advances so the trap knows how far it must unwind.
+snapshots_started=0
+completed=0
+
+# Snapshot path of an owned group: a sibling inside the same shared directory
+# (exact path, never a glob, so foreign .flutter.old.* files survive).
+snapshot_of() {
+  printf '%s/%s/.flutter.old.%s\n' "$PREFIX" "$(dirname "$1")" "$(basename "$1")"
+}
+
+die() {
+  printf 'flutter (%s): %s\n' "$VERSION" "$*" >&2
+  exit 1
+}
+
+cleanup() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ "$snapshots_started" -eq 1 ]; then
+    printf '[*] Rolling back to the previous flutter payload ...\n' >&2
+    local group snap
+    for group in "${OWNED_PATHS[@]}"; do
+      rm -rf "${PREFIX:?}/$group" || true
+      snap="$(snapshot_of "$group")"
+      if [ -e "$snap" ] || [ -L "$snap" ]; then
+        mv "$snap" "$PREFIX/$group" || true
+      fi
+    done
+    rm -rf "$WORK" || true
+    exit 1
+  fi
+  if [ "$completed" -eq 1 ]; then
+    local group
+    for group in "${OWNED_PATHS[@]}"; do
+      rm -rf "$(snapshot_of "$group")" || true
+    done
+  fi
+  rm -rf "$WORK" || true
+}
+trap cleanup EXIT
+
+# Only a configure run has a payload to install; every other dpkg argument
+# (abort-*, failed-upgrade, ...) is a no-op.
+case "${1:-}" in
+  configure) ;;
+  *) exit 0 ;;
+esac
+
+# 1. Idempotency: the marker is written last, so a match means the payload is
+#    already in place and only post_install.sh has to converge again. This is
+#    what makes `dpkg --configure -a` and retries safe.
+if [ -f "$MARKER" ] && [ "$(cat "$MARKER")" = "$VERSION" ]; then
+  printf '[*] flutter %s is already installed; re-running post_install.sh\n' "$VERSION"
+  if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
+    bash "$PREFIX/share/flutter/post_install.sh"
+  fi
+  exit 0
+fi
+
+# 2. Preflight: the staged tree plus the swap need ~1.5 GB, so refuse early
+#    (apt shows no progress during configure, hence the [*] step lines).
+mkdir -p "$WORK"
+AVAIL_KB="$(df -Pk "$WORK" | awk 'NR>1 {print $4}' | tail -1)"
+case "$AVAIL_KB" in
+  '' | *[!0-9]*) die "could not determine free space for $WORK" ;;
+esac
+if [ "$AVAIL_KB" -lt 1572864 ]; then
+  die "need at least 1.5 GB free space in $WORK (found ${AVAIL_KB} KB)"
+fi
+
+# 3. Download the payload and its verification sidecars.
+printf '[*] Downloading %s ...\n' "$DEB"
+curl -fL --retry 3 -o "$WORK/$DEB" "$RELEASE_BASE/$DEB"
+curl -fL --retry 3 -o "$WORK/$DEB.sha256" "$RELEASE_BASE/$DEB.sha256"
+curl -fL --retry 3 -o "$WORK/$DEB.size.txt" "$RELEASE_BASE/$DEB.size.txt"
+
+# 4. Verify before anything on disk is touched. The .sha256 file is
+#    name-agnostic: only its first whitespace field is compared, because the
+#    release asset name and the downloaded file name may differ.
+printf '[*] Verifying %s ...\n' "$DEB"
+EXPECTED_SHA="$(awk 'NF {print $1; exit}' "$WORK/$DEB.sha256")"
+ACTUAL_SHA="$(sha256sum "$WORK/$DEB" | awk 'NF {print $1; exit}')"
+if [ -z "$EXPECTED_SHA" ] || [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+  die "checksum mismatch for $DEB (expected ${EXPECTED_SHA:-none}, got ${ACTUAL_SHA:-none})"
+fi
+EXPECTED_SIZE="$(tr -d '[:space:]' < "$WORK/$DEB.size.txt")"
+ACTUAL_SIZE="$(wc -c < "$WORK/$DEB" | tr -d '[:space:]')"
+if [ -z "$EXPECTED_SIZE" ] || [ "$EXPECTED_SIZE" != "$ACTUAL_SIZE" ]; then
+  die "size mismatch for $DEB (expected ${EXPECTED_SIZE:-none}, got ${ACTUAL_SIZE:-none})"
+fi
+
+# 5. Stage the payload. dpkg-deb extracts data members relative to '/', so the
+#    staged prefix is the extraction root plus the runtime prefix path.
+printf '[*] Extracting %s ...\n' "$DEB"
+rm -rf "$WORK/stage"
+mkdir -p "$WORK/stage"
+dpkg-deb -x "$WORK/$DEB" "$WORK/stage"
+STAGE_PREFIX="$WORK/stage$PREFIX"
+for group in "${OWNED_PATHS[@]}"; do
+  if [ ! -e "$STAGE_PREFIX/$group" ]; then
+    die "payload $DEB does not contain $group"
+  fi
+done
+
+# 6. Build-tool staging: replicate the installer's proven bypass (declaring
+#    these as hard Depends would let apt refuse the install before the bypass
+#    could run). Semantics copied from install_flutter_complete.sh.
+mkdir -p "$WORK/apt_staging"
+(
+  cd "$WORK/apt_staging"
+  for pkg in d8 dx aidl apksigner googletest android-tools; do
+    apt download "$pkg" 2>/dev/null || true
+    if ls ${pkg}*.deb 1>/dev/null 2>&1; then
+      if ! dpkg -i ${pkg}*.deb 2>/dev/null; then
+        dpkg --force-depends --configure "${pkg}" 2>/dev/null || true
+      fi
+      rm -f ${pkg}*.deb
+    fi
+  done
+)
+
+# 7. Snapshot the owned groups by renaming them to .flutter.old.* siblings: the
+#    rename is atomic and costs no extra disk. A stale snapshot left behind by a
+#    killed run is removed first.
+printf '[*] Snapshotting the existing payload ...\n'
+snapshots_started=1
+for group in "${OWNED_PATHS[@]}"; do
+  snap="$(snapshot_of "$group")"
+  rm -rf "$snap"
+  if [ -e "$PREFIX/$group" ] || [ -L "$PREFIX/$group" ]; then
+    mkdir -p "$PREFIX/$(dirname "$group")"
+    mv "$PREFIX/$group" "$snap"
+  fi
+done
+
+# 8. Swap the staged groups into place, then let the payload configure itself
+#    (NDK wrappers, compileSdk pin, Gradle plugin cache). Its exit status gates
+#    the package: a non-zero exit triggers the rollback above.
+printf '[*] Swapping in flutter %s ...\n' "$VERSION"
+for group in "${OWNED_PATHS[@]}"; do
+  mkdir -p "$PREFIX/$(dirname "$group")"
+  mv -f "$STAGE_PREFIX/$group" "$PREFIX/$group"
+done
+printf '[*] Configuring ...\n'
+if [ ! -f "$PREFIX/share/flutter/post_install.sh" ]; then
+  die "payload $DEB does not contain share/flutter/post_install.sh"
+fi
+bash "$PREFIX/share/flutter/post_install.sh"
+
+# 9. Commit: only now is the new payload considered installed. The success path
+#    of the trap drops the snapshots and the whole working directory.
+printf '%s\n' "$VERSION" > "$MARKER"
+completed=1
+printf '[*] Installed flutter %s\n' "$VERSION"
