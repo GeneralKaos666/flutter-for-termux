@@ -461,6 +461,7 @@ def check_script_headers() -> None:
 def check_test_modules_and_ci_steps() -> None:
     required_test_modules = [
         "test_build.py",
+        "test_apt_repo.py",
     ]
     for test_mod in required_test_modules:
         require_file(test_mod)

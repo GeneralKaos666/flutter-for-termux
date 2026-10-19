@@ -6,7 +6,7 @@
 flutter/
 flutter.old
 sysroot/
-release/
+/release/
 depot_tools/
 *.deb
 out/
@@ -161,3 +161,7 @@ tmp_*/
 *.tmp
 *.temp
 dpkg_state.json
+
+# ----- apt repository build output (apt_repo.py) -----
+/apt-repo-work/
+/repo/
