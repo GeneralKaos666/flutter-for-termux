@@ -1,0 +1,5 @@
+debs/
+repo/
+.planning/
+*.deb
+*.bak*

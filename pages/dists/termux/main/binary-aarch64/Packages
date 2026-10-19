@@ -1,0 +1,15 @@
+Package: flutter
+Version: 3.47.7-5
+Architecture: aarch64
+Maintainer: mumumusuc <mumumusuc@gmail.com>
+Pre-Depends: x11-repo
+Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
+Homepage: https://www.github.com/flutter/flutter
+Description: Flutter makes it easy and fast to build beautiful apps for mobile and beyond
+Filename: dists/termux/main/binary-aarch64/flutter_3.47.7-5_aarch64.deb
+Size: 635042964
+MD5Sum: 48577bba548440f762d6efab50de2517
+SHA1: 7798d9b8e53b43453ef7ad5024faa0b9a89df30f
+SHA256: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
+SHA512: 41e4ec119bff80452dc03d7b6fee69d41bf8c7028f32bea2769c39d754f9338c328f24aa40ccc960e75bb83a5eac95832316780a9110c91b123151fcf5bf6510
+
