@@ -48,6 +48,8 @@ stays a GitHub release asset that the stub downloads, verifies, and unpacks for
 you.
 
 ```bash
+pkg install -y gnupg
+mkdir -p "$PREFIX/etc/apt/keyrings"
 curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
   | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
 echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
