@@ -941,3 +941,18 @@ class RepoTest(unittest.TestCase):
                 f"dists/termux/main/binary-aarch64/{self.deb.name}",
             }
             self.assertEqual(found, expected)
+
+
+class CiContractTest(unittest.TestCase):
+    def test_ci_and_repo_config_cover_apt_repo_tooling(self):
+        ci = Path(".github/workflows/ci.yml").read_text()
+        assert "pytest test_build.py test_apt_repo.py" in ci
+        assert "ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ scripts/release/ test_apt_repo.py" in ci
+        assert 'bash -n scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm' in ci
+        assert "shellcheck --severity=error install_flutter_complete.sh scripts/release/stub/preinst" in ci
+        ini = Path("pytest.ini").read_text()
+        assert "testpaths = test_build.py test_apt_repo.py" in ini
+        check_repo = Path("scripts/ci/check_repo.py").read_text()
+        assert '"test_apt_repo.py"' in check_repo
+        gitignore = Path(".gitignore").read_text()
+        assert "/apt-repo-work/" in gitignore and "/repo/" in gitignore

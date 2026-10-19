@@ -40,14 +40,14 @@ jobs:
           python -m py_compile "${PY_FILES[@]}"
 
       - name: Run pytest unit tests
-        run: pytest test_build.py
+        run: pytest test_build.py test_apt_repo.py
 
       - name: Ruff lint Python
         run: |
           set -euo pipefail
           pip install -q ruff==0.14.13
-          ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/
-          ruff format --check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ || true
+          ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ scripts/release/ test_apt_repo.py
+          ruff format --check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ scripts/release/ test_apt_repo.py || true
 
       - name: Shell syntax check
         shell: bash
@@ -55,6 +55,7 @@ jobs:
           set -euo pipefail
           find scripts -name "*.sh" -exec bash -n {} +
           bash -n install_flutter_complete.sh
+          bash -n scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm
 
       - name: Termux smoke self-test (APT status fidelity)
         shell: bash
@@ -66,7 +67,7 @@ jobs:
           set -euo pipefail
           # Exclude .sh files that are actually Python scripts (e.g. config_jdk.sh)
           mapfile -t SHELL_FILES < <(find scripts -name "*.sh" -exec grep -l '^#!/.*\(ba\)\?sh' {} +  2>/dev/null || true)
-          shellcheck --severity=error install_flutter_complete.sh "${SHELL_FILES[@]}"
+          shellcheck --severity=error install_flutter_complete.sh scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm "${SHELL_FILES[@]}"
 
       - name: actionlint workflow lint
         shell: bash
