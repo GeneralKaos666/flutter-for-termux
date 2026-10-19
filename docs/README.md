@@ -46,12 +46,14 @@ fingerprint: 1DED 0840 4574 B867 B058  A7BB 476F C230 ECBB FDF0
 
 ## Repository maintainers
 
-Rebuild and publish after a new `.deb` is dropped into `debs/`:
+Rebuild and publish after a new `.deb` is dropped into `debs/` (GitHub Pages
+serves this `docs/` directory of the `apt` branch as the site root):
 
 ```sh
-./termux-apt-repo debs pages termux main --sign --strip-debs
-gpg --export 476FC230ECBBFDF0 > pages/key.gpg
-# push pages/ to the orphan `apt` branch; the .deb must be attached to the
+./termux-apt-repo debs docs termux main --sign --strip-debs
+gpg --export 476FC230ECBBFDF0 > docs/key.gpg
+# commit docs/ on the apt branch and push; the .deb must be attached to the
 # GitHub release whose tag is the Flutter version minus its deb-revision
 # suffix (3.47.7-5 -> tag 3.47.7), asset name = the .deb's file name.
+# (Pages source config: branch apt, path /docs)
 ```
