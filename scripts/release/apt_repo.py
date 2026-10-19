@@ -48,6 +48,7 @@ def render_scripts(
     version: str,
     owned_paths: Sequence[str],
     template_dir: Path | None = None,
+    build_toml: Path | None = None,
 ) -> dict[str, str]:
     """Render the maintainer-script templates found in ``template_dir``.
 
@@ -55,9 +56,14 @@ def render_scripts(
     ``@VERSION@``, ``@TAG@`` and ``@OWNED_PATHS@`` placeholders are
     substituted. Returns ``{template name: rendered text}`` for whichever
     templates exist.
+
+    ``build_toml`` supplies the release tag for ``@TAG@``; it defaults to the
+    repo-root ``build.toml``, so callers that omit it are unaffected. Pass the
+    same config as :func:`render_control`/:func:`build_stub` to keep the
+    control version and the script URL tag in agreement.
     """
     directory = _DEFAULT_TEMPLATE_DIR if template_dir is None else Path(template_dir)
-    tag = load_config()["tag"]
+    tag = load_config(build_toml)["tag"]
     rendered: dict[str, str] = {}
     for name in _TEMPLATE_NAMES:
         template = directory / name
@@ -232,7 +238,9 @@ def build_stub(
         control_path = control_dir / "control"
         control_path.write_text(render_control(version, package, build_toml), encoding="utf-8")
         control_path.chmod(0o644)
-        for name, text in render_scripts(version, parse_owned_paths(package)).items():
+        for name, text in render_scripts(
+            version, parse_owned_paths(package), build_toml=build_toml
+        ).items():
             script = control_dir / name
             script.write_text(text, encoding="utf-8")
             script.chmod(0o755)
