@@ -685,12 +685,16 @@ fi
 # Pre-verify archive structure integrity (hard failure)
 echo "Verifying Android SDK archive integrity..."
 if command -v tar >/dev/null 2>&1; then
-	tar tzf "$ANDROID_SDK_DEB" >/dev/null 2>&1 || {
+	if tar tJf "$ANDROID_SDK_DEB" >/dev/null 2>&1; then
+		:
+	elif tar tf "$ANDROID_SDK_DEB" >/dev/null 2>&1; then
+		:
+	else
 		INSTALL_FAILED=true
 		record_stage integrity failed
 		echo "Android SDK archive is corrupt"
 		exit 30
-	}
+	fi
 elif command -v 7z >/dev/null 2>&1; then
 	7z t "$ANDROID_SDK_DEB" >/dev/null 2>&1 || {
 		INSTALL_FAILED=true
