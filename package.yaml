@@ -11,7 +11,7 @@ control:
   Package: flutter
   Version: $package_version
   Architecture: $architecture
-  Maintainer: mumumusuc <mumumusuc@gmail.com>
+  Maintainer: GeneralKaos666 <xkiller1177@gmail.com>
   Pre-Depends: x11-repo
   Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
   Homepage: https://www.github.com/flutter/flutter

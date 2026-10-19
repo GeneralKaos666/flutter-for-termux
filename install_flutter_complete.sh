@@ -18,6 +18,9 @@
 
 set -euo pipefail
 
+echo "[!] DEPRECATED: use the apt repository instead: pkg install flutter (see README)."
+echo "[!] This installer keeps working but no longer receives new features."
+
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo ".")"
 if [ -f "$SCRIPT_DIR/scripts/install/lib_common.sh" ]; then
