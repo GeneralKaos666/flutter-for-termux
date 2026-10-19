@@ -24,7 +24,15 @@ from apt_repo import load_config, render_scripts  # noqa: E402
 
 SPEC_GROUPS = ["bin/flutter", "etc/profile.d/flutter.sh", "opt/flutter", "share/flutter"]
 FILE_GROUPS = frozenset({"bin/flutter", "etc/profile.d/flutter.sh"})
-_BASH_SHEBANG = "#!/data/data/com.termux/files/usr/bin/bash"
+
+# The product templates (scripts/release/stub/*) keep their Termux shebang on
+# purpose -- they only ever run on Termux. The *test doubles* written below are
+# executed directly by the rendered maintainer scripts, so on a non-Termux host
+# (CI) the kernel must still find the interpreter. Resolve bash from PATH and
+# fall back to the Termux absolute path only when PATH has none, so a Termux
+# checkout without bash on PATH behaves exactly as before.
+_TERMUX_BASH = "/data/data/com.termux/files/usr/bin/bash"
+_BASH_SHEBANG = f"#!{shutil.which('bash') or _TERMUX_BASH}"
 
 
 def _render(owned=SPEC_GROUPS):
@@ -121,9 +129,9 @@ def _make_payload(prefix, body="new", post_install_rc=0):
 
     ``dpkg-deb`` stores data members relative to ``/``, so a group is packaged
     at ``prefix`` without its leading slash: on a device that is exactly the
-    canonical ``data/data/com.termux/files/usr/<group>`` layout, and the tests
-    shift the same shape under their throwaway ``PREFIX`` (which is why the
-    helper takes the prefix, not a fixed path).
+    canonical Termux ``$PREFIX/<group>`` layout, and the tests shift the same
+    shape under their throwaway ``PREFIX`` (which is why the helper takes the
+    prefix, not a fixed path).
 
     Every group carries a ``body`` marker file and ``share/flutter`` also ships
     a ``post_install.sh`` that touches ``post_install.stamp`` and exits with
@@ -241,6 +249,21 @@ class RendererTest(unittest.TestCase):
                 capture_output=True,
             )
             self.assertEqual(result.returncode, 0, f"{name}: {result.stdout}")
+
+
+class HarnessPortabilityTest(unittest.TestCase):
+    """The test doubles' shebang must resolve on whatever host runs pytest."""
+
+    def test_shim_interpreter_is_host_portable(self):
+        interpreter = Path(_BASH_SHEBANG[2:])
+        self.assertTrue(interpreter.is_file(), f"no interpreter at {interpreter}")
+        self.assertTrue(os.access(interpreter, os.X_OK), f"{interpreter} is not executable")
+
+        with tempfile.TemporaryDirectory() as td:
+            shim = _write_shim(td, "harness-probe", "echo harness-ok")
+            result = subprocess.run([str(shim)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "harness-ok")
 
 
 class PreinstTest(unittest.TestCase):
