@@ -54,6 +54,9 @@ Key details:
 | `package.yaml` | Declarative artifact mapping: build output paths → Termux install paths |
 | `utils.py` | Arch map (`arm64→aarch64`), output path resolution, `__MODE__`, Termux detection |
 | `patches/` | Flat, tag-agnostic git patches (engine/dart/skia, plus `dart.new.patch` which is a symlink to `dart.patch` per `test_build.py`) |
+| `scripts/release/apt_repo.py` | Python Fire CLI for the public apt repository: `stub` builds the control-only `flutter` stub deb, `repo` writes the signed Pages site (indexes, `Release`, `InRelease`, `key.gpg`, `index.html`). Reads all versions from `build.toml` and the owned paths from `package.yaml`. |
+| `scripts/release/stub/` | The stub's three maintainer-script templates (`preinst`, `postinst`, `postrm`) rendered into the deb. |
+| `.github/workflows/apt-repo.yml` | Publishes the signed apt repository to GitHub Pages after `Build` completes on `main`. |
 | `scripts/` | Build helpers, `install/post_install.sh`, device smoke, CI checks, e2e test |
 | `docs/CI_CD.md` | CI/CD, runner, and device-lab guide |
 
@@ -84,6 +87,7 @@ git diff --check
 - `device-smoke.yml` — manual Windows+ADB: verifies candidate deb SHA256/commit binding, runs Termux smoke, optionally promotes the release.
 - `autorelease.yml` — nightly: detects latest Flutter stable, bumps `build.toml`, `sed`s the same version strings across docs (incl. this file) and installers, then pushes.
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.
+- `apt-repo.yml` — publishes the signed apt repository to GitHub Pages. It triggers via `workflow_run` when `build` completes on `main` (plus manual dispatch, since `GITHUB_TOKEN` suppresses `release` events); a release guard skips the job unless the `build.toml` `<tag>-<pkg_rel>` release actually carries the payload `.deb`, then `scripts/release/apt_repo.py stub` and `repo` build the kilobytes-sized site and deploy it. Needs the `APT_REPO_SIGNING_KEY` and `APT_REPO_SIGNING_PASSPHRASE` secrets, and Pages → Source must be set to "GitHub Actions" (one-time). All versions are read from `build.toml`; nothing is hand-maintained.
 
 `main` is protected by `.github/rulesets/main_protection_ruleset.json`: a required PR with resolved threads (no approvals required), strict status checks (`Repository sanity`, `Verify release metadata`), linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/CI_CD.md`.
 
