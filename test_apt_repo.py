@@ -956,3 +956,31 @@ class CiContractTest(unittest.TestCase):
         assert '"test_apt_repo.py"' in check_repo
         gitignore = Path(".gitignore").read_text()
         assert "/apt-repo-work/" in gitignore and "/repo/" in gitignore
+
+
+class PagesWorkflowTest(unittest.TestCase):
+    def test_apt_repo_workflow_contract(self):
+        wf = yaml.safe_load(Path(".github/workflows/apt-repo.yml").read_text())
+        on = wf.get("on") or wf.get(True)      # YAML 1.1 parses bare `on` as True
+        assert set(on) == {"workflow_run", "workflow_dispatch"}   # Review Focus 1:
+        assert "release" not in on             # GITHUB_TOKEN suppresses release events
+        assert on["workflow_run"] == {"workflows": ["build"], "types": ["completed"],
+                                      "branches": ["main"]}
+        build, deploy = wf["jobs"]["build"], wf["jobs"]["deploy"]
+        steps = [s.get("uses") or s.get("name", "") for s in build["steps"]]
+        joined = str(build["steps"])
+        assert "Release guard" in joined                       # skips absent releases
+        assert "apt_repo.py stub" in joined and "apt_repo.py repo" in joined
+        assert any(u.startswith("actions/upload-pages-artifact@v5") for u in steps)
+        assert build["steps"][-1]["with"]["path"] == "repo"
+        assert deploy["needs"] == "build"
+        assert "needs.build.outputs.publish" in str(deploy.get("if", ""))
+        assert deploy["permissions"] == {"pages": "write", "id-token": "write"}
+        assert deploy["environment"]["name"] == "github-pages"
+        assert any(u.startswith("actions/deploy-pages@v5")
+                   for u in [s.get("uses", "") for s in deploy["steps"]])
+        # Read the raw text for this one: repr() of the parsed steps quotes every
+        # scalar, so the `key: value` pairing is only visible in the source GitHub
+        # actually reads (the file is asserted verbatim elsewhere in the contract).
+        assert ("APT_REPO_SIGNING_KEY: ${{ secrets.APT_REPO_SIGNING_KEY }}"
+                in Path(".github/workflows/apt-repo.yml").read_text())
