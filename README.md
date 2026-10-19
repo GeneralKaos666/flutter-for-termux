@@ -29,7 +29,7 @@ exactly what you installed:
 
 ## Quick start
 
-Two commands and you're building Flutter apps on your phone.
+Add the signed repository once, then install and upgrade Flutter with APT.
 
 ### 1. Prepare Termux
 
@@ -40,19 +40,32 @@ pkg update && pkg upgrade
 pkg install x11-repo
 ```
 
-### 2. Run the installer
+### 2. Install from the apt repository
+
+The package is published through a signed APT repository on GitHub Pages: the
+metadata and a small stub package live there, while the ~635 MB Flutter archive
+stays a GitHub release asset that the stub downloads, verifies, and unpacks for
+you.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh \
-  -o install_flutter_complete.sh
-bash install_flutter_complete.sh
+pkg install -y gnupg
+mkdir -p "$PREFIX/etc/apt/keyrings"
+curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
+  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
+echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
+  > "$PREFIX/etc/apt/sources.list.d/flutter.list"
+pkg update && pkg install flutter
+flutter doctor
 ```
 
-The installer grabs the release package and sets up the Android
-SDK/toolchain for you. When it finishes, check your setup:
+The key and repository lines are one-time; after that, installs and upgrades
+are plain `pkg install flutter` / `apt upgrade flutter`.
+
+Verify the signing key before you trust it:
 
 ```bash
-flutter doctor -v
+gpg --show-keys --with-fingerprint "$PREFIX/etc/apt/keyrings/flutter.gpg"
+# fingerprint: C913794B447DC32D06A395E89C866C95D51C6DD3
 ```
 
 > **Never run `flutter upgrade` on this install.** The SDK here is a
@@ -87,6 +100,21 @@ bash $PREFIX/share/flutter/post_install.sh
 Flutter lands in `$PREFIX/opt/flutter`. To remove it later, run
 `apt remove flutter`.
 
+## Deprecated: one-shot installer
+
+`install_flutter_complete.sh` still works but is deprecated and receives no new
+features — use the [quick start](#quick-start) above instead.
+
+```bash
+curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh \
+  -o install_flutter_complete.sh
+bash install_flutter_complete.sh
+```
+
+The installer downloads the release package straight from GitHub and sets up
+the Android SDK/toolchain for you. Re-running it stays supported as the
+fallback upgrade path for installs that started this way.
+
 ## Upgrading
 
 > **Never run stock `flutter upgrade` on this install.** It targets
@@ -101,15 +129,24 @@ Flutter lands in `$PREFIX/opt/flutter`. To remove it later, run
 > - `dpkg` still believes the old package is installed, so the file tree
 >   and the package database no longer match.
 
-To upgrade, re-run the installer. It downloads the latest
-`flutter_<tag>-<pkg_rel>_aarch64.deb` from this repo's releases, verifies
-the checksums, and lets `dpkg` upgrade the existing package in place:
+With the APT repository the upgrade is:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh \
-  -o install_flutter_complete.sh
-bash install_flutter_complete.sh
+pkg update && apt upgrade flutter
 ```
+
+APT re-downloads the full payload for every release and re-verifies its
+checksum and size before it touches your install. A failed configure leaves the
+previous payload in place; if APT reports a broken state, converge it with:
+
+```bash
+apt --fix-broken install
+```
+
+If you installed with the deprecated one-shot installer instead, re-run
+`install_flutter_complete.sh` — it downloads the latest
+`flutter_<tag>-<pkg_rel>_aarch64.deb` from this repo's releases, verifies the
+checksums, and lets `dpkg` upgrade in place too.
 
 Moving to a brand-new Flutter version (maintainers rebuilding from source)
 is a different process — see the
