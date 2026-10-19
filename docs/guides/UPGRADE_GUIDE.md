@@ -10,6 +10,35 @@ sysroot) are documented in the [Build process](BUILD_PROCESS.md).
 
 ---
 
+## Upgrading via apt (end users)
+
+If Flutter was installed from the apt repository
+([README quick start](../README.md#quick-start)), upgrading is:
+
+```bash
+pkg update && apt upgrade flutter
+```
+
+Each release re-downloads the full payload (~635 MB) and re-verifies its
+checksum and size before anything on disk is touched. There is no apt progress
+bar while the package configures, so watch the script's own output.
+
+If the configure step fails, `dpkg` has already recorded the new version while
+the previous payload is restored on disk — the two converge when the idempotent
+`postinst` runs again:
+
+```bash
+apt --fix-broken install
+```
+
+Never run `flutter upgrade` on this install; it replaces the patched,
+cross-built tree with upstream's checkout and breaks the SDK.
+
+The source-rebuild checklist below is maintainer-facing — it produces a new
+package from a new upstream Flutter tag, and is not the end-user upgrade path.
+
+---
+
 ## Upgrade Checklist
 
 Each checklist item maps to one step below:

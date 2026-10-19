@@ -42,7 +42,30 @@ installing you will have:
 
 ---
 
-## Method 1: One-Command Install (Recommended)
+## Method 1: apt install (Recommended)
+
+Add the signed repository once, then install Flutter with APT. The
+[README quick start](../README.md#quick-start) carries the same snippet plus the
+signing-key fingerprint to compare against.
+
+```bash
+curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
+  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
+echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
+  > "$PREFIX/etc/apt/sources.list.d/flutter.list"
+pkg update && pkg install flutter
+flutter doctor
+```
+
+`pkg install flutter` pulls the stub package, which downloads the release archive,
+verifies its checksum and size, unpacks it into `$PREFIX`, and runs
+`post_install.sh` for you. `apt policy flutter` shows the candidate version and
+its source. Later releases arrive with `apt upgrade flutter` — see the
+[Upgrade guide](UPGRADE_GUIDE.md).
+
+---
+
+## Method 2: Legacy curl installer (deprecated)
 
 1. Download and run the installer:
 
@@ -52,7 +75,8 @@ installing you will have:
    ```
 
    This script installs Flutter, the Android SDK/NDK, the required Termux
-   packages, and runs post-install for you.
+   packages, and runs post-install for you. It is deprecated and receives no new
+   features — prefer [Method 1](#method-1-apt-install-recommended).
 
 2. Wait for it to finish. The first run downloads a large amount of data, so
    keep the screen on and the network stable.
@@ -61,7 +85,7 @@ installing you will have:
 
 ---
 
-## Method 2: Manual deb Install
+## Method 3: Manual deb install
 
 Run each step in order inside Termux.
 
