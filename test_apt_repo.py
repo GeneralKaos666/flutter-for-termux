@@ -14,9 +14,12 @@ import tomllib
 import unittest
 from pathlib import Path
 
+import yaml
+
 # scripts/release/ is not a package, so put it on sys.path and import by name.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts" / "release"))
 
+import apt_repo  # noqa: E402
 from apt_repo import load_config, render_scripts  # noqa: E402
 
 SPEC_GROUPS = ["bin/flutter", "etc/profile.d/flutter.sh", "opt/flutter", "share/flutter"]
@@ -474,3 +477,98 @@ class PostinstLifecycleTest(unittest.TestCase):
         self.assertIn("free space", (result.stdout + result.stderr).lower())
         self.assertEqual(_tree(self.prefix), before)
         self._assert_no_work_leftovers()
+
+
+_PACKAGE_YAML = Path("package.yaml")
+
+
+def package_yaml_text() -> str:
+    """Text of the payload's ``package.yaml`` — the stub's contract source."""
+    return _PACKAGE_YAML.read_text(encoding="utf-8")
+
+
+class StubControlTest(unittest.TestCase):
+    """The stub's control contract and its owned-path groups (spec sections 4, 9)."""
+
+    def test_package_yaml_names_current_maintainer(self):
+        control = yaml.safe_load(package_yaml_text())["control"]
+        assert control["Maintainer"] == "GeneralKaos666 <xkiller1177@gmail.com>"
+
+    def test_parse_owned_paths_returns_the_four_spec_groups(self):
+        assert apt_repo.parse_owned_paths(_PACKAGE_YAML) == SPEC_GROUPS
+
+    def test_parse_owned_paths_never_yields_toplevel_directories(self):
+        # a group that is a bare first component would make postrm delete, e.g.,
+        # all of $PREFIX/etc — forbid it at the contract level
+        assert all(len(Path(p).parts) >= 2 for p in apt_repo.parse_owned_paths(_PACKAGE_YAML))
+
+    def test_render_control_matches_stub_contract(self):
+        cfg = load_config()
+        text = apt_repo.render_control(cfg["version"], _PACKAGE_YAML)
+        assert "Version: " + cfg["version"] in text
+        assert "Architecture: all" in text
+        assert "Maintainer: GeneralKaos666 <xkiller1177@gmail.com>" in text
+        assert "Pre-Depends: x11-repo" in text
+        assert (
+            "Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, "
+            "pkg-config, openjdk-21, wget, curl, unzip, 7zip, binutils, tar, "
+            "xz-utils"
+        ) in text
+
+    @unittest.skipUnless(shutil.which("dpkg-deb"), "dpkg-deb not installed")
+    def test_stub_command_builds_control_only_arch_all_deb(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "work"
+            version = load_config()["version"]
+            result = subprocess.run(
+                [sys.executable, "scripts/release/apt_repo.py", "stub", "--out", str(out)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            deb = out / f"flutter_{version}_all.deb"
+            self.assertTrue(
+                deb.is_file(), f"missing {deb}: {sorted(p.name for p in out.iterdir())}"
+            )
+            info = subprocess.run(
+                ["dpkg-deb", "-I", str(deb)], capture_output=True, text=True, check=True
+            ).stdout
+            for line in (
+                "Package: flutter",
+                f"Version: {version}",
+                "Architecture: all",
+                "Maintainer: GeneralKaos666 <xkiller1177@gmail.com>",
+                "Pre-Depends: x11-repo",
+            ):
+                self.assertIn(line, info)
+            # No data payload: the stub is control-only, so nothing owns opt/flutter.
+            listing = subprocess.run(
+                ["dpkg-deb", "-c", str(deb)], capture_output=True, text=True
+            ).stdout
+            self.assertNotIn("opt/flutter", listing)
+            # The maintainer scripts ride along in the control member.
+            extracted = Path(td) / "control"
+            subprocess.run(
+                ["dpkg-deb", "-e", str(deb), str(extracted)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            for name in ("preinst", "postinst", "postrm"):
+                script = extracted / name
+                self.assertTrue(script.is_file(), f"{name} missing from control")
+                self.assertTrue(script.stat().st_mode & 0o111, f"{name} is not executable")
+            # The stage directory is cleaned up on the success path.
+            self.assertFalse((out / ".stub-root").exists())
+
+    @unittest.skipUnless(shutil.which("dpkg"), "dpkg not installed")
+    def test_our_version_outranks_unrevisioned_tag(self):
+        cfg = load_config()
+        self.assertTrue(cfg["pkg_rel"], "build.toml must carry a package revision")
+        result = subprocess.run(
+            ["dpkg", "--compare-versions", cfg["version"], "gt", cfg["tag"]],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"{cfg['version']} does not outrank {cfg['tag']}")
