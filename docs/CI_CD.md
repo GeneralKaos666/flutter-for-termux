@@ -95,7 +95,7 @@ Therefore:
 
 ```text
 python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
-bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
+bash -n scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 PowerShell parser check for scripts/device/run_termux_smoke.ps1
 python scripts/ci/check_repo.py
 git diff --check
@@ -324,7 +324,7 @@ Run the same checks CI runs, in this order:
 4. Syntax-check the shell scripts:
 
    ```bash
-   bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
+   bash -n scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
    ```
 
 5. Run the repository contract check — expected output: `Repository sanity check passed.`

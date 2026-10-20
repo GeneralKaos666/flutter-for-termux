@@ -372,10 +372,6 @@ and the fix (**Fix**).
   Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
   ```
 
-  The one-command installer (`install_flutter_complete.sh`) also installs
-  `openjdk-21` itself (overridable with `JAVA_PACKAGE`), but it is deprecated
-  in favor of the apt flow.
-
 ### libflutter_linux_gtk.so missing (Linux desktop support)
 
 - **Symptom:**

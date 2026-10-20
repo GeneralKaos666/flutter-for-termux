@@ -82,27 +82,7 @@ bash $PREFIX/share/flutter/post_install.sh --provision-ndk
 
 ---
 
-## Method 2: Legacy curl installer (deprecated)
-
-1. Download and run the installer:
-
-   ```bash
-   curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh
-   bash ~/install.sh
-   ```
-
-   This script installs Flutter, the Android SDK/NDK, the required Termux
-   packages, and runs post-install for you. It is deprecated and receives no new
-   features — prefer [Method 1](#method-1-apt-install-recommended).
-
-2. Wait for it to finish. The first run downloads a large amount of data, so
-   keep the screen on and the network stable.
-
-3. Continue with [Verify the Installation](#verify-the-installation).
-
----
-
-## Method 3: Manual deb install
+## Method 2: Manual deb install
 
 Run each step in order inside Termux.
 
