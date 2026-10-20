@@ -47,9 +47,12 @@ The full engine build runs on the free GitHub-hosted `ubuntu-latest` runner
 (`build.yml`); PRs run lightweight checks first:
 
 ```bash
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
+ruff check build.py package.py sysroot.py utils.py test_build.py test_apt_repo.py scripts/ci/ scripts/release/
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py scripts/release/apt_repo.py
+pytest test_build.py test_apt_repo.py
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
+python scripts/ci/check_version_drift.py
 git diff --check
 ```
 
@@ -66,6 +69,9 @@ GitHub Actions is currently split into these tracks:
   tablet smoke test.
 - `.github/workflows/release-check.yml`: Release asset metadata / SHA256
   checks.
+- `.github/workflows/apt-repo.yml`: publishes the signed stub `.deb` and apt
+  metadata to GitHub Pages after a successful `main` build — the
+  `pkg install flutter` path.
 
 See [`docs/CI_CD.md`](../CI_CD.md) for details.
 
@@ -354,15 +360,21 @@ and the fix (**Fix**).
   dpkg --force-depends --configure android-sdk
   ```
 
-  **Permanent fix:** the one-command installer (`install_flutter_complete.sh`)
-  installs `openjdk-21` itself (overridable with the `JAVA_PACKAGE`
-  environment variable), so a normal install pulls Java in.
-  `package.yaml` does **not** declare it, so a manual `apt install ./<deb>`
-  must have a JDK present first:
+  **Permanent fix:** on the primary apt path nothing is needed — the published
+  stub's control appends the installer's unconditional packages (`openjdk-21`
+  from `build.toml [installer] java`, plus `wget`, `curl`, `unzip`, `7zip`,
+  `binutils`, `tar`, `xz-utils`) to the payload's `Depends`, so
+  `pkg install flutter` pulls Java in automatically. Only a raw payload `.deb`
+  built locally lacks them: `package.yaml` declares the slim list below, so a
+  manual `apt install ./<deb>` must have a JDK present first:
 
   ```yaml
   Depends: git, which, gtk3, xorgproto, ninja, cmake, clang, pkg-config
   ```
+
+  The one-command installer (`install_flutter_complete.sh`) also installs
+  `openjdk-21` itself (overridable with `JAVA_PACKAGE`), but it is deprecated
+  in favor of the apt flow.
 
 ### libflutter_linux_gtk.so missing (Linux desktop support)
 
