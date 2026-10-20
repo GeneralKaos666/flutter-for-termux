@@ -1,6 +1,6 @@
 # Install Guide — Flutter 3.47.7 on Termux
 
-This guide walks you through installing `flutter_3.47.7-5_aarch64.deb` on an
+This guide walks you through installing `flutter_3.47.7-6_aarch64.deb` on an
 ARM64 Termux device, verifying it, and building your first app. After
 installing you will have:
 
@@ -72,6 +72,14 @@ verifies its checksum and size, unpacks it into `$PREFIX`, and runs
 its source. Later releases arrive with `apt upgrade flutter` — see the
 [Upgrade guide](UPGRADE_GUIDE.md).
 
+The payload ships without the Android NDK (~550 MB), so pure-Dart projects
+work out of the box while native-plugin projects print a clear hint. To
+provision the pinned Termux-arm64 NDK (opt-in, idempotent, SHA256-verified):
+
+```bash
+bash $PREFIX/share/flutter/post_install.sh --provision-ndk
+```
+
 ---
 
 ## Method 2: Legacy curl installer (deprecated)
@@ -109,21 +117,21 @@ Run each step in order inside Termux.
 
    ```bash
    cd ~
-   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-5_aarch64.deb
-   sha256sum flutter_3.47.7-5_aarch64.deb
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-6_aarch64.deb
+   sha256sum flutter_3.47.7-6_aarch64.deb
    ```
 
    Expected output — the hash must match exactly:
 
    ```text
-   3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.7-5_aarch64.deb
+   3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.7-6_aarch64.deb
    ```
    # Confirm the output matches: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
 
 3. Install the package and repair any missing dependencies:
 
    ```bash
-   dpkg -i flutter_3.47.7-5_aarch64.deb
+   dpkg -i flutter_3.47.7-6_aarch64.deb
    apt --fix-broken install -y
    ```
 
@@ -372,13 +380,12 @@ Each entry below shows the exact error (**Symptom**), why it happens
   If the directory is incomplete (no `toolchains/llvm`, or no CMake toolchain
   file), post-install removes it rather than stamping it healthy. Re-running
   post-install cannot rebuild a removed directory. The NDK is not part of the
-  apt payload (the stub restores the Flutter tree only), and the only
-  project-supported way to (re)provision it is the deprecated one-command
-  installer — it downloads the aarch64 NDK (~550 MB) and extracts it into
-  `$PREFIX/opt/android-sdk/ndk/`:
+  apt payload (the stub restores the Flutter tree only), so (re)provision it
+  with the opt-in flag — it downloads the aarch64 NDK (~550 MB), verifies its
+  SHA256, and extracts it into `$PREFIX/opt/android-sdk/ndk/`:
 
   ```bash
-  curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
+  bash $PREFIX/share/flutter/post_install.sh --provision-ndk
   ```
 
   Pure-Dart projects are unaffected either way: `flutter build apk --release`
@@ -402,16 +409,17 @@ Each entry below shows the exact error (**Symptom**), why it happens
   different failure from the `source.properties` error above, and it appears
   *after* that metadata exists — so re-running post-install will not repair
   it. Post-install detects the directory as incomplete and removes it.
-- **Fix:** re-provision the NDK with the one-command installer (deprecated but
-  still functional; the apt package does not carry the NDK):
+- **Fix:** re-provision the NDK with the opt-in flag (the apt package does not
+  carry the NDK; it downloads the aarch64 repack, ~550 MB, verifies its
+  SHA256, and installs it into `$PREFIX/opt/android-sdk/ndk/`):
 
   ```bash
-  curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
+  bash $PREFIX/share/flutter/post_install.sh --provision-ndk
   ```
 
-  This re-downloads the NDK (~550 MB). A complete NDK is verified to configure,
-  compile, and link an `arm64-v8a` CMake module (`jni` 1.0.0) on-device, so
-  the build proceeds once the toolchain file is back.
+  A complete NDK is verified to configure, compile, and link an `arm64-v8a`
+  CMake module (`jni` 1.0.0) on-device, so the build proceeds once the
+  toolchain file is back.
 
 ### First build fails: `gen_snapshot` not found (host symlink dropped)
 
