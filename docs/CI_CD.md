@@ -303,37 +303,49 @@ The repository governance rules for the `main` branch are codified in `.github/r
 
 Run the same checks CI runs, in this order:
 
-1. Compile-check the Python entry points and CI scripts:
+1. Compile-check the Python entry points, tests, and CI/release scripts:
 
    ```bash
-   python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
+   python -m py_compile build.py package.py sysroot.py utils.py test_build.py test_apt_repo.py scripts/ci/*.py scripts/release/*.py
    ```
 
-2. Syntax-check the shell scripts:
+2. Run the Python unit tests (mirrors `ci.yml`):
+
+   ```bash
+   pytest test_build.py test_apt_repo.py
+   ```
+
+3. Lint the Python sources (`ruff format` is non-blocking in CI):
+
+   ```bash
+   ruff check build.py package.py sysroot.py utils.py test_build.py test_apt_repo.py scripts/ci/ scripts/release/
+   ```
+
+4. Syntax-check the shell scripts:
 
    ```bash
    bash -n install_flutter_complete.sh scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
    ```
 
-3. Run the repository contract check — expected output: `Repository sanity check passed.`
+5. Run the repository contract check — expected output: `Repository sanity check passed.`
 
    ```bash
    python scripts/ci/check_repo.py
    ```
 
-4. Run the version drift check — expected output: `Version drift check PASSED (all files aligned with build.toml).`
+6. Run the version drift check — expected output: `Version drift check PASSED (all files aligned with build.toml).`
 
    ```bash
    python scripts/ci/check_version_drift.py
    ```
 
-5. Check for whitespace errors:
+7. Check for whitespace errors:
 
    ```bash
    git diff --check
    ```
 
-6. Rebuild the apt repository locally (`repo` signs with the key in
+8. Rebuild the apt repository locally (`repo` signs with the key in
    `GNUPGHOME`, selected via `--key <fingerprint>`):
 
    ```bash
