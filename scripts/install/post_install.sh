@@ -382,9 +382,43 @@ patch_flutter_cache() {
 register_patch "flutter_cache" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/flutter_cache.dart" patch_flutter_cache
 
 patch_artifacts() {
-	if grep -F -q "if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts." "$1"; then return 0; fi
-	grep -q "if (platform.isLinux)" "$1" || return 1
-	sed -i "s#if (platform.isLinux) {#if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts.#" "$1"
+	# (1) Map the Android host platform to the Linux artifact directories.
+	if ! grep -F -q "if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts." "$1"; then
+		grep -q "if (platform.isLinux)" "$1" || return 1
+		sed -i "s#if (platform.isLinux) {#if (platform.isLinux || platform.isAndroid) { // Termux: map Android host to Linux artifacts.#" "$1"
+	fi
+	# (2) Resolve the AOT gen_snapshot to the aarch64 binary shipped in the
+	# package instead of flutter's per-build android-arm64-{release,profile}/
+	# directories. flutter materializes the upstream linux-x64 files into those
+	# directories on the first build after install and drops the step-15
+	# linux-arm64 symlink on the way, which made every fresh install's first
+	# release build fail with "Failed to find .../linux-arm64/gen_snapshot".
+	# <engine>/linux-arm64/gen_snapshot ships in the deb and lives where flutter
+	# never writes. Existence-gated: hosts without the file keep upstream
+	# behavior.
+	if ! grep -F -q "// Termux: prefer package-shipped aarch64 gen_snapshot." "$1"; then
+		grep -F -q "final String hostPlatformName = hostPlatform.cliName;" "$1" || return 1
+		awk '
+			!patched && index($0, "final String hostPlatformName = hostPlatform.cliName;") {
+				print "        // Termux: prefer package-shipped aarch64 gen_snapshot."
+				print "        // flutter materializes the upstream linux-x64 files into this"
+				print "        // directory on the first build after install and drops the step-15"
+				print "        // linux-arm64 symlink on the way, so the flutter-managed per-build"
+				print "        // directory cannot be trusted. <engine>/linux-arm64/gen_snapshot is"
+				print "        // shipped in the package and lives where flutter never writes."
+				print "        final String termuxGenSnapshot = _fileSystem.path.join("
+				print "          _fileSystem.directory(engineDir).parent.path,"
+				print "          \"linux-arm64\","
+				print "          artifact.getFileName(_platform),"
+				print "        );"
+				print "        if (_fileSystem.file(termuxGenSnapshot).existsSync()) {"
+				print "          return termuxGenSnapshot;"
+				print "        }"
+				patched = 1
+			}
+			{ print }
+		' "$1" > "$1.termux_gen_tmp" && mv "$1.termux_gen_tmp" "$1"
+	fi
 }
 register_patch "artifacts" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/artifacts.dart" patch_artifacts
 
@@ -1618,10 +1652,12 @@ fi
 # (getCurrentHostPlatform() returns linux_arm64 on Termux, see the
 # "Termux: Android host uses Linux artifacts" patch in build_info.dart).
 # Upstream only ships a linux-x64/ (x86_64, unrunnable on ARM64 Termux)
-# subdir there, so every release/profile APK build fails. Reuse the
-# self-built linux-arm64/gen_snapshot shipped in the deb (see BUILD_GUIDE:
-# Android gen_snapshot) by symlinking it in. Idempotent and re-runnable
-# (also repairs state after `flutter precache --android` re-downloads).
+# subdir there. The patch_artifacts gen_snapshot hunk above makes
+# flutter_tools resolve gen_snapshot directly to the self-built
+# linux-arm64/gen_snapshot shipped in the deb (see BUILD_GUIDE: Android
+# gen_snapshot), which flutter's first-run materialization cannot touch.
+# These symlinks remain as a fallback for any lookup that still reads the
+# per-build directories directly. Idempotent and re-runnable.
 echo "[15/17] Creating host platform symlinks..."
 ENG_ART=$FLUTTER_ROOT/bin/cache/artifacts/engine
 for dir in android-arm64-release android-arm64-profile; do
@@ -1634,8 +1670,10 @@ for dir in android-arm64-release android-arm64-profile; do
 	# the first `flutter build apk` - i.e. AFTER this script runs. Skipping
 	# them here made that first build fail with "Failed to find
 	# .../android-arm64-release/linux-arm64/gen_snapshot". Create the
-	# directories ourselves; flutter extracts its upstream linux-x64 files
-	# alongside without deleting our symlink.
+	# directories ourselves. NOTE: flutter's first-run materialization of
+	# the upstream linux-x64 files is observed to drop this symlink again;
+	# the patch_artifacts gen_snapshot hunk is what actually guarantees the
+	# first build, the symlink is a fallback for direct directory lookups.
 	if [ ! -d "$ENG_ART/$dir" ]; then
 		mkdir -p "$ENG_ART/$dir"
 		echo "  ✓ $dir/ created"
