@@ -273,6 +273,7 @@ def check_post_install_contract() -> None:
         "Flutter Gradle plugin cache cleared",
         "forceNdkDownload() patched to early return",
         "Termux: map Android host to Linux artifacts",
+        "Termux: prefer package-shipped aarch64 gen_snapshot",
         "Termux: allow linux build",
     ]
     for marker in required:
