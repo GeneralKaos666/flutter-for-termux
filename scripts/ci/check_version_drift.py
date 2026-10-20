@@ -42,7 +42,6 @@ GUIDE_DOCS = [
 ]
 INSTALLER_SCRIPTS = [
     "scripts/install/install.sh",
-    "scripts/install/install_termux_flutter.sh",
     "scripts/install/lib_common.sh",
     "scripts/install/versions_common.sh",
     "scripts/test/gh_e2e_test.sh",

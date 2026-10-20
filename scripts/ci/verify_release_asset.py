@@ -34,7 +34,6 @@ BUILD_CRITICAL_FILES = (
     "sysroot.lock.json",
     ".github/workflows/build-deb.yml",
     "install.sh",
-    "install_termux_flutter.sh",
     "scripts/ci/check_toolchain.sh",
 )
 
