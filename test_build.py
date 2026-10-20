@@ -415,7 +415,6 @@ class NdkValidationTest(unittest.TestCase):
     def setUp(self):
         root = Path(__file__).parent
         self.post_install = (root / 'scripts' / 'install' / 'post_install.sh').read_text()
-        self.installer = (root / 'install_flutter_complete.sh').read_text()
 
     @staticmethod
     def _make_ndk(root, *, toolchain, source_properties, driver='runs'):
@@ -496,33 +495,6 @@ class NdkValidationTest(unittest.TestCase):
             result = self._repair(ndk)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(ndk.exists())
-
-    def test_ndk_is_valid_requires_cmake_toolchain(self):
-        valid = _bash_function(self.installer, 'ndk_is_valid')
-        with tempfile.TemporaryDirectory() as tmp:
-            incomplete = self._make_ndk(
-                Path(tmp) / 'a', toolchain=False, source_properties=True
-            )
-            complete = self._make_ndk(
-                Path(tmp) / 'b', toolchain=True, source_properties=True
-            )
-            self.assertNotEqual(
-                _run_bash(valid, 'ndk_is_valid "$1"', str(incomplete)).returncode, 0
-            )
-            self.assertEqual(
-                _run_bash(valid, 'ndk_is_valid "$1"', str(complete)).returncode, 0
-            )
-
-    def test_ndk_is_valid_rejects_unrunnable_driver(self):
-        """An x86_64 NDK must not look installed, so it is re-provisioned (#29)."""
-        valid = _bash_function(self.installer, 'ndk_is_valid')
-        with tempfile.TemporaryDirectory() as tmp:
-            dead = self._make_ndk(
-                Path(tmp), toolchain=True, source_properties=True, driver='dead'
-            )
-            self.assertNotEqual(
-                _run_bash(valid, 'ndk_is_valid "$1"', str(dead)).returncode, 0
-            )
 
 
 class NdkClangDriverTest(unittest.TestCase):
@@ -738,218 +710,6 @@ class SdkCmakeHostToolsTest(unittest.TestCase):
                 link = sdk / 'cmake' / '3.22.1' / 'bin' / tool
                 self.assertTrue(link.is_symlink(), f'{link} not provisioned')
                 self.assertEqual(link.resolve(), (prefix / 'bin' / tool).resolve())
-
-
-class InstallerRollbackBackupTest(unittest.TestCase):
-    """Regression for #29 (comment 6235200540): the rollback-backup gate aborted
-    the installer on every Termux device that had the Flutter deb installed.
-
-    ``dpkg-repack`` is not packaged for Termux, and the old
-    ``apt-get download flutter=<ver>`` fallback can never succeed because these
-    .debs are published on GitHub Releases, not in an apt repo. The gate
-    therefore always fired ``[ERROR] Cannot backup ...`` → ``exit 35`` at step
-    2/7 — before a single download — while the EXIT trap printed a summary
-    claiming ``"preflight": "success"``. The backup must degrade (republish
-    the release asset for the installed version, then warn-and-continue)
-    instead of aborting the install.
-    """
-
-    def setUp(self):
-        root = Path(__file__).parent
-        self.installer = (root / 'install_flutter_complete.sh').read_text()
-        self.lib_common = (root / 'scripts' / 'install' / 'lib_common.sh').read_text()
-
-    # --- behavioural: attempt_package_backup ---------------------------------
-
-    @staticmethod
-    def _stub(bindir, name, body):
-        tool = bindir / name
-        tool.write_text(body)
-        tool.chmod(0o755)
-
-    def _run_backup(self, tmp, *, pkg='flutter', old_ver='3.47.7-5', repack=False,
-                    apt_ok=False, wget_ok=True):
-        """Run ``attempt_package_backup`` against PATH-stubbed backup tools."""
-        root = Path(tmp)
-        stubs = root / 'stubs'
-        stubs.mkdir()
-        dest = root / 'backup'
-        dest.mkdir()
-        log = root / 'calls.log'
-        # dpkg-repack is always stubbed (never silently resolved from the host
-        # PATH): succeeding when repack=True, otherwise failing like a host
-        # where the tool exists but cannot rebuild the package.
-        repack_body = f'#!/bin/sh\necho "repack $1" >> "{log}"\ntouch "${{1}}_repacked.deb"\n'
-        if not repack:
-            repack_body = '#!/bin/sh\necho "E: no such package" >&2\nexit 1\n'
-        self._stub(stubs, 'dpkg-repack', repack_body)
-        self._stub(
-            stubs, 'apt-get',
-            f'#!/bin/sh\necho "apt $*" >> "{log}"\n'
-            + ('touch "${2%%=*}.deb"\n' if apt_ok else 'echo "E: not found" >&2\nexit 1\n'),
-        )
-        wget_body = (
-            f'#!/bin/sh\necho "wget $*" >> "{log}"\n'
-            'out=""\n'
-            'while [ $# -gt 0 ]; do\n'
-            '  case "$1" in\n'
-            '    -O) out="$2"; shift 2 ;;\n'
-            '    -q|--show-progress) shift ;;\n'
-            '    *) shift ;;\n'
-            '  esac\n'
-            'done\n'
-        )
-        if wget_ok:
-            wget_body += 'printf deb > "$out"\n'
-        else:
-            # A flaky network leaves a partial file behind at the -O target.
-            wget_body += 'printf partial > "$out"\nexit 1\n'
-        self._stub(stubs, 'wget', wget_body)
-        env = dict(os.environ)
-        env['PATH'] = f'{stubs}:{env["PATH"]}'
-        funcs = '\n'.join([
-            'RED=\'\' GREEN=\'\' YELLOW=\'\' BLUE=\'\' CYAN=\'\' NC=\'\'',
-            _bash_function(self.installer, 'attempt_package_backup'),
-        ])
-        call = 'attempt_package_backup "$1" "$2" "$3" "$4"'
-        return subprocess.run(
-            ['bash', '-c', f'set -euo pipefail\n{funcs}\n{call}',
-             'bash', pkg, old_ver, str(dest), 'https://example.invalid/asset.deb'],
-            capture_output=True, text=True, env=env,
-        )
-
-    @staticmethod
-    def _tool_calls(log):
-        if not log.exists():
-            return []
-        return [line for line in log.read_text().splitlines() if line]
-
-    def test_dpkg_repack_success_short_circuits_other_tiers(self):
-        """Tier 1 wins: neither apt-get nor wget may be consulted afterwards."""
-        with tempfile.TemporaryDirectory() as tmp:
-            result = self._run_backup(tmp, repack=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            dest = Path(tmp) / 'backup'
-            self.assertTrue((dest / 'flutter_repacked.deb').exists())
-            calls = '\n'.join(self._tool_calls(Path(tmp) / 'calls.log'))
-            self.assertNotIn('wget', calls)
-            self.assertNotIn('apt', calls)
-
-    def test_release_asset_download_used_when_repack_and_apt_unavailable(self):
-        """The reporter's environment: no dpkg-repack, flutter absent from apt.
-
-        The published release asset for the *installed* version is the only
-        remaining backup source, and it must be fetched, not the gate.
-        """
-        with tempfile.TemporaryDirectory() as tmp:
-            result = self._run_backup(tmp, wget_ok=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            dest = Path(tmp) / 'backup'
-            self.assertTrue((dest / 'flutter_3.47.7-5_aarch64.deb').exists())
-            calls = self._tool_calls(Path(tmp) / 'calls.log')
-            # The apt tier must be consulted (and fail) before the release asset.
-            self.assertEqual(len(calls), 2, calls)
-            self.assertTrue(calls[0].startswith('apt download flutter=3.47.7-5'), calls)
-            self.assertTrue(calls[1].startswith('wget'), calls)
-            self.assertIn('https://example.invalid/asset.deb', calls[1])
-
-    def test_apt_tier_success_short_circuits_release_download(self):
-        """Tier 2 wins when the package genuinely comes from an apt repo."""
-        with tempfile.TemporaryDirectory() as tmp:
-            result = self._run_backup(tmp, apt_ok=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            dest = Path(tmp) / 'backup'
-            self.assertTrue((dest / 'flutter.deb').exists())
-            calls = self._tool_calls(Path(tmp) / 'calls.log')
-            self.assertFalse(any(c.startswith('wget') for c in calls))
-
-    def test_all_tiers_failing_fails_without_leaving_partial_deb(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = self._run_backup(tmp, wget_ok=False)
-            self.assertEqual(result.returncode, 1, result.stderr)
-            dest = Path(tmp) / 'backup'
-            self.assertEqual(list(dest.glob('*.deb')), [])
-
-    def test_empty_installed_version_skips_release_download(self):
-        """No version means no derivable release asset; fail without wget."""
-        with tempfile.TemporaryDirectory() as tmp:
-            result = self._run_backup(tmp, old_ver='')
-            self.assertEqual(result.returncode, 1, result.stderr)
-            calls = self._tool_calls(Path(tmp) / 'calls.log')
-            self.assertFalse(any(c.startswith('wget') for c in calls))
-
-    # --- contract: the gate degrades instead of aborting ----------------------
-
-    def test_hard_gate_removed_in_favour_of_warn_and_continue(self):
-        self.assertNotIn('Cannot backup existing Flutter package', self.installer)
-        self.assertNotIn('Cannot backup existing Android SDK package', self.installer)
-        self.assertNotRegex(self.installer, r'(?m)^\s*exit 35\s*$')
-        self.assertIn('continuing WITHOUT rollback', self.installer)
-        # Both packages route through the shared three-tier helper.
-        self.assertRegex(self.installer, r'attempt_package_backup flutter ')
-        self.assertRegex(self.installer, r'attempt_package_backup android-sdk ')
-        # Successful backups are recorded too, so the summary is unambiguous.
-        self.assertIn('record_stage backup success', self.installer)
-
-    def test_release_urls_are_derived_from_the_installed_version(self):
-        """No version literals: the fallback URL must be derived at run time."""
-        self.assertIn(
-            'releases/download/${FLUTTER_OLD_VER%-*}/flutter_${FLUTTER_OLD_VER}_aarch64.deb',
-            self.installer,
-        )
-        self.assertIn(
-            '${ANDROID_SDK_ARCHIVE_URL%/download/*}/download/${ANDROID_SDK_OLD_VER}'
-            '/android-sdk-aarch64-linux-android.tar.xz',
-            self.installer,
-        )
-
-    def test_backup_attempts_surface_tool_errors(self):
-        """The original failure was invisible: stderr of every backup tool was
-        discarded, hiding ``E: Unable to locate package dpkg-repack``."""
-        helper = _bash_function(self.installer, 'attempt_package_backup')
-        # The tool invocations themselves carry no redirect (an ``ls`` tidy-up
-        # redirect is fine; silencing the tools is what hid the real failure).
-        self.assertIn('dpkg-repack "$pkg") || true', helper)
-        self.assertIn('apt-get download "${pkg}=${old_ver}") || true', helper)
-        self.assertNotIn('dpkg-repack "$pkg" 2>/dev/null', helper)
-        self.assertNotIn('download "${pkg}=${old_ver}" 2>/dev/null', helper)
-        # The dpkg-repack bootstrap must first prove the package exists somewhere.
-        self.assertIn('apt-cache show dpkg-repack', self.installer)
-        self.assertNotIn('pkg install -y dpkg-repack 2>/dev/null', self.installer)
-
-    # --- contract: the JSON summary must not claim success on a failed run ----
-
-    def _run_cleanup(self, tmp, *, failing):
-        funcs = '\n'.join([
-            'RED=\'\' GREEN=\'\' YELLOW=\'\' BLUE=\'\' CYAN=\'\' NC=\'\'',
-            'declare -A STAGE_STATUS',
-            _bash_function(self.lib_common, 'record_stage'),
-            _bash_function(self.lib_common, 'print_summary'),
-            _bash_function(self.installer, 'cleanup_and_exit'),
-            'WORK_DIR="$1"',
-            'record_stage preflight success',
-            'trap cleanup_and_exit EXIT',
-        ])
-        probe = 'false' if failing else 'true'
-        result = subprocess.run(
-            ['bash', '-c', f'set -euo pipefail\n{funcs}\n{probe}', 'bash', str(Path(tmp) / 'work')],
-            capture_output=True, text=True,
-        )
-        return result, result.stdout[result.stdout.find('{'):]
-
-    def test_cleanup_summary_reports_failed_run(self):
-        """The reporter saw ``{"preflight": "success"}`` printed right after the
-        installer aborted; the summary must carry the run outcome."""
-        with tempfile.TemporaryDirectory() as tmp:
-            result, summary = self._run_cleanup(tmp, failing=True)
-            self.assertEqual(result.returncode, 1)
-            self.assertIn('"run": "failed"', summary)
-
-    def test_cleanup_summary_reports_successful_run(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result, summary = self._run_cleanup(tmp, failing=False)
-            self.assertEqual(result.returncode, 0)
-            self.assertIn('"run": "success"', summary)
 
 
 class PackageManifestTest(unittest.TestCase):
@@ -2168,17 +1928,17 @@ class VersionDriftCheckTest(unittest.TestCase):
 
 
 class CheckRepoNdkHelperDriftTest(unittest.TestCase):
-    """Guard the two duplicated NDK backup/restore helpers (review finding 35).
+    """Guard the NDK backup/restore helper contract (review finding 35).
 
-    ``install_flutter_complete.sh`` and ``scripts/install/post_install.sh`` both
-    ship a ``backup_ndk_file``/``restore_ndk_backups`` pair. They are
-    intentionally *different* implementations (the installer variant maps both
-    ``ANDROID_HOME`` and ``NDK_PATH`` and tracks absent preimages, while
-    ``post_install.sh`` maps ``ANDROID_SDK`` only), so the guard cannot demand
-    byte equality. It instead asserts the shared contract the two copies were
-    forked from: both function definitions exist and both copies keep the
-    ``ndk_backups/`` preimage directory plus the exact ``cp -a`` backup and
-    restore commands.
+    ``scripts/install/post_install.sh`` ships a ``backup_ndk_file``/
+    ``restore_ndk_backups`` pair inherited from the former rich copy in
+    ``install_flutter_complete.sh`` (removed together with the deprecated
+    one-shot installer; that copy mapped both ``ANDROID_HOME`` and ``NDK_PATH``
+    and tracked absent preimages, while ``post_install.sh`` maps
+    ``ANDROID_SDK`` only). The guard asserts the shared contract the copies
+    were forked from: both function definitions exist and the surviving copy
+    keeps the ``ndk_backups/`` preimage directory plus the exact ``cp -a``
+    backup and restore commands.
     """
 
     def _real_copies(self):
@@ -2241,9 +2001,6 @@ class HostPlatformSymlinkTest(unittest.TestCase):
         self.post_install = (
             root / 'scripts' / 'install' / 'post_install.sh'
         ).read_text(encoding='utf-8')
-        self.installer = (root / 'install_flutter_complete.sh').read_text(
-            encoding='utf-8'
-        )
 
     def _step15(self):
         start = self.post_install.index(self.STEP15_START)
@@ -2296,18 +2053,6 @@ class HostPlatformSymlinkTest(unittest.TestCase):
             engine.mkdir(parents=True)
             self._run_step15(root)
             self.assertFalse((engine / 'android-arm64-release').exists())
-
-    def test_installer_prefers_repo_post_install_over_deb_copy(self):
-        # The deb can only carry the post_install.sh that existed when it was
-        # built; fixes must reach users from the repo checkout without waiting
-        # for a new deb. Both execution sites must use the resolved variable.
-        self.assertIn(
-            'POST_INSTALL="$SCRIPT_DIR/scripts/install/post_install.sh"',
-            self.installer,
-        )
-        self.assertNotIn(
-            'bash "$PREFIX/share/flutter/post_install.sh"', self.installer
-        )
 
 
 if __name__ == '__main__':

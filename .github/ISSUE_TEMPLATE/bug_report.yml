@@ -43,8 +43,8 @@ body:
     attributes:
       label: How did you install it?
       options:
+        - APT repository (signed, pkg install flutter)
         - .deb release from GitHub Releases
-        - install_flutter_complete.sh
         - Built from source with build.py
         - Other
     validations:

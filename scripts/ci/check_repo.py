@@ -52,7 +52,9 @@ REQUIRED_DOCS = [
 # backup/restore helpers. They are intentionally different implementations (the
 # installer maps ANDROID_HOME/NDK_PATH and tracks absent preimages; post_install
 # maps ANDROID_SDK only), so CI cannot demand byte equality -- it asserts the
-# shared contract the two copies were forked from instead.
+# shared contract instead. The rich sibling in the removed
+# install_flutter_complete.sh (the deprecated one-shot installer) defined the
+# original pair; the contract now guards the surviving copy.
 NDK_HELPER_FUNCTIONS = ("backup_ndk_file", "restore_ndk_backups")
 NDK_HELPER_INVARIANTS = (
     "ndk_backups/",
@@ -60,7 +62,6 @@ NDK_HELPER_INVARIANTS = (
     'cp -a "$rel" "$dest" 2>/dev/null || true',
 )
 NDK_HELPER_COPIES = (
-    "install_flutter_complete.sh",
     "scripts/install/post_install.sh",
 )
 
@@ -310,35 +311,11 @@ def load_build_config() -> dict[str, object]:
     return out
 
 
-def check_installer_contract() -> None:
-    text = read("install_flutter_complete.sh")
-    cfg = load_build_config()
-    tag = str(cfg.get("tag") or "")
-    ndk_ver = str(cfg.get("ndk_version") or "")
-    if not tag:
-        return  # build.toml error already reported by load_build_config()
-    if not ndk_ver:
-        fail("build.toml [ndk] missing required 'version'")
-
-    # Installers may hardcode versions in-file or source the shared
-    # scripts/install/versions_common.sh; check the combined view.
-    versions_file = ROOT / "scripts/install" / "versions_common.sh"
-    combined = text
-    if versions_file.is_file():
-        combined += "\n" + versions_file.read_text(encoding="utf-8")
-    if f'FLUTTER_VERSION="{tag}"' not in combined:
-        fail(f"install_flutter_complete.sh/versions_common.sh default Flutter version is not {tag}")
-    if f'NDK_VERSION="{ndk_ver}"' not in combined:
-        fail(f"install_flutter_complete.sh/versions_common.sh default NDK version is not {ndk_ver}")
-    if "android-ndk-r27" in text:
-        fail("install_flutter_complete.sh still references removed NDK r27 downloads")
-
-
 def ndk_helper_drift_messages(texts: dict[str, str]) -> list[str]:
     """Return drift messages for the duplicated NDK backup/restore helpers.
 
     ``texts`` maps a copy path to its file contents; empty means the copies still
-    satisfy the shared contract. The two copies are deliberately different, so
+    satisfy the shared contract. The copies are deliberately different, so
     only the shared contract is checked: each copy must define every entry in
     ``NDK_HELPER_FUNCTIONS`` and keep every entry in ``NDK_HELPER_INVARIANTS``.
     """
@@ -589,7 +566,6 @@ def main() -> int:
     check_no_stale_release_commands()
     check_yaml_files()
     check_post_install_contract()
-    check_installer_contract()
     check_ndk_helper_drift()
     check_ndk_constants_drift()
     check_version_drift_contract()

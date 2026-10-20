@@ -197,13 +197,13 @@ apply_patches() {
 	fi
 }
 
-# NOTE: This is the simple variant of the NDK backup/restore helper pair, kept
-# in sync with the rich copy in install_flutter_complete.sh (which maps both
-# ANDROID_HOME and NDK_PATH and tracks absent preimages). Both copies are
-# intentionally different implementations, but they share a contract: the
+# NOTE: NDK backup/restore helper. This is the simple variant; the richer
+# sibling that mapped both ANDROID_HOME and NDK_PATH and tracked absent
+# preimages lived in install_flutter_complete.sh (the deprecated one-shot
+# installer, since removed). The shared contract it was forked from: the
 # `BACKUP_DIR`/`ndk_backups` preimage directory plus the exact `cp -a`
 # backup/restore commands. scripts/ci/check_repo.py (check_ndk_helper_drift)
-# fails CI when a copy loses that contract, so update both copies together.
+# fails CI when this copy loses that contract.
 backup_ndk_file() {
 	local file="$1"
 	if [ -f "$file" ] || [ -L "$file" ]; then
@@ -1374,8 +1374,7 @@ fi
 # AGP downloads that package whenever it wants 3.22.1 and the directory is
 # missing, so an empty directory is not enough either - it has to contain a
 # runnable cmake. Every installed package's host tools are repointed at the
-# Termux-native ones (install_flutter_complete.sh only linked 3.22.1, only at
-# first install, and AGP's own download replaces those links). source.properties
+# Termux-native ones. source.properties
 # is left untouched so AGP keeps recognising the package it finds.
 setup_sdk_cmake() {
 	local SDK_CMAKE="$ANDROID_SDK/cmake"
@@ -1399,8 +1398,7 @@ setup_sdk_cmake() {
 	fi
 	# AGP asks for cmake 3.22.1 by default (jni, path_provider_android, ...).
 	# Without the package already on disk it downloads Google's x86_64 build
-	# again, so pre-create it from the Termux tools, the same way
-	# install_flutter_complete.sh does.
+	# again, so pre-create it from the Termux tools instead.
 	if [ ! -d "$SDK_CMAKE/3.22.1" ]; then
 		mkdir -p "$SDK_CMAKE/3.22.1/bin"
 		ln -sfn "$PREFIX/bin/cmake" "$SDK_CMAKE/3.22.1/bin/cmake"
