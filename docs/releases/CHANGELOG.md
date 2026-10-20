@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test_build.py` version expectations are now fully derived from `build.toml` at test time (bump-agnostic).
 
 ### Changed
+- Opt-in NDK provisioning for the apt path: `bash $PREFIX/share/flutter/post_install.sh --provision-ndk` downloads the pinned Termux-arm64 NDK repack (~550 MB), verifies its SHA256, extracts it into `$PREFIX/opt/android-sdk/ndk/`, and wires up the clang wrappers and `ndkVersion` pins. The payload still ships without the NDK, so `pkg install flutter` stays fast and pure-Dart builds work out of the box; the step-8 "no NDK" hint now prints the provisioning command. The URL/SHA256 pins mirror `scripts/install/versions_common.sh` and are drift-checked in CI (`check_repo.py::check_ndk_constants_drift`); the hardcoded fallback `NDK_VERSION` in `post_install.sh` was aligned to `30.0.14206865`.
 - NDK is configured from `build.toml [ndk] version` everywhere (docs, `build-deb.yml` fallback to `/opt/android-ndk-r{M}`); `pytest.ini` `testpaths` points at `test_build.py`.
 - Retired the Mode-A "pin API 34" constraint documented in the AAPT2 analysis.
 - Reoriented repository documentation to English-only: `README.md` is the single English README and the `docs/guides/*` documents are English canonicals (no `*_ZH.md` twins exist). Translated user-facing messages and comments in scripts to English. Removed stale `.orig` merge artifacts.

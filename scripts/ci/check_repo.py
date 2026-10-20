@@ -362,6 +362,78 @@ def check_ndk_helper_drift() -> None:
         fail(message)
 
 
+def check_ndk_constants_drift() -> None:
+    """Keep the opt-in `--provision-ndk` constants in sync with the installer.
+
+    scripts/install/versions_common.sh is the source of truth for the NDK
+    repack pin. post_install.sh duplicates it (fallback version, SHA256 case
+    table, derived archive URL) so the apt path can provision without shipping
+    the installer; a silent divergence would install a different NDK than the
+    one the installer verifies.
+    """
+    versions = read("scripts/install/versions_common.sh")
+    post = read("scripts/install/post_install.sh")
+
+    def grab(text: str, pattern: str, label: str) -> str:
+        match = re.search(pattern, text, re.MULTILINE)
+        if not match:
+            fail(f"NDK constants drift: {label} not found")
+            return ""
+        return match.group(1)
+
+    version = grab(versions, r'^export NDK_VERSION="([^"]+)"', "NDK_VERSION in versions_common.sh")
+    url = grab(
+        versions, r'^export NDK_ARCHIVE_URL="([^"]+)"', "NDK_ARCHIVE_URL in versions_common.sh"
+    )
+    sha = grab(
+        versions,
+        r'^export NDK_EXPECTED_SHA256="([^"]+)"',
+        "NDK_EXPECTED_SHA256 in versions_common.sh",
+    )
+    if not (version and url and sha):
+        return
+
+    major = version.split(".")[0]
+
+    fallback = grab(
+        post,
+        r'^NDK_VERSION="\$\{TERMUX_NDK_VERSION:-([^}]+)\}"',
+        "post_install.sh NDK_VERSION fallback",
+    )
+    if fallback and fallback != version:
+        fail(
+            f"NDK constants drift: post_install.sh fallback {fallback} "
+            f"!= versions_common.sh NDK_VERSION {version}"
+        )
+
+    case_var = grab(
+        post,
+        rf'^\t{major}\) echo "\$([A-Z0-9_]+)" ;;',
+        f"post_install.sh SHA256 case entry for r{major}",
+    )
+    if case_var:
+        case_sha = grab(
+            post,
+            rf'^{case_var}="([0-9a-f]{{64}})"',
+            f"post_install.sh constant {case_var}",
+        )
+        if case_sha and case_sha != sha:
+            fail(
+                f"NDK constants drift: post_install.sh {case_var} "
+                f"!= versions_common.sh NDK_EXPECTED_SHA256"
+            )
+
+    expected_url = (
+        "https://github.com/HomuHomu833/android-ndk-custom/releases/download/"
+        f"r{major}/android-ndk-r{major}-aarch64-linux-android.tar.xz"
+    )
+    if url != expected_url:
+        fail(
+            f"NDK constants drift: NDK_ARCHIVE_URL {url} does not match the URL "
+            f"post_install.sh derives ({expected_url})"
+        )
+
+
 def check_ci_layout() -> None:
     for path in [
         ".github/workflows/ci.yml",
@@ -518,6 +590,7 @@ def main() -> int:
     check_post_install_contract()
     check_installer_contract()
     check_ndk_helper_drift()
+    check_ndk_constants_drift()
     check_version_drift_contract()
     check_sysroot_lock_contract()
     check_script_headers()

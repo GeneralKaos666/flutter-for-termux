@@ -41,7 +41,9 @@ fi
 # AGP would auto-download "android-ndk-r28c-linux" — Google publishes only the
 # x86-64 linux NDK build, whose tools cannot run on this device. Pinning the
 # default to the shipped NDK (set up for the Termux aarch64 host) avoids that.
-NDK_VERSION="${TERMUX_NDK_VERSION:-29.0.14206865}"
+# The fallback must match build.toml [ndk] version / versions_common.sh
+# NDK_VERSION; manifest.json normally overrides it.
+NDK_VERSION="${TERMUX_NDK_VERSION:-30.0.14206865}"
 if [ -f "$PREFIX/share/flutter/manifest.json" ]; then
 	_m_ndk=$(grep -o '"ndk_version": *"[^"]*"' "$PREFIX/share/flutter/manifest.json" 2>/dev/null | cut -d'"' -f4 || echo "")
 	[ -n "$_m_ndk" ] && NDK_VERSION="$_m_ndk"
@@ -53,9 +55,10 @@ if [ "${1:-}" = "--check" ]; then MODE="check"; fi
 if [ "${1:-}" = "--apply" ]; then MODE="apply"; fi
 if [ "${1:-}" = "--status" ]; then MODE="status"; fi
 if [ "${1:-}" = "--rollback" ]; then MODE="rollback"; fi
+if [ "${1:-}" = "--provision-ndk" ]; then MODE="provision-ndk"; fi
 if [ "${1:-}" = "--lib" ]; then MODE="lib"; fi
 
-if [ "$MODE" != "status" ] && [ "$MODE" != "check" ] && [ "$MODE" != "lib" ]; then
+if [ "$MODE" != "status" ] && [ "$MODE" != "check" ] && [ "$MODE" != "lib" ] && [ "$MODE" != "provision-ndk" ]; then
 	mkdir -p "$BACKUP_DIR" "$(dirname "$PATCH_STATE_FILE")"
 	if [ ! -f "$PATCH_STATE_FILE" ]; then
 		echo "{}" >"$PATCH_STATE_FILE"
@@ -707,6 +710,131 @@ setup_ndk_clang_wrappers() {
 	echo "    ✓ NDK $NDK_NAME configured"
 }
 
+# --- Opt-in NDK provisioning -------------------------------------------------
+# The apt payload ships without the NDK (~550 MB compressed / ~1.6 GB
+# extracted), so `pkg install flutter` stays fast and native-plugin builds
+# print a clear hint instead of a cryptic AGP error. Run:
+#
+#     bash $PREFIX/share/flutter/post_install.sh --provision-ndk
+#
+# to download, verify and install the pinned Termux-arm64 NDK repack, then
+# wire up the clang wrappers and ndkVersion pins. Idempotent: a valid NDK is
+# left untouched.
+#
+# The archive URL and SHA256 mirror scripts/install/versions_common.sh (the
+# installer's source of truth); scripts/ci/check_repo.py
+# (check_ndk_constants_drift) fails CI when the two copies diverge.
+NDK_R30_SHA256="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+
+ndk_archive_sha256() {
+	case "$1" in
+	30) echo "$NDK_R30_SHA256" ;;
+	*) echo "" ;;
+	esac
+}
+
+provision_ndk() {
+	local NDK_TARGET="$ANDROID_SDK/ndk/$NDK_VERSION"
+	local NDK_MAJOR="${NDK_VERSION%%.*}"
+	local NDK_URL="${TERMUX_NDK_URL:-https://github.com/HomuHomu833/android-ndk-custom/releases/download/r$NDK_MAJOR/android-ndk-r$NDK_MAJOR-aarch64-linux-android.tar.xz}"
+	local NDK_SHA256="${TERMUX_NDK_SHA256:-$(ndk_archive_sha256 "$NDK_MAJOR")}"
+
+	if [ -d "$NDK_TARGET" ] && ndk_clang_runs "$NDK_TARGET"; then
+		echo "=== NDK $NDK_VERSION already provisioned at $NDK_TARGET ==="
+		return 0
+	fi
+
+	if [ -z "$NDK_SHA256" ]; then
+		echo "Error: no pinned SHA256 for NDK major version r$NDK_MAJOR." >&2
+		echo "Set TERMUX_NDK_URL and TERMUX_NDK_SHA256 to provision it explicitly." >&2
+		return 1
+	fi
+
+	mkdir -p "$ANDROID_SDK/ndk"
+
+	# The tarball, its staging copy and the extracted tree all live on the
+	# target filesystem: ~550 MB download + ~1.6 GB extracted while staged.
+	local avail_kb
+	avail_kb=$(df -Pk "$ANDROID_SDK/ndk" | awk 'NR==2 {print $4}')
+	if [ -z "$avail_kb" ] || [ "$avail_kb" -lt 2700000 ]; then
+		echo "Error: need ~2.6 GB free under $ANDROID_SDK to stage the NDK (have ${avail_kb:-unknown} KB)." >&2
+		return 1
+	fi
+
+	local stage tarball
+	stage="$ANDROID_SDK/ndk/.ndk-stage.$$"
+	tarball="$stage/android-ndk-r$NDK_MAJOR-aarch64.tar.xz"
+	rm -rf "$stage"
+	mkdir -p "$stage"
+
+	echo "=== Downloading Android NDK r$NDK_MAJOR (aarch64 repack, ~550 MB) ==="
+	if ! curl -fL --progress-bar -o "$tarball" "$NDK_URL"; then
+		echo "Error: NDK download failed ($NDK_URL)." >&2
+		rm -rf "$stage"
+		return 1
+	fi
+
+	echo "=== Verifying NDK SHA256 ==="
+	local actual_sha
+	actual_sha=$(sha256sum "$tarball" | awk '{print $1}')
+	if [ "$actual_sha" != "$NDK_SHA256" ]; then
+		echo "Error: NDK archive SHA256 mismatch (expected $NDK_SHA256, got $actual_sha)." >&2
+		rm -rf "$stage"
+		return 1
+	fi
+
+	echo "=== Extracting NDK (staging isolation) ==="
+	if ! tar -xf "$tarball" -C "$stage"; then
+		echo "Error: NDK extraction failed." >&2
+		rm -rf "$stage"
+		return 1
+	fi
+	rm -f "$tarball"
+
+	local extracted="" cand
+	for cand in "android-ndk-r$NDK_MAJOR-aarch64-linux-android" "android-ndk-r$NDK_MAJOR" "android-ndk-r$NDK_MAJOR-aarch64"; do
+		if [ -d "$stage/$cand" ]; then
+			extracted="$stage/$cand"
+			break
+		fi
+	done
+	if [ -z "$extracted" ]; then
+		extracted=$(find "$stage" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+	fi
+	if [ -z "$extracted" ] || [ ! -d "$extracted" ]; then
+		echo "Error: extracted NDK directory not found in $stage." >&2
+		rm -rf "$stage"
+		return 1
+	fi
+
+	rm -rf "$NDK_TARGET"
+	if ! mv "$extracted" "$NDK_TARGET"; then
+		echo "Error: failed to move NDK into $NDK_TARGET." >&2
+		rm -rf "$stage"
+		return 1
+	fi
+	rm -rf "$stage"
+
+	# Validate like the normal install path: repair (or refuse) and wire up
+	# the Termux clang wrappers + host-tag aliases AGP/CMake rely on.
+	repair_ndk_metadata "$NDK_TARGET"
+	if [ ! -d "$NDK_TARGET" ]; then
+		echo "Error: extracted NDK failed validation (no runnable clang for this device)." >&2
+		return 1
+	fi
+	setup_ndk_clang_wrappers "$NDK_TARGET"
+
+	# Keep generated projects pinning the version actually installed.
+	if [ -f "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" ]; then
+		patch_ndk_version "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
+	fi
+	if [ -f "$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/gradle_utils.dart" ]; then
+		patch_ndk_version_dart "$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/gradle_utils.dart"
+	fi
+
+	echo "=== NDK $NDK_VERSION provisioned; native-plugin builds are ready ==="
+}
+
 # Handle library mode (for unit testing / function sourcing)
 if [ "$MODE" == "lib" ]; then
 	return 0 2>/dev/null || exit 0
@@ -725,6 +853,13 @@ if [ "$MODE" == "rollback" ]; then
 	rollback_patches
 	echo "=== Rollback finished ==="
 	exit 0
+fi
+
+# Opt-in NDK provisioning (--provision-ndk): download + install only, no
+# patching of the SDK tree beyond the NDK's own wrappers and version pins.
+if [ "$MODE" == "provision-ndk" ]; then
+	provision_ndk
+	exit $?
 fi
 
 # Run apply_patches for --apply
@@ -1187,13 +1322,13 @@ if [ -d "$NDK_DIR" ]; then
 	done
 	if [ $NDK_COUNT -eq 0 ]; then
 		echo "  ⚠ No NDK found. Clang wrappers will be created when NDK is installed."
-		echo "    Re-run this script after installing NDK: bash $PREFIX/share/flutter/post_install.sh"
+		echo "    Provision the pinned Termux NDK: bash $PREFIX/share/flutter/post_install.sh --provision-ndk"
 	else
 		echo "  ✓ $NDK_COUNT NDK(s) configured"
 	fi
 else
 	echo "  ⚠ NDK directory not found. Clang wrappers will be created when NDK is installed."
-	echo "    Re-run this script after installing NDK: bash $PREFIX/share/flutter/post_install.sh"
+	echo "    Provision the pinned Termux NDK: bash $PREFIX/share/flutter/post_install.sh --provision-ndk"
 fi
 
 # Repair the Android SDK's own CMake/Ninja packages.
