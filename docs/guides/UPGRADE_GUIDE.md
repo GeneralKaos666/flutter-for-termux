@@ -344,7 +344,7 @@ Remember to update:
 - The version number in `README.md`
 - `docs/releases/CHANGELOG.md`
 - `docs/releases/RELEASE_NOTES.md`
-- `FLUTTER_VERSION` in `scripts/install/install_termux_flutter.sh`
+- The pins in `scripts/install/versions_common.sh`
 
 > CI enforces version consistency via `scripts/ci/check_version_drift.py` —
 > if a reference was missed, the `Repository sanity` job fails and names the

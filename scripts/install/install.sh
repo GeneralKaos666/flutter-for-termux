@@ -1,6 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Flutter for Termux ARM64 - One-click installer
 # https://github.com/GeneralKaos666/flutter-for-termux
+#
+# Downloads the release deb (SHA256-verified), installs it, then provisions
+# the Android SDK and the NDK through the deb-shipped post_install.sh.
+# The aarch64 NDK repack comes from HomuHomu833
+# (https://github.com/HomuHomu833/android-ndk-custom) - credit: HomuHomu833.
+#
+# Usage: curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/scripts/install/install.sh -o ~/install.sh && bash ~/install.sh
 
 set -euo pipefail
 
@@ -21,11 +28,14 @@ echo "Flutter ${FLUTTER_VERSION} for Termux ARM64"
 echo "========================================"
 echo ""
 
-preflight_check 1000000
+# A full install needs the deb (~606 MiB), the extracted SDK, and the NDK
+# (~550 MiB compressed, ~1.6 GB extracted): the guide's floor is 5 GB free.
+preflight_check 5000000
 
-# Install x11-repo first (pre-dependency)
-echo "[1/5] Installing x11-repo..."
-pkg install -y x11-repo
+# Prerequisites the deb cannot pull itself: x11-repo (source of its gtk3 and
+# friends) and a JDK (deliberately not in the deb's Depends).
+echo "[1/5] Installing prerequisites..."
+pkg install -y x11-repo "${JAVA_PACKAGE:-openjdk-21}"
 
 # Download deb
 echo "[2/5] Downloading ${FLUTTER_DEB_NAME}..."
@@ -45,11 +55,16 @@ echo "[3/5] Installing deb package..."
 apt-get install -f -y ./flutter.deb || { record_stage package failed; exit 40; }
 record_stage package success
 
-# Run post-install script
-echo "[4/5] Running post-install configuration..."
+# Run post-install script (apply mode: SDK staging + patches), then the
+# opt-in NDK provisioning. post_install.sh --provision-ndk is a standalone
+# mode that exits after installing the pinned HomuHomu833 aarch64 NDK repack,
+# so both calls are required for a complete SDK + NDK setup.
+echo "[4/5] Running post-install configuration (SDK + NDK)..."
 if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
     bash "$PREFIX/share/flutter/post_install.sh" || { record_stage post-install failed; exit 50; }
     record_stage post-install success
+    bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk || { record_stage ndk-provision failed; exit 55; }
+    record_stage ndk-provision success
 else
     echo "Warning: post_install.sh not found"
 fi

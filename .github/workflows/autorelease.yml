@@ -141,7 +141,6 @@ jobs:
             scripts/device/run_termux_smoke.ps1
             scripts/install/flutter_termux_doctor.sh
             scripts/install/install.sh
-            scripts/install/install_termux_flutter.sh
             scripts/install/lib_common.sh
             scripts/install/post_install.sh
             scripts/install/versions_common.sh
