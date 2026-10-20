@@ -6,13 +6,14 @@ Run the Flutter SDK right on your phone with
 `flutter run`, `flutter build apk`, and `flutter build linux` with no
 computer in sight.
 
-> **Android toolchain credit:** the custom aarch64 Android SDK and NDK
-> builds this project relies on are maintained by
-> [HomuHomu833](https://github.com/HomuHomu833) —
-> [android-sdk-custom](https://github.com/HomuHomu833/android-sdk-custom) and
-> [android-ndk-custom](https://github.com/HomuHomu833/android-ndk-custom).
-> The pinned NDK is provisioned from there on demand via
-> `bash $PREFIX/share/flutter/post_install.sh --provision-ndk`. Thanks!
+> **Android toolchain credit:** the pinned aarch64 NDK repack this project
+> provisions (r30, SHA256-verified) is built by
+> [HomuHomu833](https://github.com/HomuHomu833)
+> ([android-ndk-custom](https://github.com/HomuHomu833/android-ndk-custom)) —
+> thanks! It is installed on demand via
+> `bash $PREFIX/share/flutter/post_install.sh --provision-ndk`. The SDK side
+> needs no tarball: post-install assembles it from Termux packages (`aapt2`,
+> `d8`, `aidl`, `apksigner`).
 
 > **Looking for beta and main-channel builds?** This repo tracks Flutter
 > **stable** only. For prereleases, grab them from
