@@ -7,7 +7,7 @@
 
 # Flutter release (matches [flutter] tag in build.toml)
 export FLUTTER_VERSION="3.47.7"
-export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-5}"
+export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-6}"
 export RELEASE_TAG="3.47.7"
 export EXPECTED_SHA256="3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6"
 export FLUTTER_DEB_NAME="flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL}_aarch64.deb"
