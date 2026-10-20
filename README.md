@@ -1,7 +1,5 @@
 # Flutter Termux
 
-* Currently broken just download deb file manualy as repo being reworked 
-
 Run the Flutter SDK right on your phone with
 [Termux](https://termux.dev). This project cross-compiles Flutter into a
 `.deb` that installs straight into your Termux `$PREFIX`, so you get
@@ -199,6 +197,10 @@ android {
 > Android API 26 with weak imports, so this only affects the APK packaging
 > tools. See the [AAPT2 analysis](docs/guides/AAPT2_RELEASE_BUILD_BUG_ANALYSIS.md).
 
+> **Building plugins with native code (C/C++)?** Provision the NDK once
+> (~550 MB download): `bash $PREFIX/share/flutter/post_install.sh --provision-ndk`.
+> Pure-Dart apps don't need it.
+
 Now build a debug APK:
 
 ```bash
@@ -272,7 +274,10 @@ Releases build and publish themselves. The GitHub-hosted `Build` workflow
 self-hosted evidence-tracked fallback (`build-deb.yml`) and an ADB device
 smoke gate (`device-smoke.yml`) handle manual runs, and the nightly
 `autorelease.yml` picks up new Flutter stable versions and bumps
-`build.toml` for you. See [CI/CD and device lab](docs/CI_CD.md).
+`build.toml` for you. After a release build finishes, `apt-repo.yml`
+republishes the signed APT repository on GitHub Pages, so
+`apt upgrade flutter` picks the new version up automatically. See
+[CI/CD and device lab](docs/CI_CD.md).
 
 ## Documentation
 
