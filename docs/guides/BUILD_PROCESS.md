@@ -301,7 +301,7 @@ flutter build linux --release
 
 Confirm that the version numbers in the following files are consistent:
 - `build.toml` - `tag` field
-- `scripts/install/install_termux_flutter.sh` - `FLUTTER_VERSION`
+- `scripts/install/versions_common.sh` - installer version pins (`FLUTTER_VERSION`, checksums)
 - `README.md` - version badge and text
 - `package.yaml` - `Version: $package_version`
 
@@ -359,7 +359,7 @@ flutter-for-termux/
 ├── scripts/
 │   ├── ci/               # lightweight contract checks (e.g. check_repo.py)
 │   ├── device/           # ADB → Termux smoke automation
-│   ├── install/          # post_install.sh (on-device) + install_termux_flutter.sh
+│   ├── install/          # post_install.sh (on-device) + install.sh one-click
 │   ├── release/          # apt repo builder: apt_repo.py + stub/ maintainer scripts
 │   └── test/             # Release E2E smoke scripts (gh_e2e_test.sh)
 ├── docs/
