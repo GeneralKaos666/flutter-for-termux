@@ -436,8 +436,15 @@ Each entry below shows the exact error (**Symptom**), why it happens
   `linux-arm64` → `../linux-arm64` host symlink that post-install creates
   (step 15). The `linux-x64` copy upstream ships is x86-64 and cannot run on
   this device, so AOT cannot find a runnable `gen_snapshot`.
-- **Fix:** re-run post-install (recreates the symlink), then build again —
-  this exact sequence is verified to produce `app-release.apk`:
+- **Fix (3.47.7-6 and newer):** nothing to do — post-install now patches
+  flutter_tools to resolve `gen_snapshot` directly to the ARM64 binary
+  shipped in the package (marker `Termux: prefer package-shipped aarch64
+  gen_snapshot`), in a directory Flutter's first-run materialization never
+  touches. Verified end-to-end: with the symlinks removed and the
+  materialization triggered, `flutter build apk --release` produces the APK.
+- **Fix (3.47.7-5 and older):** upgrade via apt (`pkg install flutter`), or
+  re-run post-install (recreates the symlink), then build again — this
+  exact sequence is verified to produce `app-release.apk`:
 
   ```bash
   bash $PREFIX/share/flutter/post_install.sh
