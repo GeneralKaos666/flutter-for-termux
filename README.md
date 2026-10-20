@@ -1,5 +1,7 @@
 # Flutter Termux
 
+* Currently broken just download deb file manualy as repo being reworked 
+
 Run the Flutter SDK right on your phone with
 [Termux](https://termux.dev). This project cross-compiles Flutter into a
 `.deb` that installs straight into your Termux `$PREFIX`, so you get
