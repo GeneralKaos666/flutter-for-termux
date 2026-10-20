@@ -345,7 +345,6 @@ Remember to update:
 - `docs/releases/CHANGELOG.md`
 - `docs/releases/RELEASE_NOTES.md`
 - `FLUTTER_VERSION` in `scripts/install/install_termux_flutter.sh`
-- The version number in `install_flutter_complete.sh`
 
 > CI enforces version consistency via `scripts/ci/check_version_drift.py` —
 > if a reference was missed, the `Repository sanity` job fails and names the

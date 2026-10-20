@@ -41,7 +41,6 @@ GUIDE_DOCS = [
     "docs/guides/UPGRADE_GUIDE.md",
 ]
 INSTALLER_SCRIPTS = [
-    "install_flutter_complete.sh",
     "scripts/install/install.sh",
     "scripts/install/install_termux_flutter.sh",
     "scripts/install/lib_common.sh",

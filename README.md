@@ -100,21 +100,6 @@ bash $PREFIX/share/flutter/post_install.sh
 Flutter lands in `$PREFIX/opt/flutter`. To remove it later, run
 `apt remove flutter`.
 
-## Deprecated: one-shot installer
-
-`install_flutter_complete.sh` still works but is deprecated and receives no new
-features — use the [quick start](#quick-start) above instead.
-
-```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh \
-  -o install_flutter_complete.sh
-bash install_flutter_complete.sh
-```
-
-The installer downloads the release package straight from GitHub and sets up
-the Android SDK/toolchain for you. Re-running it stays supported as the
-fallback upgrade path for installs that started this way.
-
 ## Upgrading
 
 > **Never run stock `flutter upgrade` on this install.** It targets
@@ -143,10 +128,9 @@ previous payload in place; if APT reports a broken state, converge it with:
 apt --fix-broken install
 ```
 
-If you installed with the deprecated one-shot installer instead, re-run
-`install_flutter_complete.sh` — it downloads the latest
-`flutter_<tag>-<pkg_rel>_aarch64.deb` from this repo's releases, verifies the
-checksums, and lets `dpkg` upgrade in place too.
+Installs made by the former one-shot installer (removed) are picked up by
+APT as well: `dpkg` already knows the `flutter` package, so once the
+repository above is configured, `apt upgrade flutter` takes over in place.
 
 Moving to a brand-new Flutter version (maintainers rebuilding from source)
 is a different process — see the

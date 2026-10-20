@@ -54,7 +54,6 @@ jobs:
         run: |
           set -euo pipefail
           find scripts -name "*.sh" -exec bash -n {} +
-          bash -n install_flutter_complete.sh
           bash -n scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm
 
       - name: Termux smoke self-test (APT status fidelity)
@@ -67,7 +66,7 @@ jobs:
           set -euo pipefail
           # Exclude .sh files that are actually Python scripts (e.g. config_jdk.sh)
           mapfile -t SHELL_FILES < <(find scripts -name "*.sh" -exec grep -l '^#!/.*\(ba\)\?sh' {} +  2>/dev/null || true)
-          shellcheck --severity=error install_flutter_complete.sh scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm "${SHELL_FILES[@]}"
+          shellcheck --severity=error scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm "${SHELL_FILES[@]}"
 
       - name: actionlint workflow lint
         shell: bash

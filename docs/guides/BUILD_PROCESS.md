@@ -301,7 +301,6 @@ flutter build linux --release
 
 Confirm that the version numbers in the following files are consistent:
 - `build.toml` - `tag` field
-- `install_flutter_complete.sh` - `FLUTTER_VERSION`
 - `scripts/install/install_termux_flutter.sh` - `FLUTTER_VERSION`
 - `README.md` - version badge and text
 - `package.yaml` - `Version: $package_version`
@@ -324,13 +323,11 @@ release/flutter_3.47.7-6_aarch64.deb
 2. Upload the deb file: `flutter_3.47.7-6_aarch64.deb`
 3. Fill in the Release Notes
 
-### 4. Verify the One-Click Install Script
+### 4. Verify the Release
 
-Test in a new Termux environment:
-
-```bash
-curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
-```
+Install the published release in a fresh Termux environment following the
+[Install guide](INSTALL_GUIDE.md) (apt repository method), then build a debug
+APK to confirm the toolchain end-to-end.
 
 For upgrading to a new Flutter version, follow the
 [Upgrade guide](UPGRADE_GUIDE.md).
@@ -359,7 +356,6 @@ flutter-for-termux/
 ├── utils.py              # arch mapping, output paths
 ├── .gclient              # gclient sync config (its custom_hooks apply the patches)
 ├── patches/              # Flat, tag-agnostic patches: engine.patch, dart.patch, skia.patch
-├── install_flutter_complete.sh  # Complete install script (includes Android SDK)
 ├── scripts/
 │   ├── ci/               # lightweight contract checks (e.g. check_repo.py)
 │   ├── device/           # ADB → Termux smoke automation

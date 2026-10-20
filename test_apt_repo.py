@@ -976,7 +976,7 @@ class CiContractTest(unittest.TestCase):
         assert "pytest test_build.py test_apt_repo.py" in ci
         assert "ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ scripts/release/ test_apt_repo.py" in ci
         assert 'bash -n scripts/release/stub/preinst scripts/release/stub/postinst scripts/release/stub/postrm' in ci
-        assert "shellcheck --severity=error install_flutter_complete.sh scripts/release/stub/preinst" in ci
+        assert "shellcheck --severity=error scripts/release/stub/preinst" in ci
         ini = Path("pytest.ini").read_text()
         assert "testpaths = test_build.py test_apt_repo.py" in ini
         check_repo = Path("scripts/ci/check_repo.py").read_text()
@@ -1030,10 +1030,9 @@ class DocsContractTest(unittest.TestCase):
             assert needle in quick
         # Version-free by construction: check_version_drift.py never sees it.
         assert re.search(r"\d+\.\d+\.\d+", quick) is None
-        # The apt command leads; the legacy installer download comes later.
-        assert readme.index("pkg install flutter") < readme.index(
-            "curl -sL https://raw.githubusercontent.com"
-        )
+        # The deprecated one-shot installer is gone: no legacy curl fallback.
+        assert "install_flutter_complete.sh" not in readme
+        assert "curl -sL https://raw.githubusercontent.com" not in readme
 
     def test_guides_document_apt_flow(self):
         install = Path("docs/guides/INSTALL_GUIDE.md").read_text()
@@ -1047,14 +1046,3 @@ class DocsContractTest(unittest.TestCase):
         assert "apt-repo.yml" in cicd and "APT_REPO_SIGNING_KEY" in cicd
         assert "APT_REPO_SIGNING_PASSPHRASE" in cicd
         assert "fingerprint" in cicd.lower()  # Task 1's value lands here
-
-    def test_installer_prints_deprecation_banner(self):
-        text = Path("install_flutter_complete.sh").read_text()
-        assert (
-            'echo "[!] DEPRECATED: use the apt repository instead: '
-            'pkg install flutter (see README)."' in text
-        )
-        assert (
-            'echo "[!] This installer keeps working but no longer receives new features."'
-            in text
-        )
