@@ -65,9 +65,9 @@ Key details:
 Mirrors `ci.yml` (plus a couple of local-only checks). Run before pushing:
 
 ```bash
-ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/   # ruff-format is non-blocking (|| true) in CI
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/*.py
-pytest test_build.py        # NB: no tests/ dir; pytest.ini (testpaths=test_build.py) names the file. Subprocess is mocked, so no NDK/Flutter checkout is needed even though setUp sets ANDROID_NDK=/tmp/android-ndk
+ruff check build.py package.py sysroot.py utils.py test_build.py test_apt_repo.py scripts/ci/ scripts/release/   # ruff-format is non-blocking (|| true) in CI
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/*.py scripts/release/*.py test_apt_repo.py
+pytest        # NB: no tests/ dir; pytest.ini testpaths names test_build.py and test_apt_repo.py. Subprocess is mocked, so no NDK/Flutter checkout is needed even though setUp sets ANDROID_NDK=/tmp/android-ndk
 pytest test_build.py::BuildTest::test_build_requests_packaged_targets   # single test
 bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/generate_versions.py --check   # versions_common.sh must match build.toml

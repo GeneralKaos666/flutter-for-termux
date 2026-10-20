@@ -4,6 +4,10 @@ This directory keeps project documentation out of the repository root while
 leaving only the entry-point files there (`README.md` and agent/tooling
 instructions).
 
+New here? Install Flutter via the signed apt repository using the
+[quick start](../README.md#quick-start) in the root README, then use the
+guides below for everything else.
+
 ## Operations
 
 - [CI/CD and device lab](CI_CD.md) — GitHub Actions workflow map, runner setup, and local equivalents.
