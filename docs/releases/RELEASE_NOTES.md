@@ -41,6 +41,25 @@ Installing `3.47.7-5` over `3.47.7-4` is a drop-in replacement — follow the [I
 
 ## Install
 
+Recommended: the signed apt repository (verify the fingerprint against the
+README before trusting the key):
+
+```bash
+pkg install -y gnupg
+mkdir -p "$PREFIX/etc/apt/keyrings"
+curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
+  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
+echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
+  > "$PREFIX/etc/apt/sources.list.d/flutter.list"
+pkg update && pkg install flutter
+flutter doctor
+```
+
+The key and repository lines are one-time; upgrades are then plain
+`apt upgrade flutter`.
+
+Fallback: download the payload from this release manually:
+
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip

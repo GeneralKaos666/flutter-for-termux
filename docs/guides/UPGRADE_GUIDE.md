@@ -55,6 +55,7 @@ Each checklist item maps to one step below:
 □ Step 9:  Push to the device and test
 □ Step 10: Update post_install.sh (if necessary)
 □ Step 11: Publish the GitHub Release
+□ Step 12: Publish the apt repository
 ```
 
 ## Must-Check Items After 3.47.7
@@ -349,6 +350,32 @@ Remember to update:
 > CI enforces version consistency via `scripts/ci/check_version_drift.py` —
 > if a reference was missed, the `Repository sanity` job fails and names the
 > file.
+
+---
+
+## Step 12: Publish the apt Repository
+
+Once the release carries the payload `.deb`, refresh the signed APT
+repository on GitHub Pages. `.github/workflows/apt-repo.yml` does this
+automatically when the `build` workflow completes on `main` (the default
+token suppresses `release` events, hence the `workflow_run` trigger); to
+republish manually:
+
+```bash
+gh workflow run apt-repo.yml
+```
+
+- A release guard skips the job unless the `build.toml` `<tag>-<pkg_rel>`
+  release actually carries the payload `.deb`, so the metadata can never
+  advertise a package that does not exist.
+- The job runs `scripts/release/apt_repo.py stub` (control-only
+  `Architecture: all` stub) and `repo` (signed `Release`/`InRelease`,
+  `Packages`, `key.gpg`, `index.html`), then deploys to GitHub Pages.
+- One-time setup: Pages → Source = "GitHub Actions", plus the
+  `APT_REPO_SIGNING_KEY` / `APT_REPO_SIGNING_PASSPHRASE` secrets
+  (see `docs/CI_CD.md`).
+- Verify on a device: `apt update && apt policy flutter` shows the new
+  version.
 
 ---
 

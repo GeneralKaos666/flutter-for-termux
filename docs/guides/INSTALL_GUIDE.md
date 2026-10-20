@@ -32,12 +32,19 @@ installing you will have:
 | Storage | At least 5GB; 8GB+ recommended for a full Android SDK/NDK + Gradle cache |
 | Java | `openjdk-21` |
 
-> **Before you start:** run `pkg update && pkg upgrade`, and install the
-> `x11-repo` package — the installer and the manual steps both need it:
+> **Before you start:** run `pkg update && pkg upgrade` first:
 >
 > ```bash
 > pkg update && pkg upgrade
-> pkg install x11-repo
+> ```
+>
+> The `x11-repo` package is required by the manual Methods 2 and 3. Method 1
+> (apt) needs no extra step here: the published stub declares
+> `Pre-Depends: x11-repo`, so APT fetches it automatically during
+> `pkg install flutter`:
+>
+> ```bash
+> pkg install x11-repo   # Methods 2 and 3 only
 > ```
 
 ---
@@ -364,12 +371,19 @@ Each entry below shows the exact error (**Symptom**), why it happens
 
   If the directory is incomplete (no `toolchains/llvm`, or no CMake toolchain
   file), post-install removes it rather than stamping it healthy. Re-running
-  post-install cannot rebuild a removed directory — the full installer is
-  what downloads and extracts the NDK:
+  post-install cannot rebuild a removed directory. The NDK is not part of the
+  apt payload (the stub restores the Flutter tree only), and the only
+  project-supported way to (re)provision it is the deprecated one-command
+  installer — it downloads the aarch64 NDK (~550 MB) and extracts it into
+  `$PREFIX/opt/android-sdk/ndk/`:
 
   ```bash
   curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
   ```
+
+  Pure-Dart projects are unaffected either way: `flutter build apk --release`
+  builds and links without any NDK installed; only native plugins
+  (CMake / `externalNativeBuild`) need it.
 
 ### `Could not find toolchain file` (incomplete NDK)
 
@@ -388,7 +402,8 @@ Each entry below shows the exact error (**Symptom**), why it happens
   different failure from the `source.properties` error above, and it appears
   *after* that metadata exists — so re-running post-install will not repair
   it. Post-install detects the directory as incomplete and removes it.
-- **Fix:** re-provision the NDK with the full installer:
+- **Fix:** re-provision the NDK with the one-command installer (deprecated but
+  still functional; the apt package does not carry the NDK):
 
   ```bash
   curl -sL https://raw.githubusercontent.com/GeneralKaos666/flutter-for-termux/main/install_flutter_complete.sh -o ~/install.sh && bash ~/install.sh
@@ -397,6 +412,29 @@ Each entry below shows the exact error (**Symptom**), why it happens
   This re-downloads the NDK (~550 MB). A complete NDK is verified to configure,
   compile, and link an `arm64-v8a` CMake module (`jni` 1.0.0) on-device, so
   the build proceeds once the toolchain file is back.
+
+### First build fails: `gen_snapshot` not found (host symlink dropped)
+
+- **Symptom:** the first `flutter build apk --release` after a (re)install
+  fails during AOT with:
+
+  ```text
+  Target android_aot_release_android-arm64 failed: ProcessException:
+  Failed to find ".../engine/android-arm64-release/linux-arm64/gen_snapshot" in the search path.
+  ```
+
+- **Cause:** the first build materializes Flutter's engine artifacts and
+  recreates the `android-arm64-*` directories, dropping the
+  `linux-arm64` → `../linux-arm64` host symlink that post-install creates
+  (step 15). The `linux-x64` copy upstream ships is x86-64 and cannot run on
+  this device, so AOT cannot find a runnable `gen_snapshot`.
+- **Fix:** re-run post-install (recreates the symlink), then build again —
+  this exact sequence is verified to produce `app-release.apk`:
+
+  ```bash
+  bash $PREFIX/share/flutter/post_install.sh
+  flutter build apk --release
+  ```
 
 ### Stale Gradle or Kotlin errors after upgrading
 
