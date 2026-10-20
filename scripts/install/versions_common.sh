@@ -12,14 +12,10 @@ export RELEASE_TAG="3.47.7"
 export EXPECTED_SHA256="3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6"
 export FLUTTER_DEB_NAME="flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL}_aarch64.deb"
 
-# Android SDK (HomuHomu833/android-sdk-custom)
-export ANDROID_SDK_VERSION="${ANDROID_SDK_VERSION:-37.0.0}"
-export ANDROID_SDK_ARCHIVE_URL="https://github.com/HomuHomu833/android-sdk-custom/releases/download/${ANDROID_SDK_VERSION}/android-sdk-aarch64-linux-android.tar.xz"
-export ANDROID_SDK_EXPECTED_SHA256="b484e5bfe51f22dca25b93286151cea5256177debdafc28b9e3977d88857cb98"
-# Backward compatibility for .deb paths
-export ANDROID_SDK_DEB_URL="$ANDROID_SDK_ARCHIVE_URL"
-
 # Android NDK (HomuHomu833/android-ndk-custom; r30)
+# The SDK has no archive pin: post_install.sh assembles it from Termux
+# packages (aapt2, d8, aidl, apksigner). An older HomuHomu833 SDK tarball pin
+# lived here but had no remaining consumer and was removed.
 export NDK_VERSION="30.0.14206865"
 export NDK_ARCHIVE_URL="https://github.com/HomuHomu833/android-ndk-custom/releases/download/r30/android-ndk-r30-aarch64-linux-android.tar.xz"
 export NDK_EXPECTED_SHA256="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
