@@ -31,7 +31,7 @@ Installing `3.47.7-5` over `3.47.7-4` is a drop-in replacement — follow the [I
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.7-5_aarch64.deb` |
+| Package | `flutter_3.47.7-6_aarch64.deb` |
 | Size | 635,042,964 bytes (~606 MiB) |
 | SHA256 | `3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6` |
 | Flutter | 3.47.7 |
@@ -58,13 +58,20 @@ flutter doctor
 The key and repository lines are one-time; upgrades are then plain
 `apt upgrade flutter`.
 
+Native-plugin projects (CMake / `externalNativeBuild`) additionally need the
+NDK — it is opt-in, since pure-Dart builds do not use it:
+
+```bash
+bash $PREFIX/share/flutter/post_install.sh --provision-ndk
+```
+
 Fallback: download the payload from this release manually:
 
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-5_aarch64.deb
-dpkg -i flutter_3.47.7-5_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-6_aarch64.deb
+dpkg -i flutter_3.47.7-6_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
