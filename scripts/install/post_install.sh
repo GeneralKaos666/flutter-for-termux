@@ -356,7 +356,7 @@ patch_plugin_utils() {
 	# code, so the generated `androidComponents.finalizeDsl { ... }` fails to
 	# compile with "Only safe (?.) or non-null asserted (!!.) calls are allowed
 	# on a nullable receiver of type 'AndroidComponentsExtension<*, *, *>?'"
-	# (Flutter 3.47.7, flutter_tools/gradle). Replacing the whole body keeps the
+	# (Flutter 3.47.8, flutter_tools/gradle). Replacing the whole body keeps the
 	# same runtime behaviour (NDK is preinstalled on Termux) with no dead code.
 	if grep -F -q "Termux: NDK provisioning disabled" "$1"; then return 0; fi
 	grep -q "fun forceNdkDownload" "$1" || return 1
@@ -985,11 +985,11 @@ if ! [ -x "$GIT_BIN" ] && ! command -v "$GIT_BIN" >/dev/null 2>&1; then
 fi
 
 # Load canonical metadata from packaged manifest or embedded source-of-truth constants
-CANONICAL_FLUTTER_VER="3.47.7"
-CANONICAL_FRAMEWORK_REV="abaf9c523780a608bd46686fd5e53740a07077f8"
-CANONICAL_FRAMEWORK_DATE="2026-10-08 09:51:21 -0700"
+CANONICAL_FLUTTER_VER="3.47.8"
+CANONICAL_FRAMEWORK_REV="737ba8f885dc774b53b442759999a312c9461e4e"
+CANONICAL_FRAMEWORK_DATE="2026-10-22 21:37:31 -0700"
 CANONICAL_ENGINE_REV="$local_eng_ver"
-CANONICAL_DART_VER="3.13.5"
+CANONICAL_DART_VER="3.13.7"
 CANONICAL_DEVTOOLS_VER="2.60.0"
 CANONICAL_CHANNEL="stable"
 CANONICAL_REPO_URL="https://github.com/flutter/flutter.git"

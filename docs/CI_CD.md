@@ -107,7 +107,7 @@ git diff --check
 - self-hosted workflows are not triggered by `pull_request`
 - `package.yaml` still ships the required runtime resources, including `post_install`
 - `post_install.sh` still contains the Flutter 3.44 `PLATFORM_ABI_LIST` and Android-host patches
-- installer defaults remain on Flutter 3.47.7 and NDK r29 for Termux installs
+- installer defaults remain on Flutter 3.47.8 and NDK r29 for Termux installs
 - release/download docs do not regress to stale 3.41.5 commands
 
 ## Full deb build
@@ -151,9 +151,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.47.7-5_aarch64.deb`
-- `flutter_3.47.7-5_aarch64.deb.sha256`
-- `flutter_3.47.7-5_aarch64.deb.size.txt`
+- `flutter_3.47.8-5_aarch64.deb`
+- `flutter_3.47.8-5_aarch64.deb.sha256`
+- `flutter_3.47.8-5_aarch64.deb.size.txt`
 - `inventory.txt`
 - `build_metadata.json`
 - `build_evidence.json`
@@ -364,7 +364,7 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebPath ".\candidate\flutter_3.47.7-5_aarch64.deb" `
+  -DebPath ".\candidate\flutter_3.47.8-5_aarch64.deb" `
   -ExpectedSha256 "3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6"
 ```
 

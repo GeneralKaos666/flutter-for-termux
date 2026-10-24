@@ -1,22 +1,22 @@
-# Flutter 3.47.7 for Termux ARM64
+# Flutter 3.47.8 for Termux ARM64
 
-**Flutter 3.47.7 / Dart 3.13.5 for Android-bionic ARM64 hosts.**
+**Flutter 3.47.8 / Dart 3.13.7 for Android-bionic ARM64 hosts.**
 
-This release updates the Termux Flutter SDK package to Flutter 3.47.7. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
+This release updates the Termux Flutter SDK package to Flutter 3.47.8. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
 
-## Fixed in 3.47.7-4
+## Fixed in 3.47.8-4
 
-`3.47.7-3` could fail its own post-install APK smoke test and roll the installation back ([issue #27](https://github.com/GeneralKaos666/flutter-for-termux/issues/27)). `3.47.7-4` fixes this:
+`3.47.8-3` could fail its own post-install APK smoke test and roll the installation back ([issue #27](https://github.com/GeneralKaos666/flutter-for-termux/issues/27)). `3.47.8-4` fixes this:
 
-- **Smoke test.** The installer's smoke project was generated with an outdated Gradle DSL (`kotlin-android` plugin, `kotlinOptions { jvmTarget }`) that AGP 9.1.0 / Kotlin 2.4.0 reject; it now uses the current Flutter 3.47.7 DSL.
+- **Smoke test.** The installer's smoke project was generated with an outdated Gradle DSL (`kotlin-android` plugin, `kotlinOptions { jvmTarget }`) that AGP 9.1.0 / Kotlin 2.4.0 reject; it now uses the current Flutter 3.47.8 DSL.
 - **Diagnostics.** If the smoke build ever fails, the installer now prints the relevant Gradle log lines and reports a failed `flutter create`, instead of a bare `✗ APK build failed`.
 - **NDK default.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant) to the NDK shipped in this package (`29.0.14206865`). Projects no longer trigger AGP to auto-download the x86-64-only `android-ndk-r28c-linux`, whose tools cannot run on ARM64 Termux.
 
-Installing `3.47.7-4` over `3.47.7-3` is a drop-in replacement — follow the [Install](#install) steps. If a previous attempt rolled back and removed the SDK, reinstall from scratch with the same commands.
+Installing `3.47.8-4` over `3.47.8-3` is a drop-in replacement — follow the [Install](#install) steps. If a previous attempt rolled back and removed the SDK, reinstall from scratch with the same commands.
 
-## Fixed in 3.47.7-5
+## Fixed in 3.47.8-5
 
-`3.47.7-5` is an installer, manifest, and packaging hardening revision. `3.47.7-5` fixes:
+`3.47.8-5` is an installer, manifest, and packaging hardening revision. `3.47.8-5` fixes:
 
 - **Manifest.** The rendered `manifest.json` `engine_revision` no longer carries a trailing newline. The engine revision is now stripped when read, so the manifest is valid JSON and `post_install.sh`'s revision check matches instead of silently failing.
 - **Settings.** `~/.flutter_settings` is now always valid JSON. The old rewrite could append `"android-sdk"` after a trailing comma and produce a doubled comma; it now loads, updates, and rewrites the file as JSON (falling back to `cat` when `python3` is unavailable).
@@ -25,18 +25,18 @@ Installing `3.47.7-4` over `3.47.7-3` is a drop-in replacement — follow the [I
 - **Project config.** `flutter_project_config.sh` is now actually shipped in the deb (at `$PREFIX/share/flutter/flutter_project_config.sh`), so the per-project `compileSdk`/`targetSdk`/`abiFilters` configuration runs from the installed package instead of being missing.
 - **Artifact location.** The deb is emitted under `release/` instead of the repository root.
 
-Installing `3.47.7-5` over `3.47.7-4` is a drop-in replacement — follow the [Install](#install) steps.
+Installing `3.47.8-5` over `3.47.8-4` is a drop-in replacement — follow the [Install](#install) steps.
 
 ## Package
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.7-6_aarch64.deb` |
+| Package | `flutter_3.47.8-6_aarch64.deb` |
 | Size | 635,042,964 bytes (~606 MiB) |
 | SHA256 | `3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6` |
-| Flutter | 3.47.7 |
-| Flutter Tools Dart | 3.13.5 |
-| Dart VM | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |
+| Flutter | 3.47.8 |
+| Flutter Tools Dart | 3.13.7 |
+| Dart VM | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
 | Target host | Termux / Android bionic / ARM64 |
 
 ## Install
@@ -70,8 +70,8 @@ Fallback: download the payload from this release manually:
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-6_aarch64.deb
-dpkg -i flutter_3.47.7-6_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.8/flutter_3.47.8-6_aarch64.deb
+dpkg -i flutter_3.47.8-6_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -84,9 +84,9 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 | Command | Result |
 |---------|--------|
-| `flutter --version` | ✅ Flutter 3.47.7 |
-| `dart --version` | ✅ Dart 3.13.5 on `android_arm64` |
-| `dartvm --version` | ✅ Dart 3.13.5 on `linux_arm64` |
+| `flutter --version` | ✅ Flutter 3.47.8 |
+| `dart --version` | ✅ Dart 3.13.7 on `android_arm64` |
+| `dartvm --version` | ✅ Dart 3.13.7 on `linux_arm64` |
 | `flutter doctor -v` | ✅ completes; unknown channel / no connected device are expected warnings |
 | `flutter create --platforms=android,linux` | ✅ |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ ARM64 APK produced |
@@ -95,9 +95,9 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 ## Highlights
 
-### Flutter 3.47.7 update
+### Flutter 3.47.8 update
 
-- Updated package metadata, NDK configurations, and patches to target Flutter 3.47.7 (Dart 3.13.5).
+- Updated package metadata, NDK configurations, and patches to target Flutter 3.47.8 (Dart 3.13.7).
 - Keeps Flutter CLI on Termux JIT Dart while preserving engine VM tools for snapshots.
 
 ### Installer & Environment Hardening
