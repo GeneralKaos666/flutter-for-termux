@@ -12,18 +12,18 @@ Related guides:
   [Build process](BUILD_PROCESS.md)
 - CI workflows and the device lab: [CI/CD](../CI_CD.md)
 
-## Current Version Status (3.47.7 / 2026-08-15)
+## Current Version Status (3.47.8 / 2026-08-15)
 
 | Item | Value |
 |------|----|
-| Flutter tag | `3.47.7` |
+| Flutter tag | `3.47.8` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
-| Package | `flutter_3.47.7-6_aarch64.deb` |
+| Package | `flutter_3.47.8-6_aarch64.deb` |
 | Package size | 635,042,964 bytes (about 606 MiB) |
 | SHA256 | `3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
-3.47.7 introduces three new points that require special attention:
+3.47.8 introduces three new points that require special attention:
 
 1. **Dart VM/tool split**: The Flutter CLI uses the Termux JIT `dart`, but
    engine snapshots still need the accompanying `dartvm` / `dartaotruntime`,
@@ -194,7 +194,7 @@ python3 build.py debuild --arch=arm64
 After the build completes, the deb package is located at:
 
 ```text
-release/flutter_3.47.7-6_aarch64.deb
+release/flutter_3.47.8-6_aarch64.deb
 ```
 
 ---
@@ -238,7 +238,7 @@ follow [Install guide](INSTALL_GUIDE.md) (the manual deb method), or in
 short:
 
 ```bash
-dpkg -i flutter_3.47.7-6_aarch64.deb
+dpkg -i flutter_3.47.8-6_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -659,13 +659,13 @@ After the build completes, verify with the following checklist.
 
 ---
 
-## 10. Feature Test Results (3.47.7, updated 2026-08-15)
+## 10. Feature Test Results (3.47.8, updated 2026-08-15)
 
 | Feature | Status | Description |
 |------|------|------|
-| `flutter --version` | ✅ OK | Flutter 3.47.7 / Tools Dart 3.13.5 |
-| `dart --version` | ✅ OK | Termux JIT Dart 3.13.5 (`android_arm64`) |
-| `dartvm --version` | ✅ OK | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |
+| `flutter --version` | ✅ OK | Flutter 3.47.8 / Tools Dart 3.13.7 |
+| `dart --version` | ✅ OK | Termux JIT Dart 3.13.7 (`android_arm64`) |
+| `dartvm --version` | ✅ OK | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
 | `flutter doctor -v` | ✅ OK | unknown channel / no device are expected warnings |
 | `flutter create` | ✅ OK | Can create Android + Linux projects |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ OK | Requires running post_install.sh; only supports android-arm64 |

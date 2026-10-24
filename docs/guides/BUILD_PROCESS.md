@@ -59,7 +59,7 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
 | 4. Build Linux components | `build.py configure --arch=arm64 --mode=release` + `build.py build --arch=arm64 --mode=release` | The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
 | 5. Android gen_snapshot | (none) | Standard builds ship gen_snapshot in the deb artifacts; no separate Android configure/build step is required |
-| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.47.7-6_aarch64.deb` |
+| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.47.8-6_aarch64.deb` |
 
 ---
 
@@ -261,11 +261,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.47.7-6_aarch64.deb /sdcard/Download/
+adb push flutter_3.47.8-6_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.47.7-6_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.47.8-6_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -314,13 +314,13 @@ Confirm that the version numbers in the following files are consistent:
 
 ```bash
 # Final artifact location
-release/flutter_3.47.7-6_aarch64.deb
+release/flutter_3.47.8-6_aarch64.deb
 ```
 
 ### 3. Upload to GitHub Releases
 
-1. Create a new Release: `3.47.7`
-2. Upload the deb file: `flutter_3.47.7-6_aarch64.deb`
+1. Create a new Release: `3.47.8`
+2. Upload the deb file: `flutter_3.47.8-6_aarch64.deb`
 3. Fill in the Release Notes
 
 ### 4. Verify the Release
@@ -381,7 +381,7 @@ flutter-for-termux/
 <summary>Historical updates</summary>
 
 ### 2026-06-01
-- Updated this document to the Flutter 3.47.7 / Dart 3.13.5 state
+- Updated this document to the Flutter 3.47.8 / Dart 3.13.7 state
 - Added `scripts/ci`, `scripts/device`, GitHub Actions and release metadata check
 - Changed the testing process to ARM64 APK + Linux release smoke
 

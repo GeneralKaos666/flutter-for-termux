@@ -1,8 +1,8 @@
 # Flutter Version Upgrade Guide
 
-This document explains how to upgrade Termux Flutter from the current 3.47.7
+This document explains how to upgrade Termux Flutter from the current 3.47.8
 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle
-plugins that must be re-checked after 3.47.7.
+plugins that must be re-checked after 3.47.8.
 
 Build commands and their expected behavior are explained in the
 [Build guide](BUILD_GUIDE.md); build internals (patches, GN configs,
@@ -58,7 +58,7 @@ Each checklist item maps to one step below:
 □ Step 12: Publish the apt repository
 ```
 
-## Must-Check Items After 3.47.7
+## Must-Check Items After 3.47.8
 
 | Item | Why it matters | How to check |
 |------|------------|----------|

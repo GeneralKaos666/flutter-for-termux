@@ -1,6 +1,6 @@
-# Install Guide — Flutter 3.47.7 on Termux
+# Install Guide — Flutter 3.47.8 on Termux
 
-This guide walks you through installing `flutter_3.47.7-6_aarch64.deb` on an
+This guide walks you through installing `flutter_3.47.8-6_aarch64.deb` on an
 ARM64 Termux device, verifying it, and building your first app. After
 installing you will have:
 
@@ -14,9 +14,9 @@ installing you will have:
 
 | Item | Value |
 |------|-------|
-| Flutter | 3.47.7 |
-| Flutter Tools Dart | 3.13.5 |
-| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.5 (`android_arm64`) |
+| Flutter | 3.47.8 |
+| Flutter Tools Dart | 3.13.7 |
+| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
 
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
 | deb size | 635,042,964 bytes (about 606 MiB) |
@@ -97,21 +97,21 @@ Run each step in order inside Termux.
 
    ```bash
    cd ~
-   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.7/flutter_3.47.7-6_aarch64.deb
-   sha256sum flutter_3.47.7-6_aarch64.deb
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.8/flutter_3.47.8-6_aarch64.deb
+   sha256sum flutter_3.47.8-6_aarch64.deb
    ```
 
    Expected output — the hash must match exactly:
 
    ```text
-   3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.7-6_aarch64.deb
+   3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.8-6_aarch64.deb
    ```
    # Confirm the output matches: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
 
 3. Install the package and repair any missing dependencies:
 
    ```bash
-   dpkg -i flutter_3.47.7-6_aarch64.deb
+   dpkg -i flutter_3.47.8-6_aarch64.deb
    apt --fix-broken install -y
    ```
 
@@ -168,7 +168,7 @@ flutter doctor -v
 
 Expected highlights:
 
-- `flutter --version` shows Flutter 3.47.7.
+- `flutter --version` shows Flutter 3.47.8.
 - `dart --version` shows `android_arm64` (Termux JIT Dart).
 - `dartvm --version` shows `linux_arm64` (engine VM).
 - `flutter doctor -v` may show the two expected warnings listed above.
@@ -301,7 +301,7 @@ Each entry below shows the exact error (**Symptom**), why it happens
 - **Symptom:** a Kotlin unresolved-reference error for `PLATFORM_ABI_LIST`
   while building an APK.
 - **Cause:** the post-install Flutter Gradle plugin template or the Gradle
-  cache is stale — common after updating to the 3.47.7 deb.
+  cache is stale — common after updating to the 3.47.8 deb.
 - **Fix:** re-run post-install and clear the Gradle caches, then rebuild:
 
   ```bash
@@ -416,13 +416,13 @@ Each entry below shows the exact error (**Symptom**), why it happens
   `linux-arm64` → `../linux-arm64` host symlink that post-install creates
   (step 15). The `linux-x64` copy upstream ships is x86-64 and cannot run on
   this device, so AOT cannot find a runnable `gen_snapshot`.
-- **Fix (3.47.7-6 and newer):** nothing to do — post-install now patches
+- **Fix (3.47.8-6 and newer):** nothing to do — post-install now patches
   flutter_tools to resolve `gen_snapshot` directly to the ARM64 binary
   shipped in the package (marker `Termux: prefer package-shipped aarch64
   gen_snapshot`), in a directory Flutter's first-run materialization never
   touches. Verified end-to-end: with the symlinks removed and the
   materialization triggered, `flutter build apk --release` produces the APK.
-- **Fix (3.47.7-5 and older):** upgrade via apt (`pkg install flutter`), or
+- **Fix (3.47.8-5 and older):** upgrade via apt (`pkg install flutter`), or
   re-run post-install (recreates the symlink), then build again — this
   exact sequence is verified to produce `app-release.apk`:
 
