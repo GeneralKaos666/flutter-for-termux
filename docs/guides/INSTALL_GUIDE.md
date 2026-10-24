@@ -19,8 +19,8 @@ installing you will have:
 | Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
 
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
-| deb size | 635,042,964 bytes (about 606 MiB) |
-| SHA256 | `3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6` |
+| deb size | 678,847,056 bytes (about 647 MiB) |
+| SHA256 | `9abd5b3048202475407804618605d49861aec73da414a1223db2f0cfc3f2fe90` |
 
 ## System Requirements
 
@@ -106,7 +106,7 @@ Run each step in order inside Termux.
    ```text
    3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.8-6_aarch64.deb
    ```
-   # Confirm the output matches: 3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6
+   # Confirm the output matches: 9abd5b3048202475407804618605d49861aec73da414a1223db2f0cfc3f2fe90
 
 3. Install the package and repair any missing dependencies:
 

@@ -19,8 +19,8 @@ Related guides:
 | Flutter tag | `3.47.8` |
 | Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
 | Package | `flutter_3.47.8-6_aarch64.deb` |
-| Package size | 635,042,964 bytes (about 606 MiB) |
-| SHA256 | `3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6` |
+| Package size | 678,847,056 bytes (about 647 MiB) |
+| SHA256 | `9abd5b3048202475407804618605d49861aec73da414a1223db2f0cfc3f2fe90` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
 3.47.8 introduces three new points that require special attention:
