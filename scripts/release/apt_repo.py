@@ -487,38 +487,11 @@ def write_index_html(site_root: str | Path) -> Path:
     return index
 
 
-def build_repo(
-    deb_path: str | Path,
-    out_dir: str | Path = _DEFAULT_SITE_DIR,
-    key: str = "",
-    passphrase: str | None = None,
-) -> Path:
-    """Generate the signed apt repository for the stub ``deb_path``.
-
-    Writes the pinned site under ``out_dir`` — ``index.html``, ``key.gpg``,
-    ``dists/termux/{InRelease,Release}`` and
-    ``dists/termux/main/{Contents-aarch64,.xz}`` plus
-    ``dists/termux/main/binary-aarch64/{Packages,Packages.xz,<deb>}`` — and
-    returns ``Path(out_dir)``. ``key`` is a fingerprint (``""`` auto-resolves a
-    single secret key in ``GNUPGHOME``); see :func:`_passphrase_flags` for the
-    ``passphrase``/``APT_REPO_SIGNING_PASSPHRASE`` seam.
-    """
-    deb = Path(deb_path)
-    if not deb.is_file():
-        raise FileNotFoundError(f"stub deb not found: {deb}")
-    fingerprint = _resolve_signing_key(key)
-    flags = _passphrase_flags(passphrase)
-
-    out = Path(out_dir)
-    dists = out / "dists" / _SUITE
-    component = dists / _COMPONENT
-    binary = component / f"binary-{_SITE_ARCH}"
-    binary.mkdir(parents=True, exist_ok=True)
-
+def _index_deb(deb: Path, binary: Path) -> tuple[list[tuple[str, str]], Path]:
+    """Extract control fields, copy deb to binary dir, and return (fields, published_path)."""
     published = binary / deb.name
     shutil.copyfile(deb, published)
     published.chmod(0o644)
-
     with tempfile.TemporaryDirectory(prefix="apt-repo.") as work:
         fields = _parse_control(_extract_control(deb, Path(work) / "control"))
     fields.extend(
@@ -528,8 +501,61 @@ def build_repo(
             ("SHA256", hashlib.sha256(published.read_bytes()).hexdigest()),
         ]
     )
-    # A blank line terminates the paragraph so apt can find the next entry.
-    packages = "".join(f"{name}: {value}\n" for name, value in fields) + "\n"
+    return fields, published
+
+
+def build_repo(
+    deb_path: str | Path | Sequence[str | Path] = "",
+    out_dir: str | Path = _DEFAULT_SITE_DIR,
+    key: str = "",
+    passphrase: str | None = None,
+    debs_dir: str | Path | None = None,
+) -> Path:
+    """Generate the signed apt repository for one or more debs.
+
+    Writes the pinned site under ``out_dir`` — ``index.html``, ``key.gpg``,
+    ``dists/termux/{InRelease,Release}`` and
+    ``dists/termux/main/{Contents-aarch64,.xz}`` plus
+    ``dists/termux/main/binary-aarch64/{Packages,Packages.xz,<deb>}`` — and
+    returns ``Path(out_dir)``. ``key`` is a fingerprint (``""`` auto-resolves a
+    single secret key in ``GNUPGHOME``); see :func:`_passphrase_flags` for the
+    ``passphrase``/``APT_REPO_SIGNING_PASSPHRASE`` seam.
+    """
+    fingerprint = _resolve_signing_key(key)
+    flags = _passphrase_flags(passphrase)
+
+    out = Path(out_dir)
+    dists = out / "dists" / _SUITE
+    component = dists / _COMPONENT
+    binary = component / f"binary-{_SITE_ARCH}"
+    binary.mkdir(parents=True, exist_ok=True)
+
+    deb_paths: list[Path] = []
+    if debs_dir is not None:
+        for p in sorted(Path(debs_dir).glob("*.deb")):
+            deb_paths.append(p)
+    elif deb_path == "" or deb_path is None:
+        # Default behavior: prefer apt-repo-work for stub, but also allow any .deb in cwd patterns
+        work_dir = _DEFAULT_STUB_DIR
+        deb_paths = sorted(work_dir.glob("*.deb")) if work_dir.exists() else []
+    else:
+        if isinstance(deb_path, (str, Path)):
+            deb_paths = [Path(deb_path)]
+        else:
+            for p in deb_path:
+                deb_paths.append(Path(p))
+
+    if not deb_paths:
+        raise FileNotFoundError("no .deb files found to index")
+    for deb in deb_paths:
+        if not deb.is_file():
+            raise FileNotFoundError(f"stub deb not found: {deb}")
+
+    packages_parts = []
+    for deb in deb_paths:
+        fields, _published = _index_deb(deb, binary)
+        packages_parts.append("".join(f"{name}: {value}\n" for name, value in fields) + "\n")
+    packages = "".join(packages_parts)
     (binary / "Packages").write_text(packages, encoding="utf-8")
     contents = component / f"Contents-{_SITE_ARCH}"
     contents.write_text("", encoding="utf-8")

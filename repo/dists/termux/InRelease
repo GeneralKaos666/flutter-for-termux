@@ -1,0 +1,32 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
+Codename: termux
+Version: 1
+Architectures: aarch64
+Description: flutter-for-termux apt repository
+Suite: termux
+Date: Sun, 25 Oct 2026 03:48:16 GMT
+Components: main
+SHA256:
+ d6844a60876bc9d8aae621e004ac4c79d43e7b262985921424967b2ab33ae6ce 444 main/binary-aarch64/Packages
+ 2c2262fc766ac96ad21ddfd0fb04b435fafb5b03f2aea8b54b1626d51163a1fc 400 main/binary-aarch64/Packages.xz
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/Contents-aarch64
+ 0040f94d11d0039505328a90b2ff48968db873e9e7967307631bf40ef5679275 32 main/Contents-aarch64.xz
+-----BEGIN PGP SIGNATURE-----
+
+iQJPBAEBCAA5FiEEHe0IQEV0uGewWKe7R2/CMOy7/fAFAmrdfAAbFIAAAAAABAAO
+bWFudTIsMi41KzEuMTIsMywyAAoJEEdvwjDsu/3wezgQALJHoZjcyr86Sqwe6LvR
+GG6a68EEY0OCNky4mpyoh/NA705r+it1zxktIumn3psofvPhhVGVJ1XcC+W3FuSX
+44/y/i2frypzz5+W7UpC4dDFIq456KLoRwiRcSi8Tgw30N26G5M+mrNf0FdbbSAA
+wPofAgBDKDV4JZujuJtvwPDsvcyPWkqMQjbzTPP5XwADx62xv8OdNQWHjuQyIYth
+T0kyN9pDBcWIkujYOm43ieWtojcAe/g4YTJEeOgMNw+ccTMm2WxMnIVGgP3r0Alz
+dqmqGQhJB0KE9ofoeVEOr7/VzpPZtNN2sgMdbNNdXi7ONIn5NlgqIxgFmWS5Yj3f
+xRZmlJXvlvvnoPvHWCVg/U3iQ8Vz+xSOEUN5hA0r+N6OVpRM6S3yUNdSpTll4pg6
+hFVZJjb1VmkS7dLsPMsEKrL1BzT+xCYi1KLhV7XMyNLKVJWYOmWfA1sQzGpHFRVn
+zao/rKUXfypWkuOr6d7/Dry0w5tri1pydgjZq9VFsL/paRYwd8/HbBJz1ED2KmoI
+uVev/LyaJl/4cPhkRRtqHvigHlPdardMLZ3JM1+jaX/1G4ODGdBENV3EQyT42KFB
+4QHq7XcBIQbMx1LeTguD46B87ic5pVtfekWYxiCf506GqRKOrDPfji8bPYaIVnBL
+0Po8c6mQ0albba5eUnX6CQsO
+=z4UB
+-----END PGP SIGNATURE-----

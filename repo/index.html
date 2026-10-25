@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flutter-for-termux apt repository</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 48rem; padding: 0 1rem; }
+  pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; }
+  code { font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<h1>flutter-for-termux apt repository</h1>
+<p>
+  This is the apt repository for <code>flutter</code> on Termux. The signing key is
+  <a href="key.gpg">key.gpg</a>; the snippet below installs <code>gnupg</code>, creates the
+  apt keyrings directory, stores the key as
+  <code>$PREFIX/etc/apt/keyrings/flutter.gpg</code> and adds the repository to
+  <code>$PREFIX/etc/apt/sources.list.d/flutter.list</code>.
+</p>
+<h2>Quick start</h2>
+<pre><code>pkg install -y gnupg
+mkdir -p "$PREFIX/etc/apt/keyrings"
+curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
+  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
+echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
+  > "$PREFIX/etc/apt/sources.list.d/flutter.list"
+pkg update && pkg install flutter
+flutter doctor
+</code></pre>
+<p>
+  Full instructions live in the
+  <a href="https://github.com/GeneralKaos666/flutter-for-termux#quick-start">README quick start</a>.
+  Never run <code>flutter upgrade</code>; use <code>apt upgrade flutter</code> instead.
+</p>
+</body>
+</html>
