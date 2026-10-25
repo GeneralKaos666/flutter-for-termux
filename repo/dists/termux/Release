@@ -1,0 +1,12 @@
+Codename: termux
+Version: 1
+Architectures: aarch64
+Description: flutter-for-termux apt repository
+Suite: termux
+Date: Sun, 25 Oct 2026 03:48:16 GMT
+Components: main
+SHA256:
+ d6844a60876bc9d8aae621e004ac4c79d43e7b262985921424967b2ab33ae6ce 444 main/binary-aarch64/Packages
+ 2c2262fc766ac96ad21ddfd0fb04b435fafb5b03f2aea8b54b1626d51163a1fc 400 main/binary-aarch64/Packages.xz
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/Contents-aarch64
+ 0040f94d11d0039505328a90b2ff48968db873e9e7967307631bf40ef5679275 32 main/Contents-aarch64.xz
