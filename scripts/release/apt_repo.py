@@ -590,14 +590,26 @@ def _discover_stub_deb(work_dir: Path) -> Path:
     return candidates[0]
 
 
-def repo(deb: str = "", out: str = "repo", key: str = "") -> str:
-    """Generate the signed apt repository from a stub ``.deb``.
+def repo(deb: str = "", out: str = "repo", key: str = "", debs_dir: str = "") -> str:
+    """Generate the signed apt repository from one or more debs.
 
-    ``deb`` defaults to the single ``apt-repo-work/*.deb``; both it and ``out``
-    resolve against the current working directory.
+    If ``debs_dir`` is provided, all ``*.deb`` files in it are indexed.
+    Otherwise falls back to ``apt-repo-work/*.deb`` (supports multiple files).
     """
-    deb_path = Path(str(deb)) if str(deb) else _discover_stub_deb(_DEFAULT_STUB_DIR)
-    return str(build_repo(deb_path, out_dir=Path(str(out) or "repo"), key=str(key)))
+    out_path = Path(str(out) or "repo")
+    if str(debs_dir).strip():
+        return str(build_repo(debs_dir=Path(str(debs_dir)), out_dir=out_path, key=str(key)))
+    if str(deb).strip():
+        # If a specific deb is passed, still allow building repo with it
+        return str(build_repo(Path(str(deb)), out_dir=out_path, key=str(key)))
+    # Default: index all debs in apt-repo-work if multiple exist
+    work_dir = _DEFAULT_STUB_DIR
+    if work_dir.exists():
+        debs = sorted(work_dir.glob("*.deb"))
+        if debs:
+            return str(build_repo(debs_dir=work_dir, out_dir=out_path, key=str(key)))
+    deb_path = _discover_stub_deb(work_dir)
+    return str(build_repo(deb_path, out_dir=out_path, key=str(key)))
 
 
 if __name__ == "__main__":
