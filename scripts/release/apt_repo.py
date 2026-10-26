@@ -1,8 +1,10 @@
-"""Tooling to render and publish the flutter-for-termux apt repository.
+"""Tooling to build the flutter stub package and render an apt repository.
 
 Subcommands on the command-line interface:
 
 - ``stub``: build the architecture-independent stub ``.deb`` with ``dpkg-deb``.
+  The stub is published through the unified termux-apt-repo; it downloads,
+  verifies, and unpacks the release payload on device.
 - ``repo``: generate the repository indexes, ``Release``/``InRelease``,
   ``index.html`` and ``key.gpg``, signing with the key in ``GNUPGHOME``.
 
@@ -41,11 +43,11 @@ _DEFAULT_SITE_DIR = Path("repo")
 _QUICK_START = (
     "pkg install -y gnupg\n"
     'mkdir -p "$PREFIX/etc/apt/keyrings"\n'
-    "curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \\\n"
-    '  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"\n'
-    'echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] '
-    'https://GeneralKaos666.github.io/flutter-for-termux termux main" \\\n'
-    '  > "$PREFIX/etc/apt/sources.list.d/flutter.list"\n'
+    "curl -fsSL https://generalkaos666.github.io/termux-apt-repo/key.gpg \\\n"
+    '  -o "$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg"\n'
+    'echo "deb [signed-by=$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg] '
+    'https://generalkaos666.github.io/termux-apt-repo stable main" \\\n'
+    '  > "$PREFIX/etc/apt/sources.list.d/termux-apt-repo.list"\n'
     "pkg update && pkg install flutter\n"
     "flutter doctor"
 )
@@ -67,11 +69,12 @@ _INDEX_HTML = """<!DOCTYPE html>
 <body>
 <h1>flutter-for-termux apt repository</h1>
 <p>
-  This is the apt repository for <code>flutter</code> on Termux. The signing key is
+  This is the apt repository for <code>flutter</code> on Termux, published through the
+  unified termux-apt-repo. The signing key is
   <a href="key.gpg">key.gpg</a>; the snippet below installs <code>gnupg</code>, creates the
   apt keyrings directory, stores the key as
-  <code>$PREFIX/etc/apt/keyrings/flutter.gpg</code> and adds the repository to
-  <code>$PREFIX/etc/apt/sources.list.d/flutter.list</code>.
+  <code>$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg</code> and adds the repository to
+  <code>$PREFIX/etc/apt/sources.list.d/termux-apt-repo.list</code>.
 </p>
 <h2>Quick start</h2>
 <pre><code><!--QUICK_START-->

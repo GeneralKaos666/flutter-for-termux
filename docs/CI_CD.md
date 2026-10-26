@@ -54,7 +54,6 @@ References:
 | CI | `.github/workflows/ci.yml` | `ubuntu-latest` | PR, push to `main`, manual | Python/shell/PowerShell syntax, package/docs/workflow sanity, whitespace checks |
 | Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` + `gate` (builds only when the `build.toml` tag has no published release yet) | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
 | Build deb (self-hosted) | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing (fallback) |
-| Apt repo | `.github/workflows/apt-repo.yml` | `ubuntu-latest` | `workflow_run` after `Build` completes on `main`, manual | Release guard, then build the stub + signed apt repository (a few KB) and deploy it to GitHub Pages |
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
 | Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | PR, release publish/edit, manual | Verify release asset name, size, and SHA256 digest (lightweight structural check on PRs) |
 
@@ -280,15 +279,13 @@ This workflow is safe to run on GitHub-hosted runners because it only reads publ
 - Device smoke does not run untrusted PR code automatically.
 - Release publishing requires `contents: write`: the GitHub-hosted `Build`
   workflow publishes automatically after `CI` succeeds on `main`.
-- The apt repository is signed by a **dedicated CI-only ed25519 key**, not the
-  maintainer's personal key, so it is disposable and independently rotatable.
-  Its fingerprint is
-  `C913794B447DC32D06A395E89C866C95D51C6DD3`; users pin it against the published
-  `key.gpg`. `apt-repo.yml` imports the armored private key from the
-  `APT_REPO_SIGNING_KEY` secret, clearsigns `InRelease` with
-  `APT_REPO_SIGNING_PASSPHRASE`, and exports the public half to `key.gpg`.
-  Rotation = generate a new key, update both secrets, and update the fingerprint
-  recorded here and in the README, so users re-pin once.
+- Flutter is published through the unified
+  [termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo), a
+  separate repository that signs its `InRelease` with its own key. Its
+  fingerprint is `1DED 0840 4574 B867 B058 A7BB 476F C230 ECBB FDF0`; users pin
+  it against the published `key.gpg` (see the README quick start). Rotation is
+  handled in that repository — regenerate the key, update its secrets, and
+  re-record the fingerprint there and in the README.
 
 ## Branch Protection and Repository Governance
 
@@ -345,12 +342,11 @@ Run the same checks CI runs, in this order:
    git diff --check
    ```
 
-8. Rebuild the apt repository locally (`repo` signs with the key in
-   `GNUPGHOME`, selected via `--key <fingerprint>`):
+8. Regenerate the flutter stub package locally (it is then dropped into
+   termux-apt-repo and republished there):
 
    ```bash
    python3 scripts/release/apt_repo.py stub   # → apt-repo-work/flutter_<ver>_all.deb
-   python3 scripts/release/apt_repo.py repo   # → repo/ (the site root)
    ```
 
 Manual Termux release E2E test inside Termux:

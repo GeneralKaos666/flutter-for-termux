@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stable release notes: https://docs.flutter.dev/release/release-notes/release-notes-3.47.0 (imported 2026-10-09; source verified).
 
 ### Infrastructure & CI
-- Published a GPG-signed APT repository on GitHub Pages (`.github/workflows/apt-repo.yml` + `scripts/release/apt_repo.py`): `pkg install flutter` / `apt upgrade flutter` are now the primary install path. A small `Architecture: all` stub package fetches the payload from the GitHub release, verifies its SHA256 and size, unpacks it into `$PREFIX`, and runs `post_install.sh`.
+- Moved the `pkg install flutter` / `apt upgrade flutter` install path to the unified [termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo): `scripts/release/apt_repo.py stub` generates the `Architecture: all` stub (which fetches the payload from the GitHub release, verifies its SHA256 and size, unpacks it into `$PREFIX`, and runs `post_install.sh`), and it is republished there. The repo's own GitHub Pages apt site and `.github/workflows/apt-repo.yml` were retired.
 - Lifted `compileSdk`/`targetSdk` default from 34 to 36 (fail-closed ladder 36→35→34) using Termux aapt2 16.0.0.4 (Android Build-Tools), driven by `build.toml` `[android]` and applied per-project by `post_install.sh`/`flutter_project_config.sh`.
 - Centralized installer version/package metadata in `scripts/install/versions_common.sh`, sourced by `lib_common.sh` and drift-verified against `build.toml`.
 - Modernized packages: single JDK (`openjdk-21`), `7zip`, dynamic NDK clang detection, and an `apt-mark hold aapt2` hardening with a `TERMUX_NO_HOLD_AAPT2` opt-out.
