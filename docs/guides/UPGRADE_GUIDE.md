@@ -352,27 +352,24 @@ Remember to update:
 
 ---
 
-## Step 12: Publish the apt Repository
+## Step 12: Publish the flutter Stub to termux-apt-repo
 
-Once the release carries the payload `.deb`, refresh the signed APT
-repository on GitHub Pages. `.github/workflows/apt-repo.yml` does this
-automatically when the `build` workflow completes on `main` (the default
-token suppresses `release` events, hence the `workflow_run` trigger); to
-republish manually:
+Once the release carries the payload `.deb`, regenerate the `Architecture:
+all` stub and publish it through the unified
+[termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo):
 
 ```bash
-gh workflow run apt-repo.yml
+python3 scripts/release/apt_repo.py stub
 ```
 
-- A release guard skips the job unless the `build.toml` `<tag>-<pkg_rel>`
-  release actually carries the payload `.deb`, so the metadata can never
-  advertise a package that does not exist.
-- The job runs `scripts/release/apt_repo.py stub` (control-only
-  `Architecture: all` stub) and `repo` (signed `Release`/`InRelease`,
-  `Packages`, `key.gpg`, `index.html`), then deploys to GitHub Pages.
-- One-time setup: Pages → Source = "GitHub Actions", plus the
-  `APT_REPO_SIGNING_KEY` / `APT_REPO_SIGNING_PASSPHRASE` secrets
-  (see `docs/CI_CD.md`).
+Then drop the resulting `apt-repo-work/flutter_<ver>_all.deb` into the
+termux-apt-repo `debs/` directory and republish that repository (its own
+`README.md` documents the `./termux-apt-repo debs docs stable main --sign`
+flow).
+
+- The stub fetches the payload from the GitHub release, verifies its SHA256
+  and size, and unpacks it on device, so the metadata can never advertise a
+  package that does not exist.
 - Verify on a device: `apt update && apt policy flutter` shows the new
   version.
 

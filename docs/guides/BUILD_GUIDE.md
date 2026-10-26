@@ -69,9 +69,10 @@ GitHub Actions is currently split into these tracks:
   tablet smoke test.
 - `.github/workflows/release-check.yml`: Release asset metadata / SHA256
   checks.
-- `.github/workflows/apt-repo.yml`: publishes the signed stub `.deb` and apt
-  metadata to GitHub Pages after a successful `main` build — the
-  `pkg install flutter` path.
+- The `pkg install flutter` path is served by the unified
+  [termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo): this
+  repo generates the stub with `scripts/release/apt_repo.py stub`, which is
+  dropped into that repository and republished there.
 
 See [`docs/CI_CD.md`](../CI_CD.md) for details.
 

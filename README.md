@@ -51,18 +51,19 @@ pkg install x11-repo
 
 ### 2. Install from the apt repository
 
-The package is published through a signed APT repository on GitHub Pages: the
-metadata and a small stub package live there, while the ~635 MB Flutter archive
+The package is published through the unified
+[termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo): a small
+`Architecture: all` stub package lives there, while the ~635 MB Flutter archive
 stays a GitHub release asset that the stub downloads, verifies, and unpacks for
 you.
 
 ```bash
 pkg install -y gnupg
 mkdir -p "$PREFIX/etc/apt/keyrings"
-curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
-  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
-echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
-  > "$PREFIX/etc/apt/sources.list.d/flutter.list"
+curl -fsSL https://generalkaos666.github.io/termux-apt-repo/key.gpg \
+  -o "$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg"
+echo "deb [signed-by=$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg] https://generalkaos666.github.io/termux-apt-repo stable main" \
+  > "$PREFIX/etc/apt/sources.list.d/termux-apt-repo.list"
 pkg update && pkg install flutter
 flutter doctor
 ```
@@ -73,8 +74,8 @@ are plain `pkg install flutter` / `apt upgrade flutter`.
 Verify the signing key before you trust it:
 
 ```bash
-gpg --show-keys --with-fingerprint "$PREFIX/etc/apt/keyrings/flutter.gpg"
-# fingerprint: C913794B447DC32D06A395E89C866C95D51C6DD3
+gpg --show-keys --with-fingerprint "$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg"
+# fingerprint: 1DED 0840 4574 B867 B058 A7BB 476F C230 ECBB FDF0
 ```
 
 > **Never run `flutter upgrade` on this install.** The SDK here is a
@@ -267,8 +268,9 @@ Releases build and publish themselves. The GitHub-hosted `Build` workflow
 self-hosted evidence-tracked fallback (`build-deb.yml`) and an ADB device
 smoke gate (`device-smoke.yml`) handle manual runs, and the nightly
 `autorelease.yml` picks up new Flutter stable versions and bumps
-`build.toml` for you. After a release build finishes, `apt-repo.yml`
-republishes the signed APT repository on GitHub Pages, so
+`build.toml` for you. After a release build finishes, regenerate the stub with
+`apt_repo.py stub` and publish it through the unified
+[termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo), so
 `apt upgrade flutter` picks the new version up automatically. See
 [CI/CD and device lab](docs/CI_CD.md).
 

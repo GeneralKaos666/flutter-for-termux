@@ -332,14 +332,14 @@ APK to confirm the toolchain end-to-end.
 For upgrading to a new Flutter version, follow the
 [Upgrade guide](UPGRADE_GUIDE.md).
 
-### 5. Publish the apt Repository
+### 5. Publish the flutter Stub
 
-`.github/workflows/apt-repo.yml` republishes the signed stub package and apt
-metadata on GitHub Pages whenever the `build` workflow completes on `main`
-(plus manual dispatch: `gh workflow run apt-repo.yml`). A release guard skips
-the job unless the `build.toml` tag release carries the payload `.deb`.
-One-time setup: Pages → Source = "GitHub Actions" and the
-`APT_REPO_SIGNING_KEY` / `APT_REPO_SIGNING_PASSPHRASE` secrets.
+The `pkg install flutter` path is served by the unified
+[termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo). After the
+release carries the payload `.deb`, regenerate the stub with
+`scripts/release/apt_repo.py stub` and drop the resulting
+`flutter_<ver>_all.deb` into termux-apt-repo's `debs/`, then republish that
+repository.
 
 ---
 
@@ -360,7 +360,7 @@ flutter-for-termux/
 │   ├── ci/               # lightweight contract checks (e.g. check_repo.py)
 │   ├── device/           # ADB → Termux smoke automation
 │   ├── install/          # post_install.sh (on-device) + install.sh one-click
-│   ├── release/          # apt repo builder: apt_repo.py + stub/ maintainer scripts
+│   ├── release/          # flutter stub builder: apt_repo.py + stub/ maintainer scripts
 │   └── test/             # Release E2E smoke scripts (gh_e2e_test.sh)
 ├── docs/
 │   ├── CI_CD.md          # CI/CD and device-lab guide
