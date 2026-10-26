@@ -918,7 +918,7 @@ class RepoTest(unittest.TestCase):
             'mkdir -p "$PREFIX/etc/apt/keyrings"',
             "pkg install flutter",
             "key.gpg",
-            "termux main",
+            "stable main",
             "https://github.com/GeneralKaos666/flutter-for-termux#quick-start",
         ):
             self.assertIn(needle, page)
@@ -985,34 +985,6 @@ class CiContractTest(unittest.TestCase):
         assert "/apt-repo-work/" in gitignore and "/repo/" in gitignore
 
 
-class PagesWorkflowTest(unittest.TestCase):
-    def test_apt_repo_workflow_contract(self):
-        wf = yaml.safe_load(Path(".github/workflows/apt-repo.yml").read_text())
-        on = wf.get("on") or wf.get(True)      # YAML 1.1 parses bare `on` as True
-        assert set(on) == {"workflow_run", "workflow_dispatch"}   # Review Focus 1:
-        assert "release" not in on             # GITHUB_TOKEN suppresses release events
-        assert on["workflow_run"] == {"workflows": ["build"], "types": ["completed"],
-                                      "branches": ["main"]}
-        build, deploy = wf["jobs"]["build"], wf["jobs"]["deploy"]
-        steps = [s.get("uses") or s.get("name", "") for s in build["steps"]]
-        joined = str(build["steps"])
-        assert "Release guard" in joined                       # skips absent releases
-        assert "apt_repo.py stub" in joined and "apt_repo.py repo" in joined
-        assert any(u.startswith("actions/upload-pages-artifact@v5") for u in steps)
-        assert build["steps"][-1]["with"]["path"] == "repo"
-        assert deploy["needs"] == "build"
-        assert "needs.build.outputs.publish" in str(deploy.get("if", ""))
-        assert deploy["permissions"] == {"pages": "write", "id-token": "write"}
-        assert deploy["environment"]["name"] == "github-pages"
-        assert any(u.startswith("actions/deploy-pages@v5")
-                   for u in [s.get("uses", "") for s in deploy["steps"]])
-        # Read the raw text for this one: repr() of the parsed steps quotes every
-        # scalar, so the `key: value` pairing is only visible in the source GitHub
-        # actually reads (the file is asserted verbatim elsewhere in the contract).
-        assert ("APT_REPO_SIGNING_KEY: ${{ secrets.APT_REPO_SIGNING_KEY }}"
-                in Path(".github/workflows/apt-repo.yml").read_text())
-
-
 class DocsContractTest(unittest.TestCase):
     """The documented user-facing flow: apt first, installer deprecated (§6)."""
 
@@ -1022,9 +994,9 @@ class DocsContractTest(unittest.TestCase):
         # the quick start and is the sentinel for "still in the recommended flow".
         quick = readme.split("## Quick start")[1].split("## Manual install")[0]
         for needle in (
-            "https://GeneralKaos666.github.io/flutter-for-termux",
+            "https://generalkaos666.github.io/termux-apt-repo",
             "key.gpg",
-            "sources.list.d/flutter.list",
+            "sources.list.d/termux-apt-repo.list",
             "pkg install flutter",
         ):
             assert needle in quick
@@ -1043,6 +1015,5 @@ class DocsContractTest(unittest.TestCase):
         agents = Path("AGENTS.md").read_text()
         assert "scripts/release/apt_repo.py" in agents
         cicd = Path("docs/CI_CD.md").read_text()
-        assert "apt-repo.yml" in cicd and "APT_REPO_SIGNING_KEY" in cicd
-        assert "APT_REPO_SIGNING_PASSPHRASE" in cicd
-        assert "fingerprint" in cicd.lower()  # Task 1's value lands here
+        assert "termux-apt-repo" in cicd
+        assert "fingerprint" in cicd.lower()  # the termux-apt-repo signing key

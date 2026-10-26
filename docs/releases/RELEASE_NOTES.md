@@ -47,10 +47,10 @@ README before trusting the key):
 ```bash
 pkg install -y gnupg
 mkdir -p "$PREFIX/etc/apt/keyrings"
-curl -fsSL https://GeneralKaos666.github.io/flutter-for-termux/key.gpg \
-  | gpg --dearmor > "$PREFIX/etc/apt/keyrings/flutter.gpg"
-echo "deb [signed-by=$PREFIX/etc/apt/keyrings/flutter.gpg] https://GeneralKaos666.github.io/flutter-for-termux termux main" \
-  > "$PREFIX/etc/apt/sources.list.d/flutter.list"
+curl -fsSL https://generalkaos666.github.io/termux-apt-repo/key.gpg \
+  -o "$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg"
+echo "deb [signed-by=$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg] https://generalkaos666.github.io/termux-apt-repo stable main" \
+  > "$PREFIX/etc/apt/sources.list.d/termux-apt-repo.list"
 pkg update && pkg install flutter
 flutter doctor
 ```
