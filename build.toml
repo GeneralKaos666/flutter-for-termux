@@ -16,6 +16,11 @@ version = '30.0.14206865' # r30 from HomuHomu833
 [build]
 arch = ['arm64']       # arm, arm64, x86, x64
 runtime = ['release']  # debug, release, profile; the deb packages only these modes' artifacts
+# Android-target gen_snapshot modes. `flutter build apk --release/--profile`
+# AOT-compiles Dart with an Android-configured gen_snapshot (compressed
+# pointers, target_os=android); the Linux desktop gen_snapshot cannot be reused
+# for Android. Only AOT modes matter here (debug is JIT, no gen_snapshot).
+android_runtime = ['release', 'profile']
 gclient = './.gclient'
 
 [android]

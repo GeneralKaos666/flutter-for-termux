@@ -175,9 +175,7 @@ python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
 ```
 
-There is no separate Android gen_snapshot build step — the same Linux
-`gen_snapshot` produced here is reused on-device for `flutter build apk`
-(see [What Ships in the deb](#5-what-ships-in-the-deb)).
+An Android-target `gen_snapshot` is built for `flutter build apk --release/--profile` (see [What Ships in the deb](#5-what-ships-in-the-deb)). The Linux desktop `gen_snapshot` is not used for Android AOT on this target; `post_install.sh` resolves and provisions it. Debug uses JIT.
 
 > **Note:** the `build()` ninja invocation includes
 > `flutter/build/archives:dart_sdk_archive` (plus `flutter_patched_sdk` and

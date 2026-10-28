@@ -91,6 +91,7 @@ class Build:
         self.repo = repo or 'https://github.com/flutter/flutter'
         self.arch = arch or 'arm64'
         self.mode = mode or 'debug'
+        self.android_runtime = cfg['build'].get('android_runtime') or self.mode
         self.sysroot = Sysroot(path=path/syspath, **sysroot_cfg)
         self.root = path/root
         self.gclient = path/gclient
@@ -164,37 +165,17 @@ class Build:
         repo = git.Repo(path)
         repo.git.apply([file])
 
-    def configure(
-        self,
-        arch: str,
-        mode: str,
-        api: int = None,
-        root: str = None,
-        sysroot: str = None,
-        toolchain: str = None,
-    ):
-        root = root or self.root
-        api = api or self.api
-        sysroot = os.path.abspath(sysroot or self.sysroot.path)
-        toolchain = os.path.abspath(toolchain or self.toolchain)
+    def _termux_gn_args(self, api, sysroot, toolchain):
+        """GN args shared by the Linux and Android engine configurations.
+
+        Both targets compile with the Termux toolchain (aarch64 Bionic, via
+        ``--target=aarch64-linux-android<api>``) so their host binaries run on
+        Termux. The args are identical for the two configurations; only the
+        ``--linux``/``--android`` target selector in ``gn`` differs.
+        """
         vulkan = ndk_vulkan_include(toolchain)
         stubs = termux_stubs_dir()
-        cmd = [
-            'vpython3',
-            'engine/src/flutter/tools/gn',
-            '--linux',
-            '--linux-cpu', arch,
-            '--enable-fontconfig',
-            '--no-goma',
-            '--no-backtrace',
-            '--clang',
-            '--lto',
-            '--no-enable-unittests',
-            '--no-build-embedder-examples',
-            '--no-prebuilt-dart-sdk',
-            '--target-toolchain', toolchain,
-            '--runtime-mode', mode,
-            '--no-build-glfw-shell',
+        return [
             '--gn-args', 'symbol_level=0',
             '--gn-args', 'arm_use_neon=false',
             '--gn-args', 'arm_optionally_use_neon=true',
@@ -225,7 +206,81 @@ class Build:
             '--gn-args',
             f'extra_cflags_cc={gn_list([f"-I{vulkan}", f"-I{stubs}", "-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__", "-Wno-newline-eof"])}',
         ]
+
+    def configure(
+        self,
+        arch: str,
+        mode: str,
+        api: int = None,
+        root: str = None,
+        sysroot: str = None,
+        toolchain: str = None,
+    ):
+        root = root or self.root
+        api = api or self.api
+        sysroot = os.path.abspath(sysroot or self.sysroot.path)
+        toolchain = os.path.abspath(toolchain or self.toolchain)
+        cmd = [
+            'vpython3',
+            'engine/src/flutter/tools/gn',
+            '--linux',
+            '--linux-cpu', arch,
+            '--enable-fontconfig',
+            '--no-goma',
+            '--no-backtrace',
+            '--clang',
+            '--lto',
+            '--no-enable-unittests',
+            '--no-build-embedder-examples',
+            '--no-prebuilt-dart-sdk',
+            '--target-toolchain', toolchain,
+            '--runtime-mode', mode,
+            '--no-build-glfw-shell',
+            *self._termux_gn_args(api, sysroot, toolchain),
+        ]
         logger.info(f'running gn configure: arch={arch} mode={mode}')
+        subprocess.run(cmd, cwd=root, check=True)
+
+    def configure_android(
+        self,
+        arch: str,
+        mode: str,
+        api: int = None,
+        root: str = None,
+        sysroot: str = None,
+        toolchain: str = None,
+    ):
+        """Configure an Android-target engine build for the ``gen_snapshot`` tool.
+
+        The Linux desktop engine's gen_snapshot produces AOT snapshots the
+        Android runtime VM rejects (``target_os=linux``, no compressed
+        pointers). ``flutter build apk --release/--profile`` therefore needs a
+        gen_snapshot built with ``target_os=android`` and compressed pointers,
+        which ``--android`` provides. Only the gen_snapshot binary is built
+        from this configuration (see :meth:`build_android`); the Android
+        embedding itself is published separately.
+        """
+        root = root or self.root
+        api = api or self.api
+        sysroot = os.path.abspath(sysroot or self.sysroot.path)
+        toolchain = os.path.abspath(toolchain or self.toolchain)
+        cmd = [
+            'vpython3',
+            'engine/src/flutter/tools/gn',
+            '--android',
+            '--android-cpu', arch,
+            '--no-goma',
+            '--no-backtrace',
+            '--clang',
+            '--lto',
+            '--no-enable-unittests',
+            '--no-build-embedder-examples',
+            '--no-prebuilt-dart-sdk',
+            '--target-toolchain', toolchain,
+            '--runtime-mode', mode,
+            *self._termux_gn_args(api, sysroot, toolchain),
+        ]
+        logger.info(f'running gn configure (android): arch={arch} mode={mode}')
         subprocess.run(cmd, cwd=root, check=True)
 
     def build(self, arch: str, mode: str, root: str = None, jobs: int = None):
@@ -243,6 +298,26 @@ class Build:
         if jobs:
             cmd.append(f'-j{jobs}')
         logger.info(f'running: {" ".join(cmd)}')
+        subprocess.run(cmd, check=True)
+
+    def build_android(self, arch: str, mode: str, root: str = None, jobs: int = None):
+        """Build only the Android-target gen_snapshot from an ``--android`` build.
+
+        ``flutter build apk --release/--profile`` AOT-compiles Dart with a
+        gen_snapshot whose VM matches the Android embedding (compressed
+        pointers, ``target_os=android``). The Linux desktop gen_snapshot cannot
+        be reused, so this target is built separately and shipped under
+        ``artifacts/engine/linux-arm64-android-{mode}/``.
+        """
+        require_tools('ninja')
+        root = root or self.root
+        cmd = [
+            'ninja', '-C', utils.android_target_output(root, arch, mode),
+            'flutter/third_party/dart/runtime/bin:gen_snapshot',
+        ]
+        if jobs:
+            cmd.append(f'-j{jobs}')
+        logger.info(f'running (android gen_snapshot): {" ".join(cmd)}')
         subprocess.run(cmd, check=True)
 
     def debuild(self, arch: str, output: str = None, root: str = None, **conf):
@@ -284,6 +359,9 @@ class Build:
             for mode in self.mode:
                 self.configure(arch=arch, mode=mode)
                 self.build(arch=arch, mode=mode)
+            for mode in self.android_runtime:
+                self.configure_android(arch=arch, mode=mode)
+                self.build_android(arch=arch, mode=mode)
             self.debuild(arch=arch, output=self.output(arch))
 
 
