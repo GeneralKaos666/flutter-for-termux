@@ -99,4 +99,4 @@ pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 [package]
 conf = './package.yaml'
 path = 'release'  # gitignored; created on demand by Build.output()
-pkg_rel = '6'  # Debian packaging revision suffix (3.47.7-6 adds the opt-in `post_install.sh --provision-ndk` NDK provisioning for the apt path; 3.47.7-5 shipped the review-fix batch: newline-free engine version, valid flutter_settings JSON, honest snapshot banners, non-interactive --yes, flutter_project_config in the deb, deb under release/)
+pkg_rel = '7'  # Debian packaging revision suffix (3.47.7-6 adds the opt-in `post_install.sh --provision-ndk` NDK provisioning for the apt path; 3.47.7-5 shipped the review-fix batch: newline-free engine version, valid flutter_settings JSON, honest snapshot banners, non-interactive --yes, flutter_project_config in the deb, deb under release/)
