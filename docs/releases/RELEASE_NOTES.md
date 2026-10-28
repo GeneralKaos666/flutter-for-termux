@@ -31,9 +31,9 @@ Installing `3.47.8-5` over `3.47.8-4` is a drop-in replacement — follow the [I
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.47.8-6_aarch64.deb` |
-| Size | 678,847,056 bytes (~647 MiB) |
-| SHA256 | `9abd5b3048202475407804618605d49861aec73da414a1223db2f0cfc3f2fe90` |
+| Package | `flutter_3.47.8-7_aarch64.deb` |
+| Size | 640,495,672 bytes (~611 MiB) |
+| SHA256 | `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474` |
 | Flutter | 3.47.8 |
 | Flutter Tools Dart | 3.13.7 |
 | Dart VM | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
@@ -70,8 +70,8 @@ Fallback: download the payload from this release manually:
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.8/flutter_3.47.8-6_aarch64.deb
-dpkg -i flutter_3.47.8-6_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.8/flutter_3.47.8-7_aarch64.deb
+dpkg -i flutter_3.47.8-7_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
