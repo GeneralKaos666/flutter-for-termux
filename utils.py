@@ -32,6 +32,19 @@ def target_output(root: str, arch: str, mode: str, opted: bool = True):
     return os.path.join(root, 'engine', 'src', 'out', dest)
 
 
+def android_target_output(root: str, arch: str, mode: str):
+    """GN output dir for an Android-target build (``--android``).
+
+    Distinct from :func:`target_output` because the Linux desktop engine's
+    ``gen_snapshot`` produces ``target_os=linux``/``no-compressed-pointers``
+    AOT snapshots, which the Android runtime VM rejects. The Android gen_snapshot
+    must be built separately (``--android --android-cpu <arch>``) and packaged
+    under its own output directory.
+    """
+    root = os.path.abspath(os.path.expanduser(root))
+    return os.path.join(root, 'engine', 'src', 'out', f'android_{mode}_{arch}')
+
+
 def flutter_tag(root: str):
     if not os.path.isdir(root):
         return None

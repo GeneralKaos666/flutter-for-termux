@@ -107,6 +107,26 @@ resource:
       file: $remote/linux-$arch-profile/linux-$arch-flutter-gtk.zip
       path: $eng
 
+  # Android-target gen_snapshot. The Linux desktop gen_snapshot produces AOT
+  # snapshots the Android runtime rejects (target_os=linux, no compressed
+  # pointers), so `flutter build apk --release/--profile` needs a gen_snapshot
+  # built with `--android` (compressed pointers, target_os=android). It is
+  # packaged under a path flutter's cache materialization never writes, and
+  # resolved by the post_install.sh `artifacts` patch.
+  android_gen_snapshot_release:
+    source: $out/gen_snapshot
+    output: $eng/linux-arm64-android-release/gen_snapshot
+    define:
+      eng: *eng
+      out: output.android_release
+
+  android_gen_snapshot_profile:
+    source: $out/gen_snapshot
+    output: $eng/linux-arm64-android-profile/gen_snapshot
+    define:
+      eng: *eng
+      out: output.android_profile
+
   flutter_patched_sdk: &sdk
     source:
       - $out/flutter_patched_sdk/platform_strong.dill
