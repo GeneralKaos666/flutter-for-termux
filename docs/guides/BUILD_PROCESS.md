@@ -58,7 +58,7 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 | 2. Patches | (automatic during `sync`) | Manual `build.py patch --file=...` only to re-test/rebase against a fresh checkout |
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
 | 4. Build Linux components | `build.py configure --arch=arm64 --mode=release` + `build.py build --arch=arm64 --mode=release` | The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
-| 5. Android gen_snapshot | (none) | Standard builds ship gen_snapshot in the deb artifacts; no separate Android configure/build step is required |
+| 5. Android gen_snapshot | `configure_android()` / `build_android()` (`--android --android-cpu arm64`, target `flutter/third_party/dart/runtime/bin:gen_snapshot`) | Shipped for release/profile as `linux-arm64-android-{release,profile}/gen_snapshot`; post-install resolves/provisions it for `flutter build apk`. |
 | 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.47.8-6_aarch64.deb` |
 
 ---
