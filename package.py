@@ -328,11 +328,16 @@ class ResourceDispatcher:
 class Output:
     def __init__(self, root, arch):
         self.any = None
+        self.android_any = None
         for mode in utils.__MODE__:
             out = utils.target_output(root, arch, mode)
             self.__dict__[mode] = out
             if not self.any and Path(out).is_dir():
                 self.any = out
+            aout = utils.android_target_output(root, arch, mode)
+            self.__dict__[f'android_{mode}'] = aout
+            if not self.android_any and Path(aout).is_dir():
+                self.android_any = aout
 
         if not self.any:
             raise ValueError('no valid out path found.')

@@ -1984,13 +1984,12 @@ class HostPlatformSymlinkTest(unittest.TestCase):
     """Fresh-install regression for post_install.sh step [15/17].
 
     flutter_tools resolves the AOT gen_snapshot for android targets to
-    ``<engine>/android-arm64-{release,profile}/linux-arm64/gen_snapshot``,
-    while flutter's cache only creates those ``android-*`` directories on its
-    first artifact download - which happens during the first
-    ``flutter build apk``, i.e. *after* post_install.sh has run. Step 15 used
-    to skip missing directories, so the very first build of a fresh install
-    failed with ``Failed to find .../android-arm64-release/linux-arm64/
-    gen_snapshot``. It must now provision the directories itself.
+    ``<engine>/android-arm64-{release,profile}/<host>/gen_snapshot``, while
+    flutter's cache only creates those ``android-*`` directories on its first
+    artifact download - which happens during the first ``flutter build apk``,
+    i.e. *after* post_install.sh has run. Step 15 must provision the
+    directories itself and point them at the shipped Android-target
+    gen_snapshot (``linux-arm64-android-{mode}``), not the Linux desktop one.
     """
 
     STEP15_START = 'echo "[15/17] Creating host platform symlinks..."'
@@ -2009,8 +2008,10 @@ class HostPlatformSymlinkTest(unittest.TestCase):
 
     def _fresh_engine_dir(self, root):
         engine = Path(root) / 'bin' / 'cache' / 'artifacts' / 'engine'
-        (engine / 'linux-arm64').mkdir(parents=True)
-        (engine / 'linux-arm64' / 'gen_snapshot').write_text('fake')
+        for mode in ('release', 'profile'):
+            src = engine / f'linux-arm64-android-{mode}'
+            src.mkdir(parents=True)
+            (src / 'gen_snapshot').write_text(f'android-{mode}')
         return engine
 
     def _run_step15(self, root):
@@ -2026,12 +2027,15 @@ class HostPlatformSymlinkTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             engine = self._fresh_engine_dir(root)
             self._run_step15(root)
-            for name in ('android-arm64-release', 'android-arm64-profile'):
+            for mode in ('release', 'profile'):
+                name = f'android-arm64-{mode}'
                 link = engine / name / 'linux-arm64'
                 self.assertTrue(link.is_symlink(), f'{name}/linux-arm64 missing')
-                self.assertEqual(os.readlink(link), '../linux-arm64')
                 self.assertEqual(
-                    (link / 'gen_snapshot').read_text(), 'fake'
+                    os.readlink(link), f'../linux-arm64-android-{mode}'
+                )
+                self.assertEqual(
+                    (link / 'gen_snapshot').read_text(), f'android-{mode}'
                 )
 
     def test_is_idempotent_and_leaves_real_directories_untouched(self):
@@ -2047,12 +2051,13 @@ class HostPlatformSymlinkTest(unittest.TestCase):
             self.assertIn('leaving untouched', third.stdout)
             self.assertFalse(real.is_symlink())
 
-    def test_skips_when_deb_gen_snapshot_is_missing(self):
+    def test_skips_when_android_gen_snapshot_is_missing(self):
         with tempfile.TemporaryDirectory() as root:
             engine = Path(root) / 'bin' / 'cache' / 'artifacts' / 'engine'
             engine.mkdir(parents=True)
             self._run_step15(root)
             self.assertFalse((engine / 'android-arm64-release').exists())
+            self.assertFalse((engine / 'android-arm64-profile').exists())
 
 
 if __name__ == '__main__':

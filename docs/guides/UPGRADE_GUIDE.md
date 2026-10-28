@@ -262,7 +262,7 @@ python3 build.py build --arch=arm64 --mode=profile
 > the standard build via `flutter/build/archives:dart_sdk_archive` (no
 > separate `build_dart` step in the FFT pipeline).
 >
-> ✔️ Android gen_snapshot needs no separate build either: the standard
+> ✔️ Android gen_snapshot: dedicated Android-target build is required (release/profile) as of this change. The standard
 > `build()` produces the Linux engine targets, and Android APK builds on
 > Termux use the gen_snapshot shipped in the deb package's artifacts.
 > Only ARM64 → ARM64 works; ARM32 and x64 targets cannot be compiled
