@@ -16,8 +16,7 @@ installing you will have:
 |------|-------|
 | Flutter | 3.47.8 |
 | Flutter Tools Dart | 3.13.7 |
-| Dart VM (`dartvm`) | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
-
+| Dart VM (`dartvm`) | Dart 3.13.7 (`linux_arm64`) |
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
 | deb size | 640,495,672 bytes (about 611 MiB) |
 | SHA256 | `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474` |
@@ -98,15 +97,15 @@ Run each step in order inside Termux.
    ```bash
    cd ~
    wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.8/flutter_3.47.8-7_aarch64.deb
+   # Confirm the output matches: eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474
    sha256sum flutter_3.47.8-7_aarch64.deb
    ```
 
    Expected output — the hash must match exactly:
 
    ```text
-   3f62be6aad385092b3c4dd760080279c4b78ab292822c3fec8ba764eb88208a6  flutter_3.47.8-7_aarch64.deb
+   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.47.8-7_aarch64.deb
    ```
-   # Confirm the output matches: eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474
 
 3. Install the package and repair any missing dependencies:
 
@@ -146,11 +145,12 @@ These two warnings are normal and can be ignored:
 
 | Category | Details |
 |----------|---------|
-| Dart | Runs the Flutter CLI with Termux JIT Dart, keeping the engine `dartvm` / `dartaotruntime` for snapshots |
+| Dart | Keeps the engine-built `dart`, `dartvm`, and `dartaotruntime` in the SDK cache so the Flutter CLI and its snapshots stay in step |
 | Flutter Tools | Patches the Android/Termux host lookup and clears stale `flutter_tools` snapshots/cache |
 | Gradle plugin | ARM64-only ABI; adds the `PLATFORM_ABI_LIST` that Flutter 3.44 needs |
-| Android SDK | Installs/patches API 34/36, cmdline-tools, build-tools, licenses |
+| Android SDK | Installs/patches API 36 (falling back 36 → 35 → 34), cmdline-tools, build-tools, licenses |
 | NDK | Configures the clang driver and host-tag aliases, patches the CMake toolchain, replaces objcopy/strip |
+| AOT `gen_snapshot` | Points `flutter build apk` at the Android-target `gen_snapshot` shipped in the package, and keeps the per-build symlinks as a fallback |
 | Linux desktop | Enables `flutter build linux` to run on the Termux host |
 
 ---
@@ -162,15 +162,16 @@ Run all four checks:
 ```bash
 flutter --version
 dart --version
-dartvm --version
+$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dartvm --version
 flutter doctor -v
 ```
 
 Expected highlights:
 
 - `flutter --version` shows Flutter 3.47.8.
-- `dart --version` shows `android_arm64` (Termux JIT Dart).
-- `dartvm --version` shows `linux_arm64` (engine VM).
+- `dart --version` shows Dart 3.13.7 on `linux_arm64` (the SDK's own Dart).
+- The SDK's `dartvm` shows Dart 3.13.7 on `linux_arm64` (the engine VM). It is
+  not on `PATH`; use the full path above.
 - `flutter doctor -v` may show the two expected warnings listed above.
 
 ---
@@ -401,7 +402,35 @@ Each entry below shows the exact error (**Symptom**), why it happens
   CMake module (`jni` 1.0.0) on-device, so the build proceeds once the
   toolchain file is back.
 
-### First build fails: `gen_snapshot` not found (host symlink dropped)
+### Release APK builds but shows a blank screen
+
+- **Symptom:** `flutter build apk --release` completes and the APK installs,
+  but the app opens to a white/blank screen; logcat may report an unexpected
+  kernel or unhandled snapshot format.
+- **Cause:** Android AOT snapshots must be produced by a `gen_snapshot` built
+  for Android (`target_os=android`, compressed pointers). The Linux desktop
+  `gen_snapshot` shipped in packages up to `3.47.8-6` produces snapshots the
+  Android VM rejects ([issue #41](https://github.com/GeneralKaos666/flutter-for-termux/issues/41)).
+- **Fix (`3.47.8-7` and newer):** upgrade, re-run post-install, and rebuild:
+
+  ```bash
+  apt upgrade flutter
+  bash $PREFIX/share/flutter/post_install.sh
+  cd myapp && flutter clean
+  flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
+  ```
+
+  `3.47.8-7` ships the Android-target binary at
+  `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`,
+  and post-install patches `flutter_tools` to resolve it directly (marker
+  `Termux: prefer package-shipped aarch64 gen_snapshot`). Confirm it is
+  present with:
+
+  ```bash
+  ls -l $PREFIX/opt/flutter/bin/cache/artifacts/engine/linux-arm64-android-release/gen_snapshot
+  ```
+
+### First build fails: `gen_snapshot` not found
 
 - **Symptom:** the first `flutter build apk --release` after a (re)install
   fails during AOT with:
@@ -411,20 +440,20 @@ Each entry below shows the exact error (**Symptom**), why it happens
   Failed to find ".../engine/android-arm64-release/linux-arm64/gen_snapshot" in the search path.
   ```
 
-- **Cause:** the first build materializes Flutter's engine artifacts and
-  recreates the `android-arm64-*` directories, dropping the
-  `linux-arm64` → `../linux-arm64` host symlink that post-install creates
-  (step 15). The `linux-x64` copy upstream ships is x86-64 and cannot run on
-  this device, so AOT cannot find a runnable `gen_snapshot`.
-- **Fix (3.47.8-6 and newer):** nothing to do — post-install now patches
-  flutter_tools to resolve `gen_snapshot` directly to the ARM64 binary
-  shipped in the package (marker `Termux: prefer package-shipped aarch64
-  gen_snapshot`), in a directory Flutter's first-run materialization never
-  touches. Verified end-to-end: with the symlinks removed and the
-  materialization triggered, `flutter build apk --release` produces the APK.
-- **Fix (3.47.8-5 and older):** upgrade via apt (`pkg install flutter`), or
-  re-run post-install (recreates the symlink), then build again — this
-  exact sequence is verified to produce `app-release.apk`:
+- **Cause:** Flutter's first-run artifact materialization recreates the
+  `android-arm64-*` directories and drops the `linux-arm64` symlink that
+  post-install creates (step 15). Upstream only puts an x86-64 binary there,
+  which cannot run on ARM64 Termux.
+- **Fix (`3.47.8-6` and newer):** nothing to do for this failure. Post-install
+  resolves `gen_snapshot` to the package-shipped ARM64 binary, in a directory
+  Flutter never writes, so the first build completes. The step-15 symlinks
+  remain only as a fallback.
+- **Heads-up (`3.47.8-6` only):** that package shipped the *Linux* ARM64
+  `gen_snapshot` for this path, so the build succeeded but the release APK
+  white-screened. `3.47.8-7` ships the Android-target binary — see
+  [Release APK builds but shows a blank screen](#release-apk-builds-but-shows-a-blank-screen).
+- **Fix (`3.47.8-5` and older):** upgrade to the current package, or re-run
+  post-install to recreate the symlink, then build again:
 
   ```bash
   bash $PREFIX/share/flutter/post_install.sh

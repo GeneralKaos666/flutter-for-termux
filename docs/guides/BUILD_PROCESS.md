@@ -59,7 +59,7 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
 | 4. Build Linux components | `build.py configure --arch=arm64 --mode=release` + `build.py build --arch=arm64 --mode=release` | The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
 | 5. Android gen_snapshot | `configure_android()` / `build_android()` (`--android --android-cpu arm64`, target `flutter/third_party/dart/runtime/bin:gen_snapshot`) | Shipped for release/profile as `linux-arm64-android-{release,profile}/gen_snapshot`; post-install resolves/provisions it for `flutter build apk`. |
-| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.47.8-6_aarch64.deb` |
+| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.47.8-7_aarch64.deb` |
 
 ---
 
@@ -69,24 +69,25 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         WSL Build Environment                  │
+│                     Linux x86-64 build host                     │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │ Dart SDK    │  │ Flutter     │  │ gen_snapshot            │  │
-│  │ (ARM64)     │  │ Engine      │  │ (Linux ARM64, reused    │  │
-│  │             │  │ (ARM64)     │  │  on-device for Android) │  │
+│  │ (ARM64)     │  │ engine      │  │ Linux: desktop AOT      │  │
+│  │             │  │ (ARM64)     │  │ Android: APK AOT        │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 │         │               │                    │                   │
 │         └───────────────┴────────────────────┘                   │
 │                         │                                        │
-│                    [Package deb]                                │
+│                    [package .deb]                                │
 │                         │                                        │
 └─────────────────────────┼────────────────────────────────────────┘
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Termux Runtime Environment               │
+│                 Termux runtime on Android / ARM64               │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ Our deb     │  │ Android SDK │  │ ARM64 NDK               │  │
-│  │ (built)     │  │ (downloaded)│  │ (downloaded)            │  │
+│  │ our .deb    │  │ Android SDK │  │ ARM64 NDK               │  │
+│  │ (installed) │  │ (Termux     │  │ (opt-in download)       │  │
+│  │             │  │  packages)  │  │                         │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 │         │               │                    │                   │
 │         └───────────────┴────────────────────┘                   │
@@ -104,10 +105,11 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 
 | Component | File | Size | Purpose |
 |------|------|------|------|
-| **Dart CLI** | `dart-sdk/bin/dart` | ~50MB | Flutter CLI; post-install replaces it with Termux JIT Dart |
+| **Dart CLI** | `dart-sdk/bin/dart` | ~50MB | Flutter CLI |
 | **Dart VM** | `dart-sdk/bin/dartvm`, `dartaotruntime` | ~50MB | Runs engine snapshots / AOT runtime |
 | **Flutter Engine** | `libflutter_linux_gtk.so` | ~106MB | Linux desktop runtime |
-| **gen_snapshot** | `linux-arm64/gen_snapshot` | ~30MB | `flutter build linux` directly; `flutter build apk` via the on-device `post_install.sh` symlink |
+| **gen_snapshot (Linux)** | `linux-arm64/gen_snapshot` | ~7MB | `flutter build linux` |
+| **gen_snapshot (Android)** | `android_{release,profile}_arm64/gen_snapshot` → `linux-arm64-android-{release,profile}/` | ~5MB | `flutter build apk --release/--profile` |
 | **impellerc** | `impellerc` | ~20MB | Shader compiler |
 | **const_finder** | `const_finder.dart.snapshot` | ~1MB | Icon tree shaking |
 
@@ -115,9 +117,9 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 
 | Source | Component | Purpose |
 |------|------|------|
-| [mumumusuc/termux-android-sdk](https://github.com/mumumusuc/termux-android-sdk) | aapt2, d8, build-tools | Android build tools |
-| [lzhiyong/termux-ndk](https://github.com/lzhiyong/termux-ndk) | ARM64 NDK (clang, linker) | Native compilation |
-| Google Storage | Dart snapshots (dds_aot, etc.) | Hot reload support |
+| [HomuHomu833/android-ndk-custom](https://github.com/HomuHomu833/android-ndk-custom) | aarch64 NDK repack (r30) | Native compilation; opt-in via `post_install.sh --provision-ndk` |
+| Termux packages | aapt2, d8, aidl, apksigner | APK packaging (`post_install.sh` assembles the SDK side) |
+| Google Storage | Dart SDK snapshots (dds_aot, etc.) | Hot reload support |
 
 ### Applied Patches
 
@@ -261,11 +263,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.47.8-6_aarch64.deb /sdcard/Download/
+adb push flutter_3.47.8-7_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.47.8-6_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.47.8-7_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -314,13 +316,13 @@ Confirm that the version numbers in the following files are consistent:
 
 ```bash
 # Final artifact location
-release/flutter_3.47.8-6_aarch64.deb
+release/flutter_3.47.8-7_aarch64.deb
 ```
 
 ### 3. Upload to GitHub Releases
 
 1. Create a new Release: `3.47.8`
-2. Upload the deb file: `flutter_3.47.8-6_aarch64.deb`
+2. Upload the deb file: `flutter_3.47.8-7_aarch64.deb`
 3. Fill in the Release Notes
 
 ### 4. Verify the Release

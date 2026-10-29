@@ -26,7 +26,7 @@ computer in sight.
 | Flutter   | 3.47.8 (stable) |
 | Dart      | 3.13.7 |
 | Architecture | aarch64 (ARM64) only |
-| Package   | `flutter_3.47.8-6_aarch64.deb` |
+| Package   | `flutter_3.47.8-7_aarch64.deb` |
 
 Every release ships with checksums and build evidence so you can verify
 exactly what you installed:
@@ -53,7 +53,7 @@ pkg install x11-repo
 
 The package is published through the unified
 [termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo): a small
-`Architecture: all` stub package lives there, while the ~635 MB Flutter archive
+`Architecture: all` stub package lives there, while the ~640 MB Flutter archive
 stays a GitHub release asset that the stub downloads, verifies, and unpacks for
 you.
 
@@ -91,7 +91,7 @@ Prefer to see every step? Do it by hand.
 
 ```bash
 TAG=3.47.8
-PKG_REL=6
+PKG_REL=7
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
@@ -242,23 +242,36 @@ Open `http://localhost:8080` in your browser and you're live.
 ## Build the package from source
 
 Want to compile Flutter yourself? Run the full pipeline on a Linux x86-64
-host (WSL2 or a self-hosted runner) with NDK r29, `dpkg`, and `ar`:
+host (WSL2 or a self-hosted runner) with NDK r30, `dpkg`, and `ar`:
 
 ```bash
 python3 -m pip install -r requirements.txt
-export ANDROID_NDK=/opt/android-ndk-r29
+export ANDROID_NDK=/opt/android-ndk-r30
 
 python3 build.py clone
 python3 build.py sync
 python3 build.py sysroot --arch=arm64
+
+# Linux desktop engine: Dart SDK, GTK library, and `gen_snapshot` for `flutter build linux`
 python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
+
+# Android-target `gen_snapshot` for `flutter build apk` (release + profile AOT)
+python3 build.py configure_android --arch=arm64 --mode=release
+python3 build.py build_android --arch=arm64 --mode=release
+python3 build.py configure_android --arch=arm64 --mode=profile
+python3 build.py build_android --arch=arm64 --mode=profile
+
 python3 build.py debuild --arch=arm64
 ```
 
 Budget roughly 2-4 hours on 24 threads. Patches apply automatically during
 `sync` via the `.gclient` `custom_hooks`, so don't run a `patch_*` step
-right after (it fails with "already exists"). The
+right after (it fails with "already exists").
+
+The two `gen_snapshot` builds cannot be swapped: the Linux desktop one emits
+`target_os=linux` snapshots, which the Android VM rejects, so a release APK
+built from it white-screens. Keep both steps in the pipeline. The
 [Build guide](docs/guides/BUILD_GUIDE.md) covers details and troubleshooting.
 
 ## CI/CD
@@ -280,6 +293,7 @@ smoke gate (`device-smoke.yml`) handle manual runs, and the nightly
 - [Build guide](docs/guides/BUILD_GUIDE.md) — end-to-end source build, step-by-step commands, and troubleshooting.
 - [Upgrade guide](docs/guides/UPGRADE_GUIDE.md) — moving to a new Flutter release.
 - [Build process](docs/guides/BUILD_PROCESS.md) — build internals: pipeline stages, patches, GN toolchain, and sysroot design.
+- [AAPT2 analysis](docs/guides/AAPT2_RELEASE_BUILD_BUG_ANALYSIS.md) — why on-device release builds disable resource optimization, and what would be needed to re-enable it.
 - [Changelog](docs/releases/CHANGELOG.md) — version history and notable fixes.
 - [Release notes](docs/releases/RELEASE_NOTES.md) — GitHub release body.
 
