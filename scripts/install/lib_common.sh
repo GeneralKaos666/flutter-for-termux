@@ -28,7 +28,7 @@ source_versions_common() {
 
 source_versions_common || true
 export FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.8}"
-export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-6}"
+export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-7}"
 export RELEASE_TAG="${RELEASE_TAG:-3.47.8}"
 export EXPECTED_SHA256="${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474}}"
 export NDK_VERSION="${NDK_VERSION:-30.0.14206865}"
