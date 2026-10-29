@@ -34,9 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The built deb now lands under `release/` instead of the repository root (`build.toml [package] path`, with `Build.output()` creating the directory on demand).
 
 ### Fixed
+- **Release APKs white-screened because Android AOT used the Linux `gen_snapshot` (issue #41).** `flutter build apk --release` compiled Dart with the Linux desktop `gen_snapshot`, which emits `target_os=linux` snapshots without compressed pointers; the Android VM rejects them, so the APK installed and then opened to a blank screen. The build now produces a dedicated Android-target `gen_snapshot` (`configure_android` / `build_android`, `--android --android-cpu arm64`) for release and profile, and `package.yaml` ships the binaries at `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot` — paths Flutter's first-run artifact materialization never writes. `post_install.sh` patches flutter_tools to resolve Android AOT straight to those binaries, with the `android-arm64-{release,profile}/linux-arm64` symlinks kept as a fallback. This is the `3.47.8-7` payload (640,495,672 bytes, SHA256 `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474`).
 - **APK smoke test failed under AGP 9 and rolled back installs (issue #27).** The installer's smoke project was rewritten with an outdated `build.gradle.kts` DSL (`kotlin-android` plugin, `kotlinOptions { jvmTarget }`, `externalNativeBuild`). AGP 9.1.0 / Kotlin 2.4.0 reject those accessors, so the test build died with "Script compilation errors" and the installer rolled the whole installation back. The smoke project now uses the current Flutter 3.47.7 DSL (no `kotlin-android`, `kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }`, `compileOptions` at Java 17).
 - **Smoke failures are now diagnosable.** On an APK smoke failure the installer prints the tail of the relevant Gradle build log (filtered to error lines) and detects/report a failed `flutter create`, instead of the previous bare `✗ APK build failed`.
-- **NDK default pinned to the shipped NDK.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant in `gradle_utils.dart`) to the NDK shipped in the package (`29.0.14206865`), so new projects no longer make AGP auto-download the x86-64-only `android-ndk-r28c-linux` (whose tools cannot run on ARM64 Termux).
+- **NDK default pinned to the shipped NDK.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant in `gradle_utils.dart`) to the NDK shipped in the package (`30.0.14206865`), so new projects no longer make AGP auto-download the x86-64-only `android-ndk-r28c-linux` (whose tools cannot run on ARM64 Termux).
 - **Partial NDK installs no longer break native plugin builds (issue #29).** A `flutter build apk`/`appbundle` could fail with `[CXX1101] NDK at ... did not have a source.properties file` when the installed NDK directory was incomplete. `post_install.sh` now validates each NDK directory and regenerates the missing `source.properties` metadata (or removes an unusable stub, so the installer re-provisions a clean NDK), and `install_flutter_complete.sh` no longer treats an incomplete NDK directory as installed.
 - **An NDK missing its CMake toolchain file is no longer accepted as healthy (issue #29).** After the metadata repair above, a partially extracted NDK still broke native plugin builds (`:jni`) with `CMake Error ... Could not find toolchain file: .../build/cmake/android.toolchain.cmake`, because `source.properties` alone satisfied the installer's validity check and masked the missing files. `ndk_is_valid()` and `repair_ndk_metadata()` now also require `build/cmake/android.toolchain.cmake`, and `post_install.sh` removes such a directory so the installer re-provisions it instead of stamping it healthy.
 - **The official x86_64 NDK is no longer "configured" on aarch64 (issue #29).** AGP downloads Google's Linux NDK under the same version number as the shipped aarch64 repack. Its host tools are x86_64-only, so every existence check passed while `toolchains/llvm/prebuilt/bin/clang` could not `exec` on the device: `execve()` returned `ENOEXEC`, the shell re-parsed the ELF bytes, and CMake's compiler probe died with `.../prebuilt/bin/clang: 1: Syntax error: ")" unexpected` even though `post_install.sh` had printed `✓ NDK … configured`. `install_flutter_complete.sh::ndk_is_valid()` and `post_install.sh` now run a `clang-<N> --version` probe: an NDK whose driver does not run is rejected so the installer re-provisions it, `repair_ndk_metadata()` removes it instead of stamping it healthy, and `setup_ndk_clang_wrappers()` refuses to link such a driver.
@@ -46,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Snapshot installs reported false success in both installers.** `install_flutter_complete.sh` and the deb-shipped `post_install.sh` printed `✓ Dart SDK snapshots installed` even when the checksum or unzip failed. Both now print the banner only when the extracted snapshot exists and otherwise warn that the bundled snapshots are used.
 - **Non-interactive installs blocked on the continuation prompt.** `install_flutter_complete.sh` now honours `--yes`/`--non-interactive` and a non-TTY stdin, skipping the prompt so piped and scripted installs run to completion.
 - **`flutter_project_config.sh` was not shipped in the deb.** `package.yaml` now declares the `flutter_project_config` resource, installing the script at `$PREFIX/share/flutter/flutter_project_config.sh` instead of leaving the on-device per-project configuration missing.
-- **Documented engine output directories were incorrect.** Earlier notes claimed the build produced `android_release_arm64/` and `android_profile_arm64/` engine output directories; the engine actually builds the three `linux_{debug,release,profile}_arm64/` directories under `flutter/engine/src/out/`. The build guides now match the build.
+- **Documented engine output directories were incomplete.** Earlier notes described only the three `linux_{debug,release,profile}_arm64/` directories under `flutter/engine/src/out/`, because the Linux `gen_snapshot` was reused for Android. The build now also produces `android_release_arm64/` and `android_profile_arm64/` for the Android-target `gen_snapshot`, and the build guides list all five.
 
 ## [3.44.9-termux] - 2026-07-04
 
@@ -163,7 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical Details
 - Cross-compiled from x86_64 Linux (WSL) to ARM64 Bionic
-- Uses NDK r27d with API level 35 (historical for this 3.35.0 release; current build baseline is NDK r29, API 26)
+- Uses NDK r27d with API level 35 (historical for this 3.35.0 release; current build baseline is NDK r30, API 26)
 - Patches applied to Flutter Engine, Dart VM, and Skia
 - TLS alignment fixed for Bionic linker compatibility
 
@@ -171,10 +172,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version Naming Convention
 
-`{flutter_version}-termux` - e.g., `3.35.0-termux`
+The Debian package version is `{flutter_version}-{pkg_rel}` — for example
+`3.47.8-7` in `build.toml` and the release asset name. Installs made through the
+apt repository report a trailing `-0` (`3.47.8-7-0`) because the published stub
+carries it; both refer to the same payload.
 
-- `flutter_version`: Upstream Flutter SDK version
-- `termux`: Indicates this is a Termux-compatible build
+- `flutter_version`: upstream Flutter SDK version, matching `build.toml [flutter] tag`.
+- `pkg_rel`: package revision from `build.toml [package] pkg_rel`. It resets to
+  `1` for a new upstream tag and increments for each respin of the same tag.
+- The GitHub release tag is the bare Flutter version (`3.47.8`), with no `v`
+  prefix. Several `pkg_rel` assets can live under one release tag.
+- Older releases used a `-termux` suffix (for example `3.44.9-termux`); the
+  current scheme drops it in favour of `pkg_rel`.
 
 ## Upgrading
 

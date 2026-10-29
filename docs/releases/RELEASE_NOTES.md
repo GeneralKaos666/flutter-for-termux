@@ -10,7 +10,7 @@ This release updates the Termux Flutter SDK package to Flutter 3.47.8. It incorp
 
 - **Smoke test.** The installer's smoke project was generated with an outdated Gradle DSL (`kotlin-android` plugin, `kotlinOptions { jvmTarget }`) that AGP 9.1.0 / Kotlin 2.4.0 reject; it now uses the current Flutter 3.47.8 DSL.
 - **Diagnostics.** If the smoke build ever fails, the installer now prints the relevant Gradle log lines and reports a failed `flutter create`, instead of a bare `✗ APK build failed`.
-- **NDK default.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant) to the NDK shipped in this package (`29.0.14206865`). Projects no longer trigger AGP to auto-download the x86-64-only `android-ndk-r28c-linux`, whose tools cannot run on ARM64 Termux.
+- **NDK default.** `post_install.sh` pins the Flutter Gradle plugin default `ndkVersion` (and the create-time Dart constant) to the NDK this package provisions (`30.0.14206865`). Projects no longer trigger AGP to auto-download the x86-64-only `android-ndk-r28c-linux`, whose tools cannot run on ARM64 Termux.
 
 Installing `3.47.8-4` over `3.47.8-3` is a drop-in replacement — follow the [Install](#install) steps. If a previous attempt rolled back and removed the SDK, reinstall from scratch with the same commands.
 
@@ -27,6 +27,18 @@ Installing `3.47.8-4` over `3.47.8-3` is a drop-in replacement — follow the [I
 
 Installing `3.47.8-5` over `3.47.8-4` is a drop-in replacement — follow the [Install](#install) steps.
 
+## Fixed in 3.47.8-7
+
+Release APKs built with `3.47.8-6` could install and then white-screen. Android AOT was compiled by the Linux desktop `gen_snapshot`, which emits `target_os=linux` snapshots without compressed pointers; the Android VM rejects them ([issue #41](https://github.com/GeneralKaos666/flutter-for-termux/issues/41)).
+
+`3.47.8-7` ships a dedicated Android-target `gen_snapshot` for release and profile, built with `--android --android-cpu arm64`:
+
+- **Payload.** The binaries live at `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`, next to the Linux desktop one. Flutter never writes to those paths, so its first-run artifact materialization cannot overwrite them.
+- **Resolution.** `post_install.sh` patches `flutter_tools` so the Android AOT compiler resolves straight to the shipped binary. The `android-arm64-{release,profile}/linux-arm64` symlinks remain as a fallback for direct directory lookups.
+- **Upgrade.** Run `apt upgrade flutter`, then `bash $PREFIX/share/flutter/post_install.sh`, then `flutter clean` in each project before rebuilding. A stale `build/` directory keeps the old AOT output.
+
+`3.47.8-7` also includes the `3.47.8-4` and `3.47.8-5` fixes below.
+
 ## Package
 
 | Item | Value |
@@ -36,7 +48,7 @@ Installing `3.47.8-5` over `3.47.8-4` is a drop-in replacement — follow the [I
 | SHA256 | `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474` |
 | Flutter | 3.47.8 |
 | Flutter Tools Dart | 3.13.7 |
-| Dart VM | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
+| Dart VM | Dart 3.13.7 (`linux_arm64`) |
 | Target host | Termux / Android bionic / ARM64 |
 
 ## Install
@@ -85,11 +97,11 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 | Command | Result |
 |---------|--------|
 | `flutter --version` | ✅ Flutter 3.47.8 |
-| `dart --version` | ✅ Dart 3.13.7 on `android_arm64` |
-| `dartvm --version` | ✅ Dart 3.13.7 on `linux_arm64` |
+| `dart --version` | ✅ Dart 3.13.7 on `linux_arm64` |
+| `$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dartvm --version` | ✅ Dart 3.13.7 on `linux_arm64` |
 | `flutter doctor -v` | ✅ completes; unknown channel / no connected device are expected warnings |
 | `flutter create --platforms=android,linux` | ✅ |
-| `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ ARM64 APK produced |
+| `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ ARM64 APK produced, installs, and opens (Android-target AOT) |
 | `flutter build linux --release` | ✅ ARM64 Linux bundle produced |
 | deb artifact validator | ✅ `dart`, `dartvm`, `dartaotruntime` executable |
 
@@ -98,22 +110,20 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 ### Flutter 3.47.8 update
 
 - Updated package metadata, NDK configurations, and patches to target Flutter 3.47.8 (Dart 3.13.7).
-- Keeps Flutter CLI on Termux JIT Dart while preserving engine VM tools for snapshots.
+- Ships the engine-built `dart`, `dartvm`, and `dartaotruntime` from one SDK, so the Flutter CLI and its snapshots stay in step.
 
 ### Installer & Environment Hardening
 
 - Fully guarded `$PREFIX` paths against whitespace and `set -u` unbound variable errors.
 - Dynamic `JAVA_HOME` discovery across Termux OpenJDK installations.
 - Automated dependency resolution including OpenJDK 21 and 7zip.
-
-### Post-install Dart VM detection fix
-
-- Fixed the `post_install.sh` system Dart VM replacement logic to directly inspect the target path (`/data/data/com.termux/files/usr/bin/dart`) rather than using `command -v`, preventing path shadowing issues.
+- Android SDK staging defaults to API 36, falling back 36 → 35 → 34 when the installed aapt2 cannot load the newest platform.
 
 ### Technical Details
 
-- Build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/` (the engine has no `android_*` output directory)
-- Deb package size is ~588MB.
+- Linux build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`.
+- Android `gen_snapshot` build output directories: `android_release_arm64/`, `android_profile_arm64/`. The binaries are packaged under `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`.
+- Deb package size is 640,495,672 bytes (~611 MiB).
 
 ## Required per-project Android settings
 

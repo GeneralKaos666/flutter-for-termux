@@ -19,7 +19,7 @@ If Flutter was installed from the apt repository
 pkg update && apt upgrade flutter
 ```
 
-Each release re-downloads the full payload (~635 MB) and re-verifies its
+Each release re-downloads the full payload (~640 MB) and re-verifies its
 checksum and size before anything on disk is touched. There is no apt progress
 bar while the package configures, so watch the script's own output.
 
@@ -63,6 +63,7 @@ Each checklist item maps to one step below:
 | Item | Why it matters | How to check |
 |------|------------|----------|
 | `dart` / `dartvm` / `dartaotruntime` | Dart 3.10+ splits the CLI and VM runtime more clearly; packaging only `dart` will break either the snapshots or the Flutter CLI | `python3 build.py debuild --arch=arm64` must pass the artifact validator |
+| Android-target `gen_snapshot` | APK AOT needs a `target_os=android` build; the Linux desktop one white-screens the app (issue #41) | Release APK installs and opens; `linux-arm64-android-release/gen_snapshot` exists in the deb |
 | Flutter Tools host platform | Termux is treated by Dart as an `android` host; official Flutter Tools normally only handles macOS/Linux/Windows | Run `flutter doctor -v` on Termux; it must not crash during the cache/artifact/device-discovery phase |
 | Flutter Gradle plugin constants | As of Flutter 3.44, `FlutterPlugin.kt` directly imports `PLATFORM_ABI_LIST` | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` must not show Kotlin unresolved-reference errors |
 | Gradle included-build cache | post-install modifies the Kotlin source; on upgrade the old cache may mix old and new sources | `post_install.sh` must clear `packages/flutter_tools/gradle/.gradle`, `build`, `bin` |
@@ -77,10 +78,14 @@ Edit `build.toml`:
 ```toml
 [flutter]
 tag = '3.XX.Y'    # ← change to the new version number
+
+[package]
+pkg_rel = '1'     # reset to 1 for a new upstream tag, increment for a respin
 ```
 
 > Other fields usually don't need to change (NDK path, jobs, etc.).
-> If the new Flutter version requires a newer NDK, update the `[ndk]` section as well.
+> If the new Flutter version requires a newer NDK, update the `[ndk]` section
+> as well.
 
 ---
 
@@ -255,6 +260,18 @@ python3 build.py build --arch=arm64 --mode=profile
 > with release in the first position. `Output.any` picks the first existing directory,
 > so the release (product mode) dart-sdk snapshots drive the Flutter CLI. Do not reorder modes arbitrarily.
 
+Then build the Android-target `gen_snapshot` for each mode in
+`build.toml [build] android_runtime` (release and profile by default). This is
+a separate GN configuration and only builds the `gen_snapshot` target:
+
+```bash
+python3 build.py configure_android --arch=arm64 --mode=release
+python3 build.py build_android --arch=arm64 --mode=release
+
+python3 build.py configure_android --arch=arm64 --mode=profile
+python3 build.py build_android --arch=arm64 --mode=profile
+```
+
 **No extra tool steps are needed:**
 
 > ✔️ `dart_sdk_archive`, `flutter_patched_sdk`, and `flutter_gtk` are all
@@ -262,11 +279,11 @@ python3 build.py build --arch=arm64 --mode=profile
 > the standard build via `flutter/build/archives:dart_sdk_archive` (no
 > separate `build_dart` step in the FFT pipeline).
 >
-> ✔️ Android gen_snapshot: dedicated Android-target build is required (release/profile) as of this change. The standard
-> `build()` produces the Linux engine targets, and Android APK builds on
-> Termux use the gen_snapshot shipped in the deb package's artifacts.
-> Only ARM64 → ARM64 works; ARM32 and x64 targets cannot be compiled
-> (see the [Build guide](BUILD_GUIDE.md#8-known-limitations)).
+> ✔️ The Android `gen_snapshot` is a separate build by design. The Linux
+> desktop `gen_snapshot` emits `target_os=linux` snapshots without compressed
+> pointers, which the Android VM rejects, so `flutter build apk` needs the
+> `--android` build. Only ARM64 → ARM64 works; ARM32 and x64 targets cannot be
+> compiled (see the [Build guide](BUILD_GUIDE.md#8-known-limitations)).
 
 ---
 
@@ -277,11 +294,13 @@ python3 build.py debuild --arch=arm64
 ```
 
 This will:
-1. Sync the latest `scripts/`, `patches/`, `package.yaml`, `build.toml` from Windows to WSL
-2. Collect all build outputs according to `package.yaml`
-3. Package them into `flutter_3.XX.Y_aarch64.deb`
+1. Collect every build output declared in `package.yaml` (SDK, engine
+   artifacts, both Android `gen_snapshot` builds, scripts)
+2. Render `manifest.json` and the package metadata from `build.toml`
+3. Package everything into the deb
 
-> Output path: `~/termux-flutter/flutter_3.XX.Y_aarch64.deb`
+> Output path: `release/flutter_<tag>-<pkg_rel>_aarch64.deb`
+> (for example `release/flutter_3.47.8-7_aarch64.deb`).
 
 ---
 
@@ -289,13 +308,13 @@ This will:
 
 ```powershell
 # Copy from WSL to Windows
-Copy-Item "\\wsl.localhost\Ubuntu\home\YOUR_USER\termux-flutter\flutter_3.XX.Y_aarch64.deb" .
+Copy-Item "\\wsl.localhost\Ubuntu\home\YOUR_USER\termux-flutter\release\flutter_3.XX.Y-1_aarch64.deb" .
 
 # Push to the device
-adb push flutter_3.XX.Y_aarch64.deb /data/local/tmp/
+adb push flutter_3.XX.Y-1_aarch64.deb /data/local/tmp/
 
 # Install in Termux
-dpkg -i /data/local/tmp/flutter_3.XX.Y_aarch64.deb
+dpkg -i /data/local/tmp/flutter_3.XX.Y-1_aarch64.deb
 apt-get install -f
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -303,9 +322,13 @@ source $PREFIX/etc/profile.d/flutter.sh
 # Verify
 flutter doctor -v
 flutter create testapp && cd testapp
-flutter build apk --release --target-platform android-arm64
+bash $PREFIX/share/flutter/flutter_project_config.sh
+flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
 flutter build linux --release
 ```
+
+> **Note:** the Android build needs `--no-tree-shake-icons` because Termux Dart
+> runs in JIT mode and cannot execute Flutter's AOT icon tree-shaker snapshot.
 
 ---
 
@@ -319,7 +342,8 @@ If the new Flutter version changes any of these locations, they need to be updat
 | `build_apk.dart` | Disables arm/x64 platforms | Flutter refactored the APK build logic |
 | `build_linux.dart` | Bypasses the `isLinux` check | Flutter changed how the platform is checked |
 | `FlutterPluginConstants.kt` | ARM64-only NDK filter | The Gradle plugin structure changed |
-| `compileSdkVersion` downgrade | Termux aapt2 limitation | aapt2 got updated to support newer APIs |
+| `artifacts.dart` | Resolves the Android AOT `gen_snapshot` to the package-shipped binary | Flutter changed `_getAndroidArtifactPath` or the host-platform lookup |
+| `compileSdk` / `targetSdk` defaults | Termux aapt2 platform support (36 → 35 → 34 ladder) | aapt2 gains or loses platform support |
 | `tool_backend.sh` | Shebang fix | Flutter regenerated this script |
 | NDK clang driver | Termux ARM64 clang | A new NDK version |
 
@@ -332,23 +356,25 @@ If the new Flutter version changes any of these locations, they need to be updat
 ```powershell
 # Update version
 $VER = "3.XX.Y"
+$REL = "1"
 
-# Create the release
-gh release create "v$VER" `
+# Create the release (tag is the Flutter version, no "v" prefix)
+gh release create "$VER" `
   --title "Flutter $VER for Termux ARM64" `
   --notes-file docs/releases/RELEASE_NOTES.md `
-  "flutter_${VER}_aarch64.deb"
+  "release/flutter_${VER}-${REL}_aarch64.deb"
 ```
 
 Remember to update:
-- The version number in `README.md`
 - `docs/releases/CHANGELOG.md`
 - `docs/releases/RELEASE_NOTES.md`
-- The pins in `scripts/install/versions_common.sh`
+- `scripts/install/versions_common.sh` (version, pkg rel, SHA256)
+- `README.md`
 
 > CI enforces version consistency via `scripts/ci/check_version_drift.py` —
 > if a reference was missed, the `Repository sanity` job fails and names the
-> file.
+> file. `scripts/ci/generate_versions.py --check` separately asserts that
+> `versions_common.sh` matches `build.toml`.
 
 ---
 
@@ -388,7 +414,8 @@ python3 build.py
 2. clone
 3. sync
 4. per arch: sysroot, then configure + build for each mode in `build.toml [build] runtime` (currently `['release']`), including `dart_sdk_archive`
-5. debuild
+5. per arch: configure + build the Android-target `gen_snapshot` for each mode in `build.toml [build] android_runtime` (release and profile)
+6. debuild
 
 > ⏱ The whole thing takes about 2-4 hours
 
