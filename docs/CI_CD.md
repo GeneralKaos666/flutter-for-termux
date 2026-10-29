@@ -51,7 +51,8 @@ References:
 
 | Workflow | File | Runner | Trigger | Purpose |
 |----------|------|--------|---------|---------|
-| CI | `.github/workflows/ci.yml` | `ubuntu-latest` | PR, push to `main`, manual | Python/shell/PowerShell syntax, package/docs/workflow sanity, whitespace checks |
+| CI | `.github/workflows/ci.yml` | `ubuntu-latest` | PR, push to `main`, manual | Python/shell/PowerShell syntax, pytest, ruff, shellcheck, actionlint, version drift, package/docs/workflow sanity, whitespace checks |
+| Validate | `.github/workflows/validate.yml` | `ubuntu-latest` | PR/push touching patches, `build.py`, `build.toml`, `test_build.py`, `utils.py`, `stubs/`, `requirements.txt` | Runs the Python unit tests and checks that `engine.patch` applies to the configured Flutter tag |
 | Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` + `gate` (builds only when the `build.toml` tag has no published release yet) | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
 | Build deb (self-hosted) | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing (fallback) |
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
@@ -75,8 +76,8 @@ normal CI job:
 - Flutter Engine builds can take hours (multi-hour on the 4-vCPU runner).
 - The build needs an Android NDK (hosted images ship one; the env vars
   `ANDROID_NDK` / `ANDROID_NDK_LATEST_HOME` / `ANDROID_NDK_HOME` point at it).
-  `build.toml [ndk] version` (r29) is used for packaging metadata; self-hosted
-  installs pin it at `/opt/android-ndk-r29`.
+  `build.toml [ndk] version` (r30) is used for packaging metadata; self-hosted
+  installs pin it at `/opt/android-ndk-r30`.
 - Real release confidence requires an attached Android/Termux tablet.
 
 Therefore:
@@ -90,23 +91,30 @@ Therefore:
 
 ## PR / push CI
 
-`ci.yml` runs on every PR and push to `main`:
+`ci.yml` runs on every PR and push to `main`. In order:
 
 ```text
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py
+python -m py_compile <every tracked .py file>
+pytest test_build.py test_apt_repo.py
+ruff check build.py package.py sysroot.py utils.py test_build.py scripts/ci/ scripts/release/ test_apt_repo.py
 bash -n scripts/install/*.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
+shellcheck --severity=error scripts/release/stub/* scripts/install/*.sh ...
+actionlint .github/workflows/*.yml
 PowerShell parser check for scripts/device/run_termux_smoke.ps1
+python scripts/ci/check_version_drift.py
+python scripts/ci/generate_versions.py --check
 python scripts/ci/check_repo.py
 git diff --check
 ```
 
+`ruff format --check` also runs, but is non-blocking.
+
 `check_repo.py` validates repo-specific contracts, including:
 
-- workflow YAML parses
-- self-hosted workflows are not triggered by `pull_request`
+- workflow YAML parses, and self-hosted workflows are not triggered by `pull_request`
 - `package.yaml` still ships the required runtime resources, including `post_install`
-- `post_install.sh` still contains the Flutter 3.44 `PLATFORM_ABI_LIST` and Android-host patches
-- installer defaults remain on Flutter 3.47.8 and NDK r29 for Termux installs
+- `post_install.sh` still contains the Flutter 3.44 `PLATFORM_ABI_LIST`, Android-host, and Android `gen_snapshot` patches
+- installer defaults remain on Flutter 3.47.8 and NDK r30 for Termux installs
 - release/download docs do not regress to stale 3.41.5 commands
 
 ## Full deb build
@@ -121,22 +129,19 @@ manual dispatches) trigger the multi-hour pipeline. It:
 
 1. Installs host deps and bootstraps `depot_tools` (inline clone).
 2. Detects the NDK from the runner env (`ANDROID_NDK` → `ANDROID_NDK_LATEST_HOME` → `ANDROID_NDK_HOME`).
-3. Runs the documented pipeline. Patches are applied automatically by the
-   `.gclient` `custom_hooks` during `sync`, so no explicit `patch_*` step is
-   needed:
+3. Runs the full pipeline, which is equivalent to the step-by-step commands
+   in the [Build guide](guides/BUILD_GUIDE.md#3-step-by-step-build):
 
    ```bash
-   python3 build.py clone
-   python3 build.py sync
-   python3 build.py sysroot --arch=arm64
-   python3 build.py configure --arch=arm64 --mode=release
-   python3 build.py build    --arch=arm64 --mode=release
-   python3 build.py debuild  --arch=arm64
+   python3 build.py
    ```
 
-   The `patch_*` helpers are only for manually re-applying / rebasing a patch
-   to a fresh checkout; running them right after `sync` fails with "already
-   exists".
+   That covers config, clone, sync, sysroot, the Linux release build, the
+   Android-target `gen_snapshot` build for release and profile, and `debuild`.
+   Patches are applied automatically by the `.gclient` `custom_hooks` during
+   `sync`, so no explicit `patch_*` step is needed. The `patch_*` helpers are
+   only for manually re-applying / rebasing a patch to a fresh checkout;
+   running them right after `sync` fails with "already exists".
 4. Publishes a GitHub Release tagged with the Flutter version containing
    `**/*.deb`.
 
@@ -144,7 +149,7 @@ If the hosted runner hits its 6-hour cap (or you want build metadata), fall
 back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 
 - Runs on `${{ inputs.runner_labels_json }}` (default `["self-hosted","linux"]`).
-- Requires `/opt/android-ndk-r29` (or `ANDROID_NDK`/`NDK_PATH` env) and a Linux/WSL runner with 100GB+ disk.
+- Requires `/opt/android-ndk-r30` (or `ANDROID_NDK`/`NDK_PATH` env) and a Linux/WSL runner with 100GB+ disk.
 - Uploads the deb plus `sha256`/`size.txt`, `build_metadata.json`, `build_evidence.json`, and `inventory.txt` as a workflow artifact (feeds `device-smoke.yml`).
 
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
@@ -298,7 +303,8 @@ The repository governance rules for the `main` branch are codified in `.github/r
 
 ## Local equivalents
 
-Run the same checks CI runs, in this order:
+Run the same local checks as CI, in this order. (CI also runs `shellcheck`,
+`actionlint`, and a PowerShell parser check; those live in `ci.yml`.)
 
 1. Compile-check the Python entry points, tests, and CI/release scripts:
 
@@ -336,13 +342,19 @@ Run the same checks CI runs, in this order:
    python scripts/ci/check_version_drift.py
    ```
 
-7. Check for whitespace errors:
+7. Confirm `scripts/install/versions_common.sh` still matches `build.toml`:
+
+   ```bash
+   python scripts/ci/generate_versions.py --check
+   ```
+
+8. Check for whitespace errors:
 
    ```bash
    git diff --check
    ```
 
-8. Regenerate the flutter stub package locally (it is then dropped into
+9. Regenerate the flutter stub package locally (it is then dropped into
    termux-apt-repo and republished there):
 
    ```bash

@@ -12,12 +12,12 @@ Related guides:
   [Build process](BUILD_PROCESS.md)
 - CI workflows and the device lab: [CI/CD](../CI_CD.md)
 
-## Current Version Status (3.47.8 / 2026-08-15)
+## Current Version Status (3.47.8)
 
 | Item | Value |
 |------|----|
 | Flutter tag | `3.47.8` |
-| Engine revision | `5a2a6a42cce67f965cf540fcecf616faca624aa1` |
+| Engine revision | `cf636b1dfb818dd6a3ff16e390e93b1a036969c8` |
 | Package | `flutter_3.47.8-7_aarch64.deb` |
 | Package size | 640,495,672 bytes (about 611 MiB) |
 | SHA256 | `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474` |
@@ -83,6 +83,9 @@ See [`docs/CI_CD.md`](../CI_CD.md) for details.
 - Windows 11 + WSL2 (Ubuntu 22.04+), or any Linux x86-64 host
 - At least 100GB of free disk space
 - At least 16GB RAM
+- Android NDK r30, unpacked at `/opt/android-ndk-r30` — or set `ANDROID_NDK`
+  (or `[ndk] path` in `build.toml`) to its location. CI runners provide one;
+  the version in `build.toml [ndk] version` is `30.0.14206865`.
 - Stable network connection
 
 ---
@@ -98,10 +101,11 @@ python3 build.py
 
 This command automatically completes:
 
-1. Configure the Linux release build
-2. Compile the Flutter engine
-3. Compile the dart binary (critical!)
-4. Package the deb
+1. Clone and sync Flutter, applying the patches through the `.gclient` hooks
+2. Assemble the Termux sysroot
+3. Configure and compile the Linux release engine, including the Dart SDK
+4. Configure and compile the Android-target `gen_snapshot` for release and profile
+5. Package the deb
 
 A full run takes roughly 2-4 hours on 24 threads. Patches are applied
 automatically during `sync` via the `.gclient` `custom_hooks`, so no explicit
@@ -168,14 +172,31 @@ Termux apt repo (skip if `sysroot/` is already assembled for this version).
 
 ### Step 6: Configure and Compile
 
+Build the Linux desktop engine first. It produces the Dart SDK, the GTK
+library, and the `gen_snapshot` used by `flutter build linux`:
+
 ```bash
-# Linux release (also builds the gen_snapshot used by flutter build linux and,
-# on-device, flutter build apk)
 python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
 ```
 
-An Android-target `gen_snapshot` is built for `flutter build apk --release/--profile` (see [What Ships in the deb](#5-what-ships-in-the-deb)). The Linux desktop `gen_snapshot` is not used for Android AOT on this target; `post_install.sh` resolves and provisions it. Debug uses JIT.
+Then build the Android-target `gen_snapshot` that `flutter build apk` uses.
+This is a separate GN configuration (`--android --android-cpu arm64`) and only
+the `gen_snapshot` target:
+
+```bash
+python3 build.py configure_android --arch=arm64 --mode=release
+python3 build.py build_android --arch=arm64 --mode=release
+
+# Profile AOT, for `flutter build apk --profile`
+python3 build.py configure_android --arch=arm64 --mode=profile
+python3 build.py build_android --arch=arm64 --mode=profile
+```
+
+The Linux desktop `gen_snapshot` cannot stand in for the Android one: it emits
+`target_os=linux` snapshots without compressed pointers, which the Android VM
+rejects (a release APK built that way white-screens). `build.toml`
+`[build] android_runtime` controls which Android modes are built.
 
 > **Note:** the `build()` ninja invocation includes
 > `flutter/build/archives:dart_sdk_archive` (plus `flutter_patched_sdk` and
@@ -203,10 +224,14 @@ release/flutter_3.47.8-7_aarch64.deb
 1. Check that the required host-side artifacts exist:
 
    ```bash
-   # Check all required files
-   ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart  # Critical!
-   ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
+   # Linux desktop engine (dart SDK + gen_snapshot)
+   ls -la flutter/engine/src/out/linux_release_arm64/dart-sdk/bin/dart
    ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
+   ls -la flutter/engine/src/out/linux_release_arm64/libflutter_linux_gtk.so
+
+   # Android-target gen_snapshot (release and profile)
+   ls -la flutter/engine/src/out/android_release_arm64/gen_snapshot
+   ls -la flutter/engine/src/out/android_profile_arm64/gen_snapshot
    ```
 
 2. Deploy to Termux and run the on-device checklist — see
@@ -220,13 +245,18 @@ release/flutter_3.47.8-7_aarch64.deb
 |------|------|------|
 | Flutter SDK | /data/data/com.termux/files/usr/opt/flutter | Main program |
 | dart binary | .../dart-sdk/bin/dart | Core of the flutter command |
-| Linux gen_snapshot | .../engine/linux-arm64/gen_snapshot | flutter run -d linux |
-| Android gen_snapshot | .../engine/android-arm64-release/linux-arm64/gen_snapshot | flutter build apk (on-device path; created by post_install.sh after precache, not a separate deb payload) |
+| Linux gen_snapshot | .../engine/linux-arm64/gen_snapshot | `flutter build linux` |
+| Android gen_snapshot (release) | .../engine/linux-arm64-android-release/gen_snapshot | `flutter build apk --release` |
+| Android gen_snapshot (profile) | .../engine/linux-arm64-android-profile/gen_snapshot | `flutter build apk --profile` |
 
-Only the Linux `gen_snapshot` ships in the deb. The Android row is the
-on-device path that `post_install.sh` creates (a symlink to the Linux
-artifact) once `flutter precache --android` has made the
-`android-arm64-release` directory exist.
+Both `gen_snapshot` builds are deb payloads. They go under
+`linux-arm64-android-{release,profile}/` because Flutter's first-run artifact
+materialization rewrites `android-arm64-{release,profile}/` and would replace
+anything placed there. `post_install.sh` patches `flutter_tools` to resolve the
+AOT compiler to these paths, and keeps `android-arm64-{release,profile}/linux-arm64`
+symlinks as a fallback for lookups that read the per-build directories directly.
+
+Debug APKs are JIT builds and need no `gen_snapshot`.
 
 ---
 
@@ -577,7 +607,8 @@ The current deb package uses binaries built in **release mode**:
 - `dart` - release mode
 - `dartaotruntime` - release mode
 - `frontend_server_aot.dart.snapshot` - release mode
-- `gen_snapshot` - release mode
+- `gen_snapshot` (Linux desktop) - release mode
+- `gen_snapshot` (Android target) - release and profile modes
 
 This is because the deb packages only the modes listed in
 `build.toml [build] runtime`.
@@ -633,38 +664,44 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 
 After the build completes, verify with the following checklist.
 
-1. Check required files exist on the build host:
+1. Check that the release artifacts exist on the build host:
 
    ```bash
-   # 1. Check required files
-   ls -la flutter/engine/src/out/linux_debug_arm64/dart-sdk/bin/dart
-   ls -la flutter/engine/src/out/linux_debug_arm64/gen_snapshot
-   ls -la flutter/engine/src/out/linux_debug_arm64/libflutter_linux_gtk.so
+   ls -la flutter/engine/src/out/linux_release_arm64/dart-sdk/bin/dart
    ls -la flutter/engine/src/out/linux_release_arm64/gen_snapshot
+   ls -la flutter/engine/src/out/linux_release_arm64/libflutter_linux_gtk.so
+   ls -la flutter/engine/src/out/android_release_arm64/gen_snapshot
+   ls -la flutter/engine/src/out/android_profile_arm64/gen_snapshot
    ```
 
-2. After deploying to Termux (after running post_install.sh):
+   If you also built `--mode=debug` or `--mode=profile`, the matching
+   `linux_debug_arm64/` and `linux_profile_arm64/` directories hold those
+   variants.
+
+2. After deploying to Termux and running `post_install.sh`:
 
    ```bash
-   # 2. After deploying to Termux (after running post_install.sh)
-   flutter doctor -v               # ✅ verified
-   flutter create test_app         # ✅ verified
+   flutter doctor -v
+   flutter create test_app
    cd test_app
-   flutter build apk --release     # ✅ verified
-   flutter build apk --debug       # ✅ verified
-   flutter build linux --debug     # ✅ verified (requires Termux:X11)
-   flutter run                     # ✅ verified (Hot Reload supported)
+   bash $PREFIX/share/flutter/flutter_project_config.sh
+   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
+   flutter build linux --release
    ```
+
+   The release APK should open to your app, not a white screen. That last
+   check is the one that catches a wrong `gen_snapshot`. `flutter build apk
+   --debug` uses JIT and works too; `flutter run` needs an ADB connection.
 
 ---
 
-## 10. Feature Test Results (3.47.8, updated 2026-08-15)
+## 10. Feature Test Results (3.47.8)
 
 | Feature | Status | Description |
 |------|------|------|
 | `flutter --version` | ✅ OK | Flutter 3.47.8 / Tools Dart 3.13.7 |
-| `dart --version` | ✅ OK | Termux JIT Dart 3.13.7 (`android_arm64`) |
-| `dartvm --version` | ✅ OK | post-install `dartvm` resolves to Dart 3.13.7 (`android_arm64`) |
+| `dart --version` | ✅ OK | Dart 3.13.7 (`linux_arm64`) |
+| `$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dartvm --version` | ✅ OK | Dart 3.13.7 (`linux_arm64`) |
 | `flutter doctor -v` | ✅ OK | unknown channel / no device are expected warnings |
 | `flutter create` | ✅ OK | Can create Android + Linux projects |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ OK | Requires running post_install.sh; only supports android-arm64 |
@@ -733,7 +770,8 @@ python3 build.py
 ```text
 ✓ bin/cache/dart-sdk/bin/dart (102MB)
 ✓ bin/cache/artifacts/engine/linux-arm64/gen_snapshot (6.9MB)
-✓ bin/cache/artifacts/engine/android-arm64-release/linux-arm64/gen_snapshot (6.4MB; on-device symlink created by post_install.sh)
+✓ bin/cache/artifacts/engine/linux-arm64-android-release/gen_snapshot (5.3MB; Android AOT)
+✓ bin/cache/artifacts/engine/linux-arm64-android-profile/gen_snapshot (5.3MB; Android AOT)
 ```
 
 </details>
