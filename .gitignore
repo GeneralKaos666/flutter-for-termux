@@ -70,6 +70,11 @@ build.local.toml
 *.jpg
 *.jpeg
 *.gif
+# README/documentation media is version controlled
+!assets/*.png
+!assets/*.jpg
+!assets/*.jpeg
+!assets/*.gif
 
 # ----- Large binaries and archives -----
 *.zip
