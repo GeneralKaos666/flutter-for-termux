@@ -115,6 +115,11 @@ jobs:
         if: steps.check.outputs.should_release == 'true'
         run: |
           sed -i "s/^tag = .*/tag = '${{ steps.detect.outputs.TAG }}'/" build.toml
+          # A new upstream Flutter tag starts a fresh package revision: the
+          # previous tag's respins (n) have no bearing on this one, so reset
+          # pkg_rel to 1 instead of carrying it over. Documentation and the
+          # installer defaults follow in "Sync version references".
+          sed -i "s|^pkg_rel = .*|pkg_rel = '1'  # Debian packaging revision: resets to 1 for each new upstream tag, increments for respins of the same tag|" build.toml
           git diff -- build.toml
 
       - name: Sync version references across all files

@@ -179,7 +179,10 @@ carries it; both refer to the same payload.
 
 - `flutter_version`: upstream Flutter SDK version, matching `build.toml [flutter] tag`.
 - `pkg_rel`: package revision from `build.toml [package] pkg_rel`. It resets to
-  `1` for a new upstream tag and increments for each respin of the same tag.
+  `1` for a new upstream tag (the nightly `autorelease` bump does this) and
+  increments for each respin of the same tag. It never resets to `0`: Debian
+  treats a missing revision as `-0`, so `X.Y.Z-0` would tie a bare `X.Y.Z`
+  package instead of outranking it.
 - The GitHub release tag is the bare Flutter version (`3.47.8`), with no `v`
   prefix. Several `pkg_rel` assets can live under one release tag.
 - Older releases used a `-termux` suffix (for example `3.44.9-termux`); the
