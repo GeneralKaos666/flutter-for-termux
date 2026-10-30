@@ -44,8 +44,8 @@ Release APKs built with `3.47.9-6` could install and then white-screen. Android 
 | Item | Value |
 |------|-------|
 | Package | `flutter_3.47.9-1_aarch64.deb` |
-| Size | 640,495,672 bytes (~611 MiB) |
-| SHA256 | `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474` |
+| Size | 635,877,268 bytes (~606 MiB) |
+| SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Flutter | 3.47.9 |
 | Flutter Tools Dart | 3.13.7 |
 | Dart VM | Dart 3.13.7 (`linux_arm64`) |
@@ -123,7 +123,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 - Linux build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`.
 - Android `gen_snapshot` build output directories: `android_release_arm64/`, `android_profile_arm64/`. The binaries are packaged under `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`.
-- Deb package size is 640,495,672 bytes (~611 MiB).
+- Deb package size is 635,877,268 bytes (~606 MiB).
 
 ## Required per-project Android settings
 
