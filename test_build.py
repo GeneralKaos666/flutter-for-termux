@@ -1711,6 +1711,36 @@ class CiWorkflowContractTest(unittest.TestCase):
             'ci.yml has no generate_versions.py --check step',
         )
 
+    def test_autorelease_resets_pkg_rel_with_the_new_tag(self):
+        """A new upstream tag must start a fresh package revision.
+
+        ``autorelease`` bumps ``[flutter] tag``; if it left ``[package] pkg_rel``
+        alone the new tag would inherit the previous tag's respin number, so the
+        published version would be e.g. ``3.48.0-7`` with no ``-1`` before it.
+        """
+        path = Path(__file__).parent / '.github' / 'workflows' / 'autorelease.yml'
+        data = yaml.safe_load(path.read_text(encoding='utf-8'))
+        bump = next(
+            (
+                step.get('run', '')
+                for job in data['jobs'].values()
+                for step in job.get('steps', [])
+                if 's/^tag = ' in step.get('run', '')
+            ),
+            None,
+        )
+        self.assertIsNotNone(bump, 'autorelease.yml has no build.toml tag bump step')
+        self.assertIn(
+            "s|^pkg_rel = .*|pkg_rel = '1'",
+            self._normalized(bump),
+            'the tag bump step must also reset [package] pkg_rel to 1',
+        )
+
+    @staticmethod
+    def _normalized(run: str) -> str:
+        """Collapse whitespace so the assertion survives sed-format tweaks."""
+        return ' '.join(run.split())
+
 
 class VersionDriftCheckTest(unittest.TestCase):
     """Unit cases for scripts/ci/check_version_drift.py issue-template scanning.
