@@ -26,7 +26,7 @@ computer in sight.
 | Flutter   | 3.47.9 (stable) |
 | Dart      | 3.13.7 |
 | Architecture | aarch64 (ARM64) only |
-| Package   | `flutter_3.47.9-7_aarch64.deb` |
+| Package   | `flutter_3.47.9-1_aarch64.deb` |
 
 Every release ships with checksums and build evidence so you can verify
 exactly what you installed:
@@ -91,7 +91,7 @@ Prefer to see every step? Do it by hand.
 
 ```bash
 TAG=3.47.9
-PKG_REL=7
+PKG_REL=1
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 

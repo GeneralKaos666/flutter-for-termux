@@ -37,7 +37,7 @@ or `python3 build.py patch --file=./patches/<name>.patch --path=<repo path>`. Sk
 Key details:
 
 - Modes come from `build.toml [build] runtime` — currently `['release']` only. To also build debug/profile you must rebuild those steps with `--mode=debug|profile`.
-- `tag` is the release version (no `v` prefix). Release asset is `flutter_<tag>-<pkg_rel>_aarch64.deb` (e.g. `flutter_3.47.9-7_aarch64.deb`).
+- `tag` is the release version (no `v` prefix). Release asset is `flutter_<tag>-<pkg_rel>_aarch64.deb` (e.g. `flutter_3.47.9-1_aarch64.deb`).
 - Prefix `NO_RECORD=1` to bypass the `@utils.record` debug-logging wrapper (it logs and re-raises; bypass reduces log noise, used by CI for `python3 build.py tag`).
 - NDK discovery: build.py reads `[ndk] path` from build.toml, else the `ANDROID_NDK` env var. Workflows translate `NDK_PATH`/`ANDROID_NDK_HOME` → `ANDROID_NDK`.
 - Host build prereqs beyond `pip install -r requirements.txt`: `gclient` (depot_tools), `ninja`, `vpython3`, `dpkg` (`sysroot.py` runs `dpkg -x`), and `ar` (`package.py` runs `ar rc`). CI bootstraps depot_tools by cloning it inline.
@@ -92,7 +92,7 @@ git diff --check
 
 ## Gotchas
 
-1. **Version drift is enforced.** `scripts/ci/check_version_drift.py` and `check_repo.py` scan AGENTS.md, guides, installers, and post_install.sh — every `3.47.9` / `flutter_3.47.9-7_aarch64.deb` / patch path must match `build.toml [flutter] tag` or CI fails. `autorelease.yml` rewrites these files automatically on a bump, so don't fight the sed format. Use `check_version_drift.py --fix` to auto-rewrite from `build.toml`.
+1. **Version drift is enforced.** `scripts/ci/check_version_drift.py` and `check_repo.py` scan AGENTS.md, guides, installers, and post_install.sh — every `3.47.9` / `flutter_3.47.9-1_aarch64.deb` / patch path must match `build.toml [flutter] tag` or CI fails. `autorelease.yml` rewrites these files automatically on a bump, so don't fight the sed format. Use `check_version_drift.py --fix` to auto-rewrite from `build.toml`.
 2. **Only ARM64 works** for APK gen_snapshot. `arm` fails (32-bit BoringSSL shift overflow), `x64` fails (sysroot mismatch). Packaging is ARM64-only.
 3. **`utils.__MODE__ = ('release', 'debug', 'profile')`** — release first. `Output.any` picks the first existing `flutter/engine/src/out/linux_*_*` dir; it drives which dart-sdk snapshots get packaged. `debuild` asserts at least one output dir exists — build before you package.
 4. **`package.yaml` variables resolve with `safe_eval()`** (package.py) using constrained globals (`tag`, `root`, `arch`, `output`, `version`, `architecture`, plus CLI extras like `dart_version`; resource-local `define:` values layer on top). It allowlists literals, names, attribute access, f-strings, and simple operators — no calls, comprehensions, lambdas, or dunder access. `$version` is the engine revision from `bin/internal/engine.version`. Don't drop the resources `check_repo.py` asserts: `flutter`, `flutter_gpu`, `sky_engine`, `dart_sdk`, `artifacts`, `flutter_linux_gtk_release`, `flutter_linux_gtk_profile`, `flutter_patched_sdk_product`, `executable`, `profile`, `stamps`, `manifest`, `post_install`.
