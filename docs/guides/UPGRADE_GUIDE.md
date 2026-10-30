@@ -1,8 +1,8 @@
 # Flutter Version Upgrade Guide
 
-This document explains how to upgrade Termux Flutter from the current 3.47.8
+This document explains how to upgrade Termux Flutter from the current 3.47.9
 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle
-plugins that must be re-checked after 3.47.8.
+plugins that must be re-checked after 3.47.9.
 
 Build commands and their expected behavior are explained in the
 [Build guide](BUILD_GUIDE.md); build internals (patches, GN configs,
@@ -58,7 +58,7 @@ Each checklist item maps to one step below:
 □ Step 12: Publish the apt repository
 ```
 
-## Must-Check Items After 3.47.8
+## Must-Check Items After 3.47.9
 
 | Item | Why it matters | How to check |
 |------|------------|----------|
@@ -300,7 +300,7 @@ This will:
 3. Package everything into the deb
 
 > Output path: `release/flutter_<tag>-<pkg_rel>_aarch64.deb`
-> (for example `release/flutter_3.47.8-7_aarch64.deb`).
+> (for example `release/flutter_3.47.9-7_aarch64.deb`).
 
 ---
 
