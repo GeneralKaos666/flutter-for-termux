@@ -18,8 +18,8 @@ installing you will have:
 | Flutter Tools Dart | 3.13.7 |
 | Dart VM (`dartvm`) | Dart 3.13.7 (`linux_arm64`) |
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
-| deb size | 640,495,672 bytes (about 611 MiB) |
-| SHA256 | `eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474` |
+| deb size | 635,877,268 bytes (about 606 MiB) |
+| SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 
 ## System Requirements
 
@@ -97,7 +97,7 @@ Run each step in order inside Termux.
    ```bash
    cd ~
    wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.9/flutter_3.47.9-1_aarch64.deb
-   # Confirm the output matches: eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474
+   # Confirm the output matches: 8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981
    sha256sum flutter_3.47.9-1_aarch64.deb
    ```
 
