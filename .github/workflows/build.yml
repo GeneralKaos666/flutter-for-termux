@@ -361,6 +361,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Import CI signing key
+        if: steps.release_guard.outputs.should_publish == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
+            echo "GPG_PRIVATE_KEY secret not set; pin-sync commit will be skipped." >&2
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          install -m 700 -d "$HOME/.gnupg"
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          KEY_ID="$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/{print $5; exit}')"
+          if [ -z "$KEY_ID" ]; then
+            echo "No secret key imported; pin-sync commit will be skipped." >&2
+            echo "SIGNING_READY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "GPG_KEY_ID=${KEY_ID}" >> "$GITHUB_ENV"
+          echo "SIGNING_READY=true" >> "$GITHUB_ENV"
+
       - name: Sync installer pins to published asset
         # Keeps EXPECTED_SHA256 defaults and doc size/hash tables tracking
         # the published deb so they never go stale. Best-effort: never fail
@@ -386,11 +408,23 @@ jobs:
             git diff --stat >&2 || true
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ "${SIGNING_READY:-false}" != "true" ]; then
+            echo "No signing key; pins updated in workspace only." >&2
+            git diff --stat >&2 || true
+            exit 0
+          fi
+          # The author stays the bot; the committer is the signing identity,
+          # which is what GitHub checks before marking the commit verified.
+          git config user.name "GeneralKaos666"
+          git config user.email "xkiller1177@gmail.com"
+          git config user.signingkey "$GPG_KEY_ID"
+          git config commit.gpgsign true
           git add scripts/install/versions_common.sh scripts/install/lib_common.sh \
             scripts/test/gh_e2e_test.sh scripts/device/run_termux_smoke.ps1 \
             docs/guides/BUILD_GUIDE.md docs/guides/INSTALL_GUIDE.md \
             docs/releases/RELEASE_NOTES.md docs/CI_CD.md
-          git commit -m "chore(release): sync installer pins to ${{ steps.parser.outputs.TAG }}"
+          GIT_AUTHOR_NAME="github-actions[bot]" \
+          GIT_AUTHOR_EMAIL="github-actions[bot]@users.noreply.github.com" \
+            git commit -S -m "chore(release): sync installer pins to ${{ steps.parser.outputs.TAG }}"
+          git verify-commit HEAD
           git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main || true

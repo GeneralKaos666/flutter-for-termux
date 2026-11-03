@@ -291,6 +291,12 @@ This workflow is safe to run on GitHub-hosted runners because it only reads publ
   it against the published `key.gpg` (see the README quick start). Rotation is
   handled in that repository — regenerate the key, update its secrets, and
   re-record the fingerprint there and in the README.
+- Commits pushed by the repository's own workflows are signed with a
+  dedicated CI key (`4C99 EB10 CEAF 9A70 86AF 1B11 7565 5171 87EB EB47`),
+  separate from the maintainer's personal key. Its public half is registered
+  on the maintainer's GitHub account and its armored private half lives in the
+  `GPG_PRIVATE_KEY` repository secret. Rotation: generate a new key, upload the
+  public half, replace the secret, and revoke the old key.
 
 ## Branch Protection and Repository Governance
 
@@ -299,6 +305,7 @@ The repository governance rules for the `main` branch are codified in `.github/r
 - **Pull Request Requirements**: A PR is required and every review thread must be resolved before merge; approvals are **not** required (`required_approving_review_count: 0`, `required_review_thread_resolution: true`).
 - **Status Checks**: Strict status checks (`strict_required_status_checks_policy: true`) require the `Repository sanity` job (`ci.yml`) and the `Verify release metadata` job (`release-check.yml`) to pass before merging.
 - **History & Integrity**: Linear git history is enforced; force pushes (`non_fast_forward`) and branch deletion are blocked.
+- **Commit Signatures**: `required_signatures` rejects any unsigned commit pushed to `main`. Human commits are signed with the maintainer's local GPG key; the autorelease and pin-sync commits are signed in CI with the dedicated CI signing key stored as the `GPG_PRIVATE_KEY` secret. Both workflows keep the bot as the commit author and set the signing identity (`GeneralKaos666 <xkiller1177@gmail.com>`) as the committer, because GitHub verifies against the committer identity. Repository admins bypass the ruleset so the automated PAT pushes still land; anything signed with an unregistered key is marked `Unverified` by GitHub instead of being rejected locally.
 - **Repository Hygiene**: Automated pre-merge checks prevent scratch artifacts, test caches, backups, and stage receipts from leaking into git tracking.
 
 ## Local equivalents
