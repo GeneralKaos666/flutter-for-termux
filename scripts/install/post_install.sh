@@ -763,7 +763,7 @@ setup_ndk_clang_wrappers() {
 # The archive URL and SHA256 mirror scripts/install/versions_common.sh (the
 # installer's source of truth); scripts/ci/check_repo.py
 # (check_ndk_constants_drift) fails CI when the two copies diverge.
-NDK_R30_SHA256="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+NDK_R30_SHA256="406afc90e64eee11caf39c0eadb0fc829b126387f18e50562320cdc6162e5a2b"
 
 ndk_archive_sha256() {
 	case "$1" in
