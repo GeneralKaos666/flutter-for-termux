@@ -18,7 +18,7 @@ export FLUTTER_DEB_NAME="flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL}_aarch64.d
 # lived here but had no remaining consumer and was removed.
 export NDK_VERSION="30.0.14206865"
 export NDK_ARCHIVE_URL="https://github.com/HomuHomu833/android-ndk-custom/releases/download/r30/android-ndk-r30-aarch64-linux-android.tar.xz"
-export NDK_EXPECTED_SHA256="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+export NDK_EXPECTED_SHA256="406afc90e64eee11caf39c0eadb0fc829b126387f18e50562320cdc6162e5a2b"
 
 # compileSdk/targetSdk for `flutter build apk` (Stage-B winner, matches
 # [android] in build.toml). TERMUX_COMPILE_SDK/TERMUX_TARGET_SDK override at run
