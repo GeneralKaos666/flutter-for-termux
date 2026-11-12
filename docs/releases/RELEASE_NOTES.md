@@ -43,7 +43,7 @@ Release APKs built with `3.50.0-6` could install and then white-screen. Android 
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.50.0-1_aarch64.deb` |
+| Package | `flutter_3.50.0-2_aarch64.deb` |
 | Size | 635,877,268 bytes (~606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Flutter | 3.50.0 |
@@ -82,8 +82,8 @@ Fallback: download the payload from this release manually:
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-1_aarch64.deb
-dpkg -i flutter_3.50.0-1_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-2_aarch64.deb
+dpkg -i flutter_3.50.0-2_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
