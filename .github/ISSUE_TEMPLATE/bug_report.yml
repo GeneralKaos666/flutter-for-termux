@@ -35,7 +35,7 @@ body:
     attributes:
       label: Flutter package version
       description: "Output of `dpkg -s flutter | grep Version`, or the .deb filename you installed."
-      placeholder: "3.50.0-1"
+      placeholder: "3.50.0-2"
     validations:
       required: true
   - type: dropdown

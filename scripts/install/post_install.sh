@@ -443,9 +443,23 @@ register_patch "chrome" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/web/chrome
 
 patch_build_linux() {
 	if grep -F -q "false /* Termux" "$1"; then return 0; fi
-	grep -q "if (!globals.platform.isLinux)" "$1" || return 1
-	sed -i "s@if (!globals.platform.isLinux)@if (false /* Termux: allow linux build */)@" "$1"
-	sed -i "s@!featureFlags.isLinuxEnabled || !globals.platform.isLinux@!featureFlags.isLinuxEnabled /* Termux: visible */@" "$1"
+	# Upstream moved this command from `globals.platform` to ToolContext in 3.50:
+	# `runCommand` now aliases `final Platform platform = toolContext.platform;`
+	# and `hidden` reads `_featureFlags`/`toolContext.platform`. Patch whichever
+	# shape the shipped SDK has, and fail closed if neither matches.
+	if grep -F -q "if (!globals.platform.isLinux)" "$1"; then
+		sed -i "s@if (!globals.platform.isLinux)@if (false /* Termux: allow linux build */)@" "$1"
+		sed -i "s@!featureFlags.isLinuxEnabled || !globals.platform.isLinux@!featureFlags.isLinuxEnabled /* Termux: visible */@" "$1"
+		grep -F -q "Termux: visible" "$1" || return 1
+		return 0
+	fi
+	if grep -F -q "if (!platform.isLinux)" "$1"; then
+		sed -i "s@if (!platform.isLinux)@if (false /* Termux: allow linux build */)@" "$1"
+		sed -i "s@!_featureFlags.isLinuxEnabled || !toolContext.platform.isLinux@!_featureFlags.isLinuxEnabled /* Termux: visible */@" "$1"
+		grep -F -q "Termux: visible" "$1" || return 1
+		return 0
+	fi
+	return 1
 }
 register_patch "build_linux" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/commands/build_linux.dart" patch_build_linux
 
