@@ -12,18 +12,18 @@ Related guides:
   [Build process](BUILD_PROCESS.md)
 - CI workflows and the device lab: [CI/CD](../CI_CD.md)
 
-## Current Version Status (3.47.9)
+## Current Version Status (3.50.0)
 
 | Item | Value |
 |------|----|
-| Flutter tag | `3.47.9` |
+| Flutter tag | `3.50.0` |
 | Engine revision | `cf636b1dfb818dd6a3ff16e390e93b1a036969c8` |
-| Package | `flutter_3.47.9-1_aarch64.deb` |
+| Package | `flutter_3.50.0-1_aarch64.deb` |
 | Package size | 635,877,268 bytes (about 606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
-3.47.9 introduces three new points that require special attention:
+3.50.0 introduces three new points that require special attention:
 
 1. **Dart VM/tool split**: The Flutter CLI uses the Termux JIT `dart`, but
    engine snapshots still need the accompanying `dartvm` / `dartaotruntime`,
@@ -214,7 +214,7 @@ python3 build.py debuild --arch=arm64
 After the build completes, the deb package is located at:
 
 ```text
-release/flutter_3.47.9-1_aarch64.deb
+release/flutter_3.50.0-1_aarch64.deb
 ```
 
 ---
@@ -267,7 +267,7 @@ follow [Install guide](INSTALL_GUIDE.md) (the manual deb method), or in
 short:
 
 ```bash
-dpkg -i flutter_3.47.9-1_aarch64.deb
+dpkg -i flutter_3.50.0-1_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -695,13 +695,13 @@ After the build completes, verify with the following checklist.
 
 ---
 
-## 10. Feature Test Results (3.47.9)
+## 10. Feature Test Results (3.50.0)
 
 | Feature | Status | Description |
 |------|------|------|
-| `flutter --version` | ✅ OK | Flutter 3.47.9 / Tools Dart 3.13.7 |
-| `dart --version` | ✅ OK | Dart 3.13.7 (`linux_arm64`) |
-| `$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dartvm --version` | ✅ OK | Dart 3.13.7 (`linux_arm64`) |
+| `flutter --version` | ✅ OK | Flutter 3.50.0 / Tools Dart 3.14.0 |
+| `dart --version` | ✅ OK | Dart 3.14.0 (`linux_arm64`) |
+| `$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dartvm --version` | ✅ OK | Dart 3.14.0 (`linux_arm64`) |
 | `flutter doctor -v` | ✅ OK | unknown channel / no device are expected warnings |
 | `flutter create` | ✅ OK | Can create Android + Linux projects |
 | `flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons` | ✅ OK | Requires running post_install.sh; only supports android-arm64 |

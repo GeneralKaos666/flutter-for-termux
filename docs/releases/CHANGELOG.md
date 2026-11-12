@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+
+### Upstream Flutter 3.50
+- Stable release notes: https://docs.flutter.dev/release/release-notes/release-notes-3.50.0 (imported 2026-11-12; source verified).
+
 ### Upstream Flutter 3.47
 - Stable release notes: https://docs.flutter.dev/release/release-notes/release-notes-3.47.0 (imported 2026-10-09; source verified).
 

@@ -6,9 +6,9 @@
 # every value here in sync with build.toml when cutting a release.
 
 # Flutter release (matches [flutter] tag in build.toml)
-export FLUTTER_VERSION="3.47.9"
+export FLUTTER_VERSION="3.50.0"
 export FLUTTER_PKG_REL="${FLUTTER_PKG_REL:-1}"
-export RELEASE_TAG="3.47.9"
+export RELEASE_TAG="3.50.0"
 export EXPECTED_SHA256="8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981"
 export FLUTTER_DEB_NAME="flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL}_aarch64.deb"
 
