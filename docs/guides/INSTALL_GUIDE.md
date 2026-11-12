@@ -1,6 +1,6 @@
 # Install Guide — Flutter 3.50.0 on Termux
 
-This guide walks you through installing `flutter_3.50.0-1_aarch64.deb` on an
+This guide walks you through installing `flutter_3.50.0-2_aarch64.deb` on an
 ARM64 Termux device, verifying it, and building your first app. After
 installing you will have:
 
@@ -96,21 +96,21 @@ Run each step in order inside Termux.
 
    ```bash
    cd ~
-   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-1_aarch64.deb
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-2_aarch64.deb
    # Confirm the output matches: 8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981
-   sha256sum flutter_3.50.0-1_aarch64.deb
+   sha256sum flutter_3.50.0-2_aarch64.deb
    ```
 
    Expected output — the hash must match exactly:
 
    ```text
-   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.50.0-1_aarch64.deb
+   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.50.0-2_aarch64.deb
    ```
 
 3. Install the package and repair any missing dependencies:
 
    ```bash
-   dpkg -i flutter_3.50.0-1_aarch64.deb
+   dpkg -i flutter_3.50.0-2_aarch64.deb
    apt --fix-broken install -y
    ```
 

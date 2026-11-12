@@ -18,7 +18,7 @@ Related guides:
 |------|----|
 | Flutter tag | `3.50.0` |
 | Engine revision | `cf636b1dfb818dd6a3ff16e390e93b1a036969c8` |
-| Package | `flutter_3.50.0-1_aarch64.deb` |
+| Package | `flutter_3.50.0-2_aarch64.deb` |
 | Package size | 635,877,268 bytes (about 606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
@@ -214,7 +214,7 @@ python3 build.py debuild --arch=arm64
 After the build completes, the deb package is located at:
 
 ```text
-release/flutter_3.50.0-1_aarch64.deb
+release/flutter_3.50.0-2_aarch64.deb
 ```
 
 ---
@@ -267,7 +267,7 @@ follow [Install guide](INSTALL_GUIDE.md) (the manual deb method), or in
 short:
 
 ```bash
-dpkg -i flutter_3.50.0-1_aarch64.deb
+dpkg -i flutter_3.50.0-2_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh

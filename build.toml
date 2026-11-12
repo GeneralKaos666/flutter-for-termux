@@ -99,4 +99,4 @@ pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 [package]
 conf = './package.yaml'
 path = 'release'  # gitignored; created on demand by Build.output()
-pkg_rel = '1'  # Debian packaging revision: resets to 1 for each new upstream tag, increments for respins of the same tag
+pkg_rel = '2'  # Debian packaging revision: resets to 1 for each new upstream tag, increments for respins of the same tag
