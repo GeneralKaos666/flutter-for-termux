@@ -185,6 +185,27 @@ class BuildTest(unittest.TestCase):
             runtime = tomllib.load(f)['build'].get('runtime')
         self.assertEqual(self.instance.mode, runtime or ['debug'])
 
+    def test_runtime_modes_cover_packaged_engine_variants(self):
+        """Every mode ``package.yaml`` packages from must be built.
+
+        ``package.py::explore`` logs ``source not found`` and skips a missing
+        source instead of failing, so a mode dropped from
+        ``build.toml [build] runtime`` silently removes that engine variant
+        from the deb (debug vanished this way once, breaking the default
+        ``flutter run -d linux``).
+        """
+        with open(self.instance.conf, 'rb') as f:
+            runtime = set(tomllib.load(f)['build'].get('runtime') or [])
+        resources = (Path(__file__).parent/'package.yaml').read_text()
+        packaged = set(
+            re.findall(r'output\.(debug|release|profile)\b', resources)
+        )
+        self.assertTrue(packaged, 'package.yaml declares no per-mode outputs')
+        self.assertEqual(
+            packaged - runtime, set(),
+            f'package.yaml packages modes that are not built: '
+            f'{sorted(packaged - runtime)}')
+
     def test_output_uses_package_version_suffix(self):
         pkg_rel = str(self.instance.pkg_rel or '').strip()
         expected_version = f'{self.instance.tag}-{pkg_rel}' if pkg_rel else self.instance.tag

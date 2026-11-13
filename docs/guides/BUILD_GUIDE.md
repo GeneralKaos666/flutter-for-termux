@@ -18,7 +18,7 @@ Related guides:
 |------|----|
 | Flutter tag | `3.50.0` |
 | Engine revision | `cf636b1dfb818dd6a3ff16e390e93b1a036969c8` |
-| Package | `flutter_3.50.0-2_aarch64.deb` |
+| Package | `flutter_3.50.0-3_aarch64.deb` |
 | Package size | 635,877,268 bytes (about 606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
@@ -214,7 +214,7 @@ python3 build.py debuild --arch=arm64
 After the build completes, the deb package is located at:
 
 ```text
-release/flutter_3.50.0-2_aarch64.deb
+release/flutter_3.50.0-3_aarch64.deb
 ```
 
 ---
@@ -267,7 +267,7 @@ follow [Install guide](INSTALL_GUIDE.md) (the manual deb method), or in
 short:
 
 ```bash
-dpkg -i flutter_3.50.0-2_aarch64.deb
+dpkg -i flutter_3.50.0-3_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
@@ -600,26 +600,30 @@ and the fix (**Fix**).
   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
   ```
 
-### Debug vs Release mode mismatch (technical background)
+### Runtime modes
 
-The current deb package uses binaries built in **release mode**:
+`build.toml [build] runtime = ['release', 'debug', 'profile']`, so the deb
+carries all three GTK engine variants:
 
-- `dart` - release mode
-- `dartaotruntime` - release mode
-- `frontend_server_aot.dart.snapshot` - release mode
-- `gen_snapshot` (Linux desktop) - release mode
-- `gen_snapshot` (Android target) - release and profile modes
+| Slot | Built by | Used by |
+| --- | --- | --- |
+| `artifacts/engine/linux-arm64/` | debug | `flutter run -d linux` (JIT, hot reload), `flutter build linux --debug` |
+| `artifacts/engine/linux-arm64-release/` | release | `flutter build linux --release`, `flutter run -d linux --release` |
+| `artifacts/engine/linux-arm64-profile/` | profile | `flutter run -d linux --profile` |
+| `artifacts/engine/linux-arm64-android-{release,profile}/` | `--android`, both modes | `flutter build apk --release` / `--profile` AOT |
 
-This is because the deb packages only the modes listed in
-`build.toml [build] runtime`.
+Shared developer tools (`dart`, `dartaotruntime`,
+`frontend_server_aot.dart.snapshot`, `flutter_tester`, `gen_snapshot` for
+desktop AOT) come from the release configuration and live in the
+`linux-arm64/` slot alongside the debug GTK library.
 
-**Impact on users:**
+**Impact on users:** everything works out of the box — `flutter doctor`,
+`flutter run -d linux`, `flutter build linux` in any mode, and
+`flutter build apk --release|--profile`.
 
-- `flutter doctor` ✅ runs normally
-- `flutter build apk --release` ✅ runs normally (uses the android gen_snapshot)
-- `flutter run -d linux --release` / `flutter build linux --release` ✅ run normally
-- `flutter run -d linux` (debug) ⚠️ needs a debug-mode engine, so pass
-  `--release` or `--profile`, or rebuild with `--mode=debug`
+Dropping a mode from `runtime` does not fail the build: `package.py`'s
+`explore()` logs `source not found` and skips that slot, so the deb silently
+loses it.
 
 ### Release-mode build problems (developer reference)
 

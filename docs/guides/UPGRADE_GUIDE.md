@@ -300,7 +300,7 @@ This will:
 3. Package everything into the deb
 
 > Output path: `release/flutter_<tag>-<pkg_rel>_aarch64.deb`
-> (for example `release/flutter_3.50.0-2_aarch64.deb`).
+> (for example `release/flutter_3.50.0-3_aarch64.deb`).
 
 ---
 

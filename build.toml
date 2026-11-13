@@ -15,7 +15,7 @@ version = '30.0.14206865' # r30 from HomuHomu833
 
 [build]
 arch = ['arm64']       # arm, arm64, x86, x64
-runtime = ['release']  # debug, release, profile; the deb packages only these modes' artifacts
+runtime = ['release', 'debug', 'profile']  # engine runtime modes packaged in the deb; debug powers `flutter run -d linux`
 # Android-target gen_snapshot modes. `flutter build apk --release/--profile`
 # AOT-compiles Dart with an Android-configured gen_snapshot (compressed
 # pointers, target_os=android); the Linux desktop gen_snapshot cannot be reused
@@ -99,4 +99,4 @@ pkgs = ['gtk3', 'libxcomposite', 'libxdamage', 'libxinerama', 'libxkbcommon']
 [package]
 conf = './package.yaml'
 path = 'release'  # gitignored; created on demand by Build.output()
-pkg_rel = '2'  # Debian packaging revision: resets to 1 for each new upstream tag, increments for respins of the same tag
+pkg_rel = '3'  # Debian packaging revision: resets to 1 for each new upstream tag, increments for respins of the same tag
