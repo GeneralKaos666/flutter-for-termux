@@ -26,7 +26,7 @@ computer in sight.
 | Flutter   | 3.50.0 (stable) |
 | Dart      | 3.14.0 |
 | Architecture | aarch64 (ARM64) only |
-| Package   | `flutter_3.50.0-2_aarch64.deb` |
+| Package   | `flutter_3.50.0-3_aarch64.deb` |
 
 Every release ships with checksums and build evidence so you can verify
 exactly what you installed:
@@ -91,7 +91,7 @@ Prefer to see every step? Do it by hand.
 
 ```bash
 TAG=3.50.0
-PKG_REL=2
+PKG_REL=3
 DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
@@ -301,5 +301,7 @@ smoke gate (`device-smoke.yml`) handle manual runs, and the nightly
 
 - **ARM64 only.** `arm` and `x64` gen_snapshot builds fail (32-bit BoringSSL
   shift overflow / sysroot mismatch), so only the `aarch64` package ships.
-- **Release mode by default.** Debug and profile need those steps rebuilt
-  with `--mode=debug|profile`.
+- **All three runtime modes ship.** The deb carries debug, release, and
+  profile GTK engine variants, so `flutter run -d linux` (debug, hot reload),
+  `--profile`, and `flutter build linux --release` all work. Building all three
+  is set by `build.toml [build] runtime`.

@@ -57,9 +57,9 @@ Each stage maps to a step in the [Build guide](BUILD_GUIDE.md#3-step-by-step-bui
 | 1. Sync source | `build.py clone` then `build.py sync` | ~30GB, several hours. The `.gclient` `custom_hooks` apply the patches automatically — no separate patch step |
 | 2. Patches | (automatic during `sync`) | Manual `build.py patch --file=...` only to re-test/rebase against a fresh checkout |
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
-| 4. Build Linux components | `build.py configure --arch=arm64 --mode=release` + `build.py build --arch=arm64 --mode=release` | The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
+| 4. Build Linux components | `build.py configure --arch=arm64 --mode=<m>` + `build.py build --arch=arm64 --mode=<m>` for each mode in `[build] runtime` (`release`, `debug`, `profile`) | Debug GTK powers `flutter run -d linux`; release/profile feed `build linux` and `run -d linux --release\|--profile`. The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
 | 5. Android gen_snapshot | `configure_android()` / `build_android()` (`--android --android-cpu arm64`, target `flutter/third_party/dart/runtime/bin:gen_snapshot`) | Shipped for release/profile as `linux-arm64-android-{release,profile}/gen_snapshot`; post-install resolves/provisions it for `flutter build apk`. |
-| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.0-2_aarch64.deb` |
+| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.0-3_aarch64.deb` |
 
 ---
 
@@ -217,9 +217,12 @@ error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbsta
 
 **Cause**: The sysroot contains both glibc and bionic headers
 
-**Current Status**: Release mode is the shipped default —
-`build.toml [build] runtime = ['release']`, so the pipeline builds and
-packages release artifacts; debug/profile are opt-in via `--mode`
+**Current Status**: All three runtime modes are built and packaged —
+`build.toml [build] runtime = ['release', 'debug', 'profile']` — so the deb
+ships the debug GTK engine (`linux-arm64/`, used by `flutter run -d linux`),
+plus release and profile. The sysroot header conflict below only appears when
+mixing modes against a dirty `sysroot/` tree; `python3 build.py sysroot
+--arch=arm64` rebuilds it.
 
 **Future Fix Direction**: Clean up the sysroot and keep only the bionic headers
 
@@ -263,11 +266,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.50.0-2_aarch64.deb /sdcard/Download/
+adb push flutter_3.50.0-3_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.50.0-2_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.50.0-3_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -316,13 +319,13 @@ Confirm that the version numbers in the following files are consistent:
 
 ```bash
 # Final artifact location
-release/flutter_3.50.0-2_aarch64.deb
+release/flutter_3.50.0-3_aarch64.deb
 ```
 
 ### 3. Upload to GitHub Releases
 
 1. Create a new Release: `3.50.0`
-2. Upload the deb file: `flutter_3.50.0-2_aarch64.deb`
+2. Upload the deb file: `flutter_3.50.0-3_aarch64.deb`
 3. Fill in the Release Notes
 
 ### 4. Verify the Release
