@@ -7,6 +7,16 @@ and read the AAPT2 release-build analysis. Replaces `docs/CI_CD.md`,
 
 ## Upgrading Flutter
 
+This document explains how to upgrade Termux Flutter from the current 3.50.0
+to a new version, and lists the risk points in Dart / Flutter Tools / Gradle
+plugins that must be re-checked after 3.50.0.
+
+Build commands and their expected behavior are explained in the
+[Build guide](BUILD.md); build internals (patches, GN configs,
+sysroot) are documented in the [Build process](BUILD.md).
+
+---
+
 ### Upgrading via apt (end users)
 
 If Flutter was installed from the apt repository
@@ -473,6 +483,26 @@ See the merged tree in
 
 ## CI, CD and the device lab
 
+This repository uses GitHub Actions for both lightweight validation and the full Flutter Engine build:
+
+1. **GitHub-hosted workflows** for fast, free, public-repository validation **and** the full `.deb` build on `ubuntu-latest`.
+2. **Self-hosted workflows** as fallbacks for the expensive build and for Android tablet smoke tests.
+
+The goal is to keep pull requests cheap and safe while still making release builds reproducible.
+
+In this document:
+
+1. [GitHub Actions cost and limits](#github-actions-cost-and-limits)
+2. [Workflow map](#workflow-map)
+3. [PR / push CI](#pr--push-ci)
+4. [Full deb build](#full-deb-build)
+5. [Release policy](#release-policy)
+6. [Device smoke](#device-smoke)
+7. [Release check](#release-check)
+8. [Security model](#security-model)
+9. [Branch protection and repository governance](#branch-protection-and-repository-governance)
+10. [Local equivalents](#local-equivalents)
+
 ### GitHub Actions cost and limits
 
 This is a public open-source repository, so standard GitHub-hosted runner
@@ -841,6 +871,20 @@ scripts/device/run_termux_smoke.ps1 `
 the artifact it just downloaded and hash-verified).
 
 ## AAPT2 release-build analysis
+
+Release APKs built inside Termux used to install and then fail to parse. This
+document records what caused that, which workarounds the project ships, and
+what a full fix would require.
+
+> **Status (2026-09-13):** Termux now ships aapt2 16.0.0.4 from Android
+> Build-Tools, which loads the android-36 `android.jar`. New projects therefore
+> default to `compileSdk = 36` / `targetSdk = 36` through `post_install.sh`,
+> with a fail-closed ladder 36 → 35 → 34 for devices whose aapt2 cannot load
+> the newest platform. The old "pin API 34" constraint is retired as the
+> default. The R8 shrinking / resource-optimization workaround described below
+> is still in effect for on-device build stability.
+
+---
 
 ### 1. Background and Symptom
 

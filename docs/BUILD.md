@@ -6,6 +6,16 @@ build works internally. Replaces `docs/guides/INSTALL_GUIDE.md`,
 
 ## Install on device
 
+This guide walks you through installing `flutter_3.50.0-3_aarch64.deb` on an
+ARM64 Termux device, verifying it, and building your first app. After
+installing you will have:
+
+- `flutter doctor -v`
+- `flutter create`
+- `flutter build apk --release`
+- `flutter build linux --release`
+- `flutter run` + hot reload (requires an ADB device connection)
+
 ### Verified Versions
 
 | Item | Value |
@@ -496,6 +506,18 @@ Each entry below shows the exact error (**Symptom**), why it happens
   ```
 
 ## Build from source
+
+This guide explains how to build the Flutter deb package (including Android
+gen_snapshot) from scratch on a Linux x86-64 host. It is organized as a quick
+start, then numbered step-by-step instructions, then troubleshooting.
+
+Related guides:
+
+- Installing the finished deb on a device: [Install guide](#install-on-device)
+- Moving to a new Flutter version: [Upgrade guide](MAINTENANCE.md)
+- How the build works internally (patches, GN configs, sysroot):
+  [Build process](#build-internals)
+- CI workflows and the device lab: [CI/CD](MAINTENANCE.md)
 
 ### Current Version Status (3.50.0)
 
@@ -1218,14 +1240,63 @@ python3 build.py
 
 #### Patch maintenance tips
 
-1. **Keep patches minimal**: only modify what is necessary
-2. **Add comments**: explain in the patch why the modification is needed
-3. **Version isolation**: each Flutter version has its own patch directory
-4. **Record changes**: update docs/releases/CHANGELOG.md
+See [Patch Maintenance Tips](MAINTENANCE.md#patch-maintenance-tips) for the
+checklist.
 
 ---
 
 ## Build internals
+
+This document explains **why** the Flutter-for-Termux build is put together
+the way it is: the pipeline stages, the patches, the GN toolchain
+configuration, the sysroot, and the known issues behind them. It is a
+reference for future version upgrades.
+
+For copy-pasteable build commands, use the [Build guide](#build-from-source);
+for bumping to a new Flutter release, use the
+[Upgrade guide](MAINTENANCE.md).
+
+### Why `ninja flutter` alone was not enough
+
+#### Original problem
+
+- `flutter run -d linux` ✓ works
+- `flutter build apk --release` ✗ fails (dart version issue)
+
+#### Root cause
+
+**`ninja flutter` alone does not compile the dart binary!**
+
+The `bin/cache/dart-sdk/bin/dart` binary must ship in the deb package,
+otherwise:
+
+- The flutter command fails to execute properly
+- gen_snapshot version mismatch errors
+
+#### Solution
+
+The FFT `build()` ninja invocation includes
+`flutter/build/archives:dart_sdk_archive` (plus `flutter_patched_sdk` and
+`flutter_gtk`), so the dart binary is produced as part of the standard build:
+
+```bash
+python3 build.py build --arch=arm64 --mode=release
+```
+
+Or use the one-command build:
+
+```bash
+python3 build.py
+```
+
+#### deb package contents confirmation (after fix)
+
+```text
+✓ bin/cache/dart-sdk/bin/dart (102MB)
+✓ bin/cache/artifacts/engine/linux-arm64/gen_snapshot (6.9MB)
+✓ bin/cache/artifacts/engine/linux-arm64-android-release/gen_snapshot (5.3MB; Android AOT)
+✓ bin/cache/artifacts/engine/linux-arm64-android-profile/gen_snapshot (5.3MB; Android AOT)
+```
 
 ### Build Environment
 
