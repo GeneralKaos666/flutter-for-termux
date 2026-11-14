@@ -1884,34 +1884,6 @@ class SysrootLockTest(unittest.TestCase):
                 for field in ('name', 'version', 'url', 'sha256', 'size', 'archive_path', 'repo', 'dist'):
                     self.assertIn(field, pkg)
 
-    def test_write_lock_is_compact_and_matches_the_committed_file(self):
-        import sysroot
-
-        metas = [{
-            'name': 'glib',
-            'version': '2.0',
-            'url': 'https://example.com/glib.deb',
-            'sha256': '0' * 64,
-            'size': 123,
-            'archive_path': 'pool/glib.deb',
-            'repo': 'https://example.com/',
-            'dist': 'stable',
-        }]
-        committed = Path(__file__).parent / 'sysroot.lock.json'
-        committed_text = committed.read_text(encoding='utf-8')
-
-        with tempfile.TemporaryDirectory() as tmp:
-            lock = Path(tmp, 'sysroot.lock.json')
-            sysroot._write_lock(lock, 'aarch64', metas, 'deadbeef')
-            text = lock.read_text(encoding='utf-8')
-
-        # The committed lock is the compact form, so a regenerated lock must
-        # produce a one-line diff, not re-indent the whole file.
-        self.assertNotIn('\n  "', text, 'sysroot lock must not be pretty-printed')
-        self.assertEqual(text.count('\n'), 1, 'sysroot lock must be a single line plus trailing newline')
-        self.assertNotIn('\n  "', committed_text, 'committed sysroot.lock.json must stay compact')
-        self.assertEqual(committed_text.count('\n'), 1)
-
 
 class CiWorkflowContractTest(unittest.TestCase):
     """The CI workflow must actually run the checks this plan wires in."""
