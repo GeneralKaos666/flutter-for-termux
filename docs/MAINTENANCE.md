@@ -309,7 +309,7 @@ This will:
 3. Package everything into the deb
 
 > Output path: `release/flutter_<tag>-<pkg_rel>_aarch64.deb`
-> (for example `release/flutter_3.50.0-4_aarch64.deb`).
+> (for example `release/flutter_3.50.0-5_aarch64.deb`).
 
 ---
 
@@ -638,9 +638,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.50.0-4_aarch64.deb`
-- `flutter_3.50.0-4_aarch64.deb.sha256`
-- `flutter_3.50.0-4_aarch64.deb.size.txt`
+- `flutter_3.50.0-5_aarch64.deb`
+- `flutter_3.50.0-5_aarch64.deb.sha256`
+- `flutter_3.50.0-5_aarch64.deb.size.txt`
 - `inventory.txt`
 - `build_metadata.json`
 - `build_evidence.json`
@@ -863,7 +863,7 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebPath ".\candidate\flutter_3.50.0-4_aarch64.deb" `
+  -DebPath ".\candidate\flutter_3.50.0-5_aarch64.deb" `
   -ExpectedSha256 "8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981"
 ```
 

@@ -6,7 +6,7 @@ build works internally. Replaces `docs/guides/INSTALL_GUIDE.md`,
 
 ## Install on device
 
-This guide walks you through installing `flutter_3.50.0-4_aarch64.deb` on an
+This guide walks you through installing `flutter_3.50.0-5_aarch64.deb` on an
 ARM64 Termux device, verifying it, and building your first app. After
 installing you will have:
 
@@ -102,21 +102,21 @@ Run each step in order inside Termux.
 
    ```bash
    cd ~
-   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-4_aarch64.deb
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-5_aarch64.deb
    # Confirm the output matches: 8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981
-   sha256sum flutter_3.50.0-4_aarch64.deb
+   sha256sum flutter_3.50.0-5_aarch64.deb
    ```
 
    Expected output — the hash must match exactly:
 
    ```text
-   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.50.0-4_aarch64.deb
+   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.50.0-5_aarch64.deb
    ```
 
 3. Install the package and repair any missing dependencies:
 
    ```bash
-   dpkg -i flutter_3.50.0-4_aarch64.deb
+   dpkg -i flutter_3.50.0-5_aarch64.deb
    apt --fix-broken install -y
    ```
 
@@ -525,7 +525,7 @@ Related guides:
 |------|----|
 | Flutter tag | `3.50.0` |
 | Engine revision | `cf636b1dfb818dd6a3ff16e390e93b1a036969c8` |
-| Package | `flutter_3.50.0-4_aarch64.deb` |
+| Package | `flutter_3.50.0-5_aarch64.deb` |
 | Package size | 635,877,268 bytes (about 606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
@@ -721,7 +721,7 @@ python3 build.py debuild --arch=arm64
 After the build completes, the deb package is located at:
 
 ```text
-release/flutter_3.50.0-4_aarch64.deb
+release/flutter_3.50.0-5_aarch64.deb
 ```
 
 ---
@@ -774,7 +774,7 @@ follow [Install guide](#install-on-device) (the manual deb method), or in
 short:
 
 ```bash
-dpkg -i flutter_3.50.0-4_aarch64.deb
+dpkg -i flutter_3.50.0-5_aarch64.deb
 apt --fix-broken install -y
 source $PREFIX/etc/profile.d/flutter.sh
 flutter doctor -v
@@ -1335,7 +1335,7 @@ Each stage maps to a step in the [Build guide](#3-step-by-step-build):
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
 | 4. Build Linux components | `build.py configure --arch=arm64 --mode=<m>` + `build.py build --arch=arm64 --mode=<m>` for each mode in `[build] runtime` (`release`, `debug`, `profile`) | Debug GTK powers `flutter run -d linux`; release/profile feed `build linux` and `run -d linux --release\|--profile`. The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
 | 5. Android gen_snapshot | `configure_android()` / `build_android()` (`--android --android-cpu arm64`, target `flutter/third_party/dart/runtime/bin:gen_snapshot`) | Shipped for release/profile as `linux-arm64-android-{release,profile}/gen_snapshot`; post-install resolves/provisions it for `flutter build apk`. |
-| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.0-4_aarch64.deb` |
+| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.0-5_aarch64.deb` |
 
 ---
 
@@ -1542,11 +1542,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.50.0-4_aarch64.deb /sdcard/Download/
+adb push flutter_3.50.0-5_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.50.0-4_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.50.0-5_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -1595,13 +1595,13 @@ Confirm that the version numbers in the following files are consistent:
 
 ```bash
 # Final artifact location
-release/flutter_3.50.0-4_aarch64.deb
+release/flutter_3.50.0-5_aarch64.deb
 ```
 
 #### 3. Upload to GitHub Releases
 
 1. Create a new Release: `3.50.0`
-2. Upload the deb file: `flutter_3.50.0-4_aarch64.deb`
+2. Upload the deb file: `flutter_3.50.0-5_aarch64.deb`
 3. Fill in the Release Notes
 
 #### 4. Verify the Release
