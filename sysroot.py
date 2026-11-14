@@ -187,7 +187,9 @@ def _write_lock(lock_path, arch, metas, tree_hash):
         data['arm64'] = entry
     elif arch == 'arm64':
         data['aarch64'] = entry
-    lock_path.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+    lock_path.write_text(
+        json.dumps(data, separators=(',', ':'), sort_keys=True) + '\n', encoding='utf-8'
+    )
     logger.info(f'✓ wrote sysroot lock: {lock_path} ({len(packages)} packages)')
 
 
