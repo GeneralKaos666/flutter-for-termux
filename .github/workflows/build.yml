@@ -421,8 +421,8 @@ jobs:
           git config commit.gpgsign true
           git add scripts/install/versions_common.sh scripts/install/lib_common.sh \
             scripts/test/gh_e2e_test.sh scripts/device/run_termux_smoke.ps1 \
-            docs/BUILD.md docs/MAINTENANCE.md \
-            docs/releases/RELEASE_NOTES.md
+            docs/guides/BUILD_GUIDE.md docs/guides/INSTALL_GUIDE.md \
+            docs/releases/RELEASE_NOTES.md docs/CI_CD.md
           GIT_AUTHOR_NAME="github-actions[bot]" \
           GIT_AUTHOR_EMAIL="github-actions[bot]@users.noreply.github.com" \
             git commit -S -m "chore(release): sync installer pins to ${{ steps.parser.outputs.TAG }}"

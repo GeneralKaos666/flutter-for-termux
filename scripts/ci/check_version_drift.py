@@ -35,8 +35,10 @@ MARKDOWN_DOCS = [
 ]
 GUIDANCE_DOCS = ["AGENTS.md"]
 GUIDE_DOCS = [
-    "docs/BUILD.md",
-    "docs/MAINTENANCE.md",
+    "docs/guides/BUILD_GUIDE.md",
+    "docs/guides/BUILD_PROCESS.md",
+    "docs/guides/INSTALL_GUIDE.md",
+    "docs/guides/UPGRADE_GUIDE.md",
 ]
 INSTALLER_SCRIPTS = [
     "scripts/install/install.sh",

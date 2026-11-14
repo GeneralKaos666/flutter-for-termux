@@ -137,8 +137,11 @@ jobs:
           set -euo pipefail
           FILES=(
             AGENTS.md README.md
-            docs/BUILD.md docs/MAINTENANCE.md
-            docs/releases/RELEASE_NOTES.md
+            docs/CI_CD.md docs/releases/RELEASE_NOTES.md
+            docs/guides/BUILD_GUIDE.md
+            docs/guides/BUILD_PROCESS.md
+            docs/guides/INSTALL_GUIDE.md
+            docs/guides/UPGRADE_GUIDE.md
             scripts/ci/check_repo.py
             scripts/device/run_termux_smoke.ps1
             scripts/install/flutter_termux_doctor.sh
