@@ -27,23 +27,23 @@ Installing `3.50.0-4` over `3.50.0-3` is a drop-in replacement — follow the [I
 
 Installing `3.50.0-5` over `3.50.0-4` is a drop-in replacement — follow the [Install](#install) steps.
 
-## Fixed in 3.50.0-7
+## Fixed in 3.50.0-6
 
-Release APKs built with `3.50.0-6` could install and then white-screen. Android AOT was compiled by the Linux desktop `gen_snapshot`, which emits `target_os=linux` snapshots without compressed pointers; the Android VM rejects them ([issue #41](https://github.com/GeneralKaos666/flutter-for-termux/issues/41)).
+Release APKs built with `3.50.0-5` could install and then white-screen. Android AOT was compiled by the Linux desktop `gen_snapshot`, which emits `target_os=linux` snapshots without compressed pointers; the Android VM rejects them ([issue #41](https://github.com/GeneralKaos666/flutter-for-termux/issues/41)).
 
-`3.50.0-7` ships a dedicated Android-target `gen_snapshot` for release and profile, built with `--android --android-cpu arm64`:
+`3.50.0-6` ships a dedicated Android-target `gen_snapshot` for release and profile, built with `--android --android-cpu arm64`:
 
 - **Payload.** The binaries live at `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`, next to the Linux desktop one. Flutter never writes to those paths, so its first-run artifact materialization cannot overwrite them.
 - **Resolution.** `post_install.sh` patches `flutter_tools` so the Android AOT compiler resolves straight to the shipped binary. The `android-arm64-{release,profile}/linux-arm64` symlinks remain as a fallback for direct directory lookups.
 - **Upgrade.** Run `apt upgrade flutter`, then `bash $PREFIX/share/flutter/post_install.sh`, then `flutter clean` in each project before rebuilding. A stale `build/` directory keeps the old AOT output.
 
-`3.50.0-7` also includes the `3.50.0-4` and `3.50.0-5` fixes below.
+`3.50.0-6` also includes the `3.50.0-4` and `3.50.0-5` fixes below.
 
 ## Package
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.50.0-5_aarch64.deb` |
+| Package | `flutter_3.50.0-6_aarch64.deb` |
 | Size | 635,877,268 bytes (~606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Flutter | 3.50.0 |
@@ -82,8 +82,8 @@ Fallback: download the payload from this release manually:
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-5_aarch64.deb
-dpkg -i flutter_3.50.0-5_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-6_aarch64.deb
+dpkg -i flutter_3.50.0-6_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
