@@ -226,7 +226,7 @@ flutter run -d <device_id>
 Edit your code, save, and watch the app update live:
 
 <p align="center">
-  <img src="assets/demo_hot_reload.jpg" alt="Hot reload" width="60%"/>
+  <img src="assets/demo_hot_reload.webp" alt="Hot reload" width="60%"/>
 </p>
 
 ## More targets

@@ -170,3 +170,4 @@ dpkg_state.json
 # ----- apt repository build output (apt_repo.py) -----
 /apt-repo-work/
 /repo/
+.deja
