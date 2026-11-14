@@ -196,4 +196,4 @@ carries it; both refer to the same payload.
 
 ## Upgrading
 
-See [UPGRADE_GUIDE.md](../guides/UPGRADE_GUIDE.md) for upgrade instructions.
+See [the maintenance guide](../MAINTENANCE.md#upgrading-flutter) for upgrade instructions.

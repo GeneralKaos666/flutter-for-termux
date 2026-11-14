@@ -83,7 +83,7 @@ gpg --show-keys --with-fingerprint "$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg
 > `flutter upgrade` will destroy it. See [Upgrading](#upgrading).
 
 Full walkthrough and troubleshooting live in the
-[Install guide](docs/guides/INSTALL_GUIDE.md).
+[install part of the build guide](docs/BUILD.md#install-on-device).
 
 ## Manual install
 
@@ -154,7 +154,7 @@ repository above is configured, `apt upgrade flutter` takes over in place.
 
 Moving to a brand-new Flutter version (maintainers rebuilding from source)
 is a different process — see the
-[Upgrade guide](docs/guides/UPGRADE_GUIDE.md).
+[upgrade guide](docs/MAINTENANCE.md#upgrading-flutter).
 
 ## Build your first APK
 
@@ -199,7 +199,7 @@ android {
 > `flutter_project_config.sh` and falls back 36 → 35 → 34 only if the
 > installed aapt2 can't load the newest platform. The engine builds against
 > Android API 26 with weak imports, so this only affects the APK packaging
-> tools. See the [AAPT2 analysis](docs/guides/AAPT2_RELEASE_BUILD_BUG_ANALYSIS.md).
+> tools. See the [AAPT2 analysis](docs/MAINTENANCE.md#aapt2-release-build-analysis).
 
 > **Building plugins with native code (C/C++)?** Provision the NDK once
 > (~550 MB download): `bash $PREFIX/share/flutter/post_install.sh --provision-ndk`.
@@ -282,7 +282,7 @@ right after (it fails with "already exists").
 The two `gen_snapshot` builds cannot be swapped: the Linux desktop one emits
 `target_os=linux` snapshots, which the Android VM rejects, so a release APK
 built from it white-screens. Keep both steps in the pipeline. The
-[Build guide](docs/guides/BUILD_GUIDE.md) covers details and troubleshooting.
+[Build guide](docs/BUILD.md#build-from-source) covers details and troubleshooting.
 
 ## CI/CD
 
@@ -295,15 +295,12 @@ smoke gate (`device-smoke.yml`) handle manual runs, and the nightly
 `apt_repo.py stub` and publish it through the unified
 [termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo), so
 `apt upgrade flutter` picks the new version up automatically. See
-[CI/CD and device lab](docs/CI_CD.md).
+[CI/CD and device lab](docs/MAINTENANCE.md#ci-cd-and-the-device-lab).
 
 ## Documentation
 
-- [Install guide](docs/guides/INSTALL_GUIDE.md) — on-device setup, first projects, troubleshooting.
-- [Build guide](docs/guides/BUILD_GUIDE.md) — end-to-end source build, step-by-step commands, and troubleshooting.
-- [Upgrade guide](docs/guides/UPGRADE_GUIDE.md) — moving to a new Flutter release.
-- [Build process](docs/guides/BUILD_PROCESS.md) — build internals: pipeline stages, patches, GN toolchain, and sysroot design.
-- [AAPT2 analysis](docs/guides/AAPT2_RELEASE_BUILD_BUG_ANALYSIS.md) — why on-device release builds disable resource optimization, and what would be needed to re-enable it.
+- [Build and install guide](docs/BUILD.md) — on-device setup, first projects, end-to-end source build, and build internals (pipeline stages, patches, GN toolchain, sysroot design).
+- [Maintenance guide](docs/MAINTENANCE.md) — moving to a new Flutter release, CI/CD and the device lab, and why on-device release builds disable resource optimization.
 - [Changelog](docs/releases/CHANGELOG.md) — version history and notable fixes.
 - [Release notes](docs/releases/RELEASE_NOTES.md) — GitHub release body.
 
