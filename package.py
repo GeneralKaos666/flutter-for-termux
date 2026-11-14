@@ -256,31 +256,7 @@ def add_dir(archive, out, mod=None, cache=None):
     cache.add(out)
 
 
-def add_hardlink(archive, out, target, mod=None):
-    """Emit ``out`` as a tar hard link to the already-written ``target``."""
-    if not archive:
-        raise ValueError('bad tar')
-    if not out or not target:
-        raise ValueError('bad out')
-
-    info = tarfile.TarInfo(str(out))
-    info.type = tarfile.LNKTYPE
-    info.linkname = str(target)
-    info.size = 0
-    info.mode = mod or 0o644
-    reset(info)
-    archive.addfile(info)
-
-
-def content_digest(src: Path, chunk=1 << 20):
-    digest = hashlib.blake2b(digest_size=32)
-    with open(src, 'rb') as f:
-        while s := f.read(chunk):
-            digest.update(s)
-    return digest.digest()
-
-
-def tar(path, data, dedupe=True):
+def tar(path, data):
     if not data:
         logger.warning('no work to do.')
         return
@@ -290,10 +266,12 @@ def tar(path, data, dedupe=True):
         raise ValueError(f'bad data format: "{data}"')
 
     cache = set()
-    seen = {}
     # preset 9 (64 MiB dictionary) instead of the tarfile default 6: the
     # duplicate engine snapshots only dedupe inside one LZMA window. Override
     # with PACKAGE_XZ_PRESET when compression time matters more than bytes.
+    # Duplicates are written as full copies, never as tar hard links: Termux
+    # installs on f2fs /data, where link(2) fails with EACCES, so an LNKTYPE
+    # member makes dpkg abort the whole data tar.
     preset = int(os.environ.get('PACKAGE_XZ_PRESET', '9'))
     with tarfile.open(
         path, mode='w:xz', format=tarfile.GNU_FORMAT, dereference=True,
@@ -320,12 +298,6 @@ def tar(path, data, dedupe=True):
                 add_dir(archive, out, mod, cache=cache)
             elif src.exists():
                 add_dir(archive, out.parent, cache=cache)
-                if dedupe and src.is_file() and src.stat().st_size >= (1 << 20):
-                    digest = content_digest(src)
-                    if first := seen.get(digest):
-                        add_hardlink(archive, out, first, mod)
-                        continue
-                    seen[digest] = out
                 add_file(archive, out, src, mod)
             else:
                 raise FileNotFoundError(src)

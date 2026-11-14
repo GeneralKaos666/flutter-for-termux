@@ -980,9 +980,14 @@ class PackageManifestTest(unittest.TestCase):
                     f'{parent} must precede {leaf}',
                 )
 
-    def test_tar_hardlinks_identical_payloads(self):
-        """Duplicate multi-MiB payloads are emitted as hard links so xz does
-        not pay for the same bytes twice inside one LZMA window."""
+    def test_tar_never_emits_hardlinks(self):
+        """Duplicate multi-MiB payloads stay full copies.
+
+        Termux installs onto ``/data``, which is f2fs on most devices, and the
+        kernel rejects every ``link(2)`` there with EACCES. dpkg unpacking a
+        ``LNKTYPE`` member then aborts the whole data tar, so the deb cannot be
+        installed at all. xz preset 9 already dedupes the repeated bytes.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             payload = b'x' * (1 << 21)
             first = Path(tmp, 'first.bin')
@@ -999,10 +1004,12 @@ class PackageManifestTest(unittest.TestCase):
             )
             with tarfile.open(data_tar) as tar:
                 members = {m.name: m for m in tar.getmembers()}
+                extracted = tar.extractfile('a/second.bin').read()
 
-        self.assertFalse(members['a/first.bin'].islnk())
-        self.assertTrue(members['a/second.bin'].islnk())
-        self.assertEqual(members['a/second.bin'].linkname, 'a/first.bin')
+        self.assertEqual([m.name for m in members.values() if m.islnk()], [])
+        self.assertFalse(members['a/second.bin'].issym())
+        self.assertEqual(members['a/second.bin'].size, len(payload))
+        self.assertEqual(extracted, payload)
 
     def test_exclude_prunes_build_only_trees(self):
         with tempfile.TemporaryDirectory() as tmp:
