@@ -951,7 +951,7 @@ if [ ! -s "$FLUTTER_ROOT/bin/cache/artifacts/gradle_wrapper/gradle/wrapper/gradl
 		cd "${TMPDIR:-$PREFIX/tmp}"
 		(
 			set +e
-			curl -s -L "https://storage.googleapis.com/$WRAPPER_REL_PATH" | tar -xz -C "$FLUTTER_ROOT/bin/cache/artifacts/gradle_wrapper" 2>/dev/null
+			curl -s -L --connect-timeout 15 --max-time 180 --retry 2 --retry-delay 2 "https://storage.googleapis.com/$WRAPPER_REL_PATH" | tar -xz -C "$FLUTTER_ROOT/bin/cache/artifacts/gradle_wrapper" 2>/dev/null
 		) || true
 		rm -f "$FLUTTER_ROOT/bin/cache/artifacts/gradle_wrapper/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null || true
 		rm -f "$FLUTTER_ROOT/bin/cache/artifacts/gradle_wrapper/NOTICE" 2>/dev/null || true
@@ -977,7 +977,7 @@ if [ ! -d "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" ] || [ -z "$(ls -A 
 		cd "${TMPDIR:-$PREFIX/tmp}"
 		(
 			set +e
-			curl -s -L "https://storage.googleapis.com/$FONTS_REL_PATH" -o fonts.zip 2>/dev/null && unzip -q -o fonts.zip -d "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" 2>/dev/null && rm -f fonts.zip
+			curl -s -L --connect-timeout 15 --max-time 180 --retry 2 --retry-delay 2 "https://storage.googleapis.com/$FONTS_REL_PATH" -o fonts.zip 2>/dev/null && unzip -q -o fonts.zip -d "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" 2>/dev/null && rm -f fonts.zip
 		) || true
 	fi
 fi
@@ -1002,6 +1002,18 @@ GIT_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/git"
 if ! [ -x "$GIT_BIN" ] && ! command -v "$GIT_BIN" >/dev/null 2>&1; then
 	GIT_BIN="git"
 fi
+
+# The synthetic SDK repo belongs to the package, not to the user's project, so
+# signing its commits and tags buys nothing. Worse, a global commit.gpgsign or
+# tag.gpgsign makes git call pinentry during the dpkg postinst, where there is
+# no TTY: the install hangs until it is interrupted. Force both off, ignore
+# user hooks, and never let git prompt on a terminal.
+GIT_TERMINAL_PROMPT=0
+export GIT_TERMINAL_PROMPT
+git_synth() {
+	"$GIT_BIN" -c commit.gpgsign=false -c tag.gpgsign=false \
+		-c core.hooksPath= "$@"
+}
 
 # Load canonical metadata from packaged manifest or embedded source-of-truth constants
 CANONICAL_FLUTTER_VER="3.50.0"
@@ -1080,14 +1092,18 @@ is_synthetic_repo() {
 if ! [ -d "$FLUTTER_ROOT/.git" ]; then
 	echo "  ! Missing .git, creating synthetic repository on stable branch for version resolution..."
 	rm -f version
-	"$GIT_BIN" init -q -b stable >/dev/null 2>&1 || "$GIT_BIN" init -q >/dev/null 2>&1
-	"$GIT_BIN" symbolic-ref HEAD refs/heads/stable >/dev/null 2>&1 || true
-	"$GIT_BIN" config user.email "termux@example.com"
-	"$GIT_BIN" config user.name "termux"
-	"$GIT_BIN" add -f bin/flutter bin/internal/engine.version bin/internal/*.version >/dev/null 2>&1 || true
-	"$GIT_BIN" commit -q -m "Init framework" >/dev/null 2>&1 || true
-	"$GIT_BIN" branch -M stable >/dev/null 2>&1 || true
-	"$GIT_BIN" tag -f "$CANONICAL_FLUTTER_VER" HEAD >/dev/null 2>&1
+	git_synth init -q -b stable >/dev/null 2>&1 || git_synth init -q >/dev/null 2>&1
+	git_synth symbolic-ref HEAD refs/heads/stable >/dev/null 2>&1 || true
+	git_synth config user.email "termux@example.com"
+	git_synth config user.name "termux"
+	# Persist the non-signing policy in the synthetic repo itself, so later git
+	# calls in this checkout cannot inherit a signing setup from the user.
+	git_synth config commit.gpgsign false >/dev/null 2>&1 || true
+	git_synth config tag.gpgsign false >/dev/null 2>&1 || true
+	git_synth add -f bin/flutter bin/internal/engine.version bin/internal/*.version >/dev/null 2>&1 || true
+	git_synth commit -q -m "Init framework" >/dev/null 2>&1 || true
+	git_synth branch -M stable >/dev/null 2>&1 || true
+	git_synth tag -f "$CANONICAL_FLUTTER_VER" HEAD >/dev/null 2>&1 || true
 	echo "{\"synthetic\":true,\"package\":\"termux-flutter-wsl\",\"version\":\"$CANONICAL_FLUTTER_VER\"}" >.git/termux_synthetic
 	rm -f .git/FETCH_HEAD
 	echo "  ✓ Synthetic tag $CANONICAL_FLUTTER_VER created on stable branch"
@@ -1095,21 +1111,21 @@ elif is_synthetic_repo "$FLUTTER_ROOT"; then
 	echo "  ! Verifying and repairing synthetic repository state..."
 	rm -f version
 	# Normalize branch to stable if needed (handles master, main, trunk, develop, custom-name, detached HEAD)
-	curr_br="$("$GIT_BIN" symbolic-ref --short HEAD 2>/dev/null || echo "")"
+	curr_br="$(git_synth symbolic-ref --short HEAD 2>/dev/null || echo "")"
 	if [ "$curr_br" != "stable" ]; then
-		"$GIT_BIN" checkout -B stable >/dev/null 2>&1 || "$GIT_BIN" branch -M stable >/dev/null 2>&1 || "$GIT_BIN" symbolic-ref HEAD refs/heads/stable >/dev/null 2>&1
+		git_synth checkout -B stable >/dev/null 2>&1 || git_synth branch -M stable >/dev/null 2>&1 || git_synth symbolic-ref HEAD refs/heads/stable >/dev/null 2>&1
 	fi
 
 	# Purge any imported tag contamination (e.g. 1100+ upstream tags fetched)
-	existing_tags=$("$GIT_BIN" tag -l 2>/dev/null || echo "")
+	existing_tags=$(git_synth tag -l 2>/dev/null || echo "")
 	for t in $existing_tags; do
 		if [ "$t" != "$CANONICAL_FLUTTER_VER" ]; then
-			"$GIT_BIN" tag -d "$t" >/dev/null 2>&1 || true
+			git_synth tag -d "$t" >/dev/null 2>&1 || true
 		fi
 	done
-	head_tag=$("$GIT_BIN" tag --points-at HEAD 2>/dev/null || echo "")
+	head_tag=$(git_synth tag --points-at HEAD 2>/dev/null || echo "")
 	if ! echo "$head_tag" | grep -qx "$CANONICAL_FLUTTER_VER"; then
-		"$GIT_BIN" tag -f "$CANONICAL_FLUTTER_VER" HEAD >/dev/null 2>&1
+		git_synth tag -f "$CANONICAL_FLUTTER_VER" HEAD >/dev/null 2>&1 || true
 	fi
 	rm -f .git/FETCH_HEAD
 	echo "{\"synthetic\":true,\"package\":\"termux-flutter-wsl\",\"version\":\"$CANONICAL_FLUTTER_VER\"}" >.git/termux_synthetic
@@ -1124,17 +1140,17 @@ fi
 
 # Fail-closed postcondition verification for synthetic repos
 if is_synthetic_repo "$FLUTTER_ROOT"; then
-	verified_branch="$("$GIT_BIN" symbolic-ref --short HEAD 2>/dev/null || echo "unknown")"
+	verified_branch="$(git_synth symbolic-ref --short HEAD 2>/dev/null || echo "unknown")"
 	if [ "$verified_branch" != "stable" ]; then
 		echo "Error: Synthetic repository branch verification failed: expected 'stable', got '$verified_branch'" >&2
 		exit 1
 	fi
-	tags_at_head="$("$GIT_BIN" tag --points-at HEAD 2>/dev/null || echo "")"
+	tags_at_head="$(git_synth tag --points-at HEAD 2>/dev/null || echo "")"
 	if ! echo "$tags_at_head" | grep -qx "$CANONICAL_FLUTTER_VER"; then
 		echo "Error: Synthetic repository tag verification failed: '$CANONICAL_FLUTTER_VER' not pointing at HEAD" >&2
 		exit 1
 	fi
-	tag_count="$("$GIT_BIN" tag -l 2>/dev/null | wc -l)"
+	tag_count="$(git_synth tag -l 2>/dev/null | wc -l)"
 	if [ "$tag_count" -ne 1 ]; then
 		echo "Error: Synthetic repository tag count verification failed: expected 1 tag, found $tag_count" >&2
 		exit 1

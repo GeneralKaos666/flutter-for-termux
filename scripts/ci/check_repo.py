@@ -275,6 +275,10 @@ def check_post_install_contract() -> None:
         # dpkg postinst guards: apt/pkg must never run while dpkg holds its lock.
         "TERMUX_POSTINST",
         "apt install skipped (running from dpkg postinst; apt holds the dpkg lock)",
+        # dpkg postinst has no TTY: signing the synthetic SDK repo would block
+        # on pinentry and hang the install.
+        "commit.gpgsign=false",
+        "tag.gpgsign=false",
     ]
     for marker in required:
         if marker not in text:
