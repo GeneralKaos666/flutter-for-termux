@@ -17,11 +17,35 @@ control:
   Homepage: https://www.github.com/flutter/flutter
   Description: Flutter makes it easy and fast to build beautiful apps for mobile and beyond
 
+scripts:
+  # Maintainer scripts packed into the control archive. postinst runs the
+  # shipped post_install.sh automatically; preinst reclaims payload that older
+  # releases shipped but this one excludes (full .git history, build-only trees).
+  preinst: scripts/install/deb_preinst.sh
+  postinst: scripts/install/deb_postinst.sh
+
 resource:
   flutter:
     source: $root
     output: $distro
     git: true
+    # .git is never packaged (explore_git drops it); post_install.sh
+    # synthesises a tag-correct repository on device instead. The entries below
+    # are build-only or contributor-only trees whose removal keeps the deb
+    # small without touching anything `flutter` reads at runtime.
+    exclude:
+      - engine/**          # runtime uses bin/cache/artifacts, not the engine tree
+      - dev/**
+      - docs/**
+      - examples/**
+      - packages/*/test/**
+      - packages/*/test_driver/**
+      - .github/**
+      - .agents/**
+      - .claude/**
+      - .gemini/**
+      - .vscode/**
+      - agent-artifacts/**
 
   flutter_gpu:
     source: $root/engine/src/flutter/lib/gpu

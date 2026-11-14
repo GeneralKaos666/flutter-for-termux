@@ -980,6 +980,169 @@ class PackageManifestTest(unittest.TestCase):
                     f'{parent} must precede {leaf}',
                 )
 
+    def test_tar_hardlinks_identical_payloads(self):
+        """Duplicate multi-MiB payloads are emitted as hard links so xz does
+        not pay for the same bytes twice inside one LZMA window."""
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = b'x' * (1 << 21)
+            first = Path(tmp, 'first.bin')
+            second = Path(tmp, 'second.bin')
+            first.write_bytes(payload)
+            second.write_bytes(payload)
+            data_tar = Path(tmp, 'data.tar.xz')
+            package.tar(
+                data_tar,
+                [
+                    {'out': 'a/first.bin', 'src': first},
+                    {'out': 'a/second.bin', 'src': second},
+                ],
+            )
+            with tarfile.open(data_tar) as tar:
+                members = {m.name: m for m in tar.getmembers()}
+
+        self.assertFalse(members['a/first.bin'].islnk())
+        self.assertTrue(members['a/second.bin'].islnk())
+        self.assertEqual(members['a/second.bin'].linkname, 'a/first.bin')
+
+    def test_exclude_prunes_build_only_trees(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'tree')
+            for rel in (
+                'bin/flutter',
+                'engine/src/engine.cc',
+                'dev/bots/x.dart',
+                'docs/README.md',
+                'packages/flutter/lib/a.dart',
+                'packages/flutter/test/a_test.dart',
+            ):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text('x', encoding='utf-8')
+
+            patterns = ['engine/**', 'dev/**', 'docs/**', 'packages/*/test/**']
+            got = {
+                it.as_posix()
+                for _, it in package.explore(root, False, patterns)
+            }
+
+        self.assertIn('bin/flutter', got)
+        self.assertIn('packages/flutter/lib/a.dart', got)
+        for pruned in ('engine', 'dev', 'docs', 'packages/flutter/test'):
+            self.assertFalse(
+                [it for it in got if it == pruned or it.startswith(pruned + '/')],
+                f'{pruned} was not pruned',
+            )
+
+    def test_git_resources_never_ship_dot_git(self):
+        """A git-backed resource must carry the tree, never .git: 490 MiB of
+        history, and post_install.sh synthesises a repo on device instead."""
+        import git
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, 'repo')
+            (root / 'bin').mkdir(parents=True)
+            (root / 'bin' / 'flutter').write_text('x', encoding='utf-8')
+            repo = git.Repo.init(root)
+            repo.index.add(['bin/flutter'])
+            actor = git.Actor('test', 'test@example.com')
+            repo.index.commit('init', author=actor, committer=actor)
+
+            got = {
+                it.as_posix()
+                for _, it in package.explore(root, True)
+            }
+
+        self.assertIn('bin/flutter', got)
+        self.assertFalse([it for it in got if it.startswith('.git')])
+
+    def test_package_ships_maintainer_scripts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = self._make_package(Path(tmp, 'flutter'))
+            scripts = {it['out']: it for it in pkg.gen_scripts()}
+
+        self.assertEqual(set(scripts), {'preinst', 'postinst'})
+        for name, item in scripts.items():
+            self.assertEqual(item['mod'], 0o755, name)
+            text = Path(item['src']).read_text(encoding='utf-8')
+            self.assertTrue(
+                text.startswith('#!/data/data/com.termux/files/usr/bin/sh'), name
+            )
+
+    def test_postinst_runs_post_install_and_never_fails_the_install(self):
+        script = (
+            Path(__file__).parent / 'scripts' / 'install' / 'deb_postinst.sh'
+        ).read_text(encoding='utf-8')
+        self.assertIn('post_install.sh', script)
+        self.assertIn('TERMUX_POSTINST=true', script)
+        self.assertIn('configure) ;;', script)
+        self.assertIn('timeout 1800', script)
+        self.assertTrue(script.rstrip().endswith('exit 0'))
+
+    def test_preinst_reclaims_legacy_payload_only(self):
+        """Legacy .git (upstream clone) and build-only trees are removed on
+        upgrade; a user-owned repo and a synthetic repo are preserved."""
+        import git
+
+        script = Path(__file__).parent / 'scripts' / 'install' / 'deb_preinst.sh'
+
+        def run(root: Path):
+            env = {**os.environ, 'FLUTTER_ROOT': str(root), 'PREFIX': str(root.parent)}
+            return subprocess.run(
+                ['sh', str(script), 'upgrade'],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            legacy = tmp_path / 'legacy'
+            (legacy / 'engine' / 'src').mkdir(parents=True)
+            (legacy / 'dev').mkdir()
+            (legacy / 'packages' / 'flutter' / 'test').mkdir(parents=True)
+            (legacy / 'packages' / 'flutter' / 'lib').mkdir(parents=True)
+            (legacy / 'packages' / 'flutter' / 'lib' / 'a.dart').write_text('a')
+            repo = git.Repo.init(legacy)
+            repo.create_remote('origin', 'https://github.com/flutter/flutter')
+
+            run(legacy)
+
+            self.assertFalse((legacy / '.git').exists())
+            self.assertFalse((legacy / 'engine').exists())
+            self.assertFalse((legacy / 'dev').exists())
+            self.assertFalse((legacy / 'packages' / 'flutter' / 'test').exists())
+            self.assertTrue((legacy / 'packages' / 'flutter' / 'lib' / 'a.dart').is_file())
+
+            own = tmp_path / 'own'
+            own.mkdir()
+            own_repo = git.Repo.init(own)
+            own_repo.create_remote('origin', 'https://example.com/mine.git')
+            run(own)
+            self.assertTrue((own / '.git').exists())
+
+            synthetic = tmp_path / 'synthetic'
+            (synthetic / '.git').mkdir(parents=True)
+            (synthetic / '.git' / 'termux_synthetic').write_text('{}')
+            run(synthetic)
+            self.assertTrue((synthetic / '.git' / 'termux_synthetic').is_file())
+
+    def test_engine_patch_blocks_sdk_self_upgrade(self):
+        """flutter_tools must reject upgrade/downgrade/channel-switch on Termux;
+        the package manager owns SDK versions and the tree is cross-built."""
+        patch_file = Path(__file__).parent / 'patches' / 'engine.patch'
+        patch = patch_file.read_text(encoding='utf-8')
+
+        for command in ('upgrade', 'downgrade', 'channel'):
+            self.assertIn(
+                f'diff --git a/packages/flutter_tools/lib/src/commands/{command}.dart',
+                patch,
+            )
+            self.assertIn(
+                f"'flutter {command} is disabled on the Termux build",
+                patch,
+            )
+        self.assertIn('pkg upgrade flutter', patch)
+
     def test_control_version_uses_package_revision(self):
         flutter = self.cfg['flutter']
         package_cfg = self.cfg.get('package', {})

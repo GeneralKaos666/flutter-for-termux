@@ -114,12 +114,18 @@ Run each step in order inside Termux.
    apt --fix-broken install -y
    ```
 
-4. Run post-install. **This step is required** — `dpkg` only copies files;
-   post-install patches the Termux runtime so Flutter actually works:
+4. Post-install runs automatically: the package's `postinst` invokes
+   `bash $PREFIX/share/flutter/post_install.sh` during `dpkg`/`apt` install.
+   It patches the Termux runtime so Flutter actually works, and skips its own
+   `apt`/`pkg install` calls because dpkg holds those locks. To finish those
+   skipped dependency installs, run it once more yourself (idempotent):
 
    ```bash
    bash $PREFIX/share/flutter/post_install.sh
    ```
+
+   Its output from the automatic run is at
+   `$PREFIX/share/flutter/post_install.log`.
 
 5. Load the Flutter environment into your shell and check the install:
 
