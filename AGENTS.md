@@ -90,7 +90,17 @@ git diff --check
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.
 - Flutter is published through the unified `termux-apt-repo` (a separate repository), not a self-hosted Pages site: `scripts/release/apt_repo.py stub` generates the `Architecture: all` stub, which is dropped into that repo's `debs/` and republished there. The former `.github/workflows/apt-repo.yml` was removed.
 
-`main` is protected by `.github/rulesets/main_protection_ruleset.json`: a required PR with resolved threads (no approvals required), strict status checks (`Repository sanity`, `Verify release metadata`), linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/CI_CD.md`.
+`main` is protected by `.github/rulesets/main_protection_ruleset.json`: a required PR with resolved threads (no approvals required), strict status checks (`Repository sanity`, `Verify release metadata`), linear history, no force-push/deletion, and `required_signatures`. Full runner/device-lab detail lives in `docs/CI_CD.md`.
+
+## Commit signing
+
+Every commit on this repository must be GPG-signed and must verify as `G` (good signature). GitHub enforces this on `main` through `required_signatures`, so an unsigned or unverifiable commit is rejected before it lands.
+
+- Never use `--no-gpg-sign` or `-c commit.gpgsign=false`, and never unset `commit.gpgsign`, `tag.gpgsign`, `merge.gpgsign`, or `user.signingkey`. If signing fails, unlock or repair the GPG agent; do not commit unsigned.
+- Pass `-S` explicitly: `git commit -S`, `git commit --amend -S`, `git merge -S <branch>`, `git tag -s`.
+- Verify after every commit: `git verify-commit HEAD` must exit `0` and `git log -1 --format='%G?'` must print `G`. Statuses `N`, `B`, `E`, `U` are not acceptable; repair with `git commit --amend -S --no-edit`.
+- Enable the checked-in hooks once per clone: `git config core.hooksPath .githooks`. `.githooks/pre-commit` refuses a commit that git would not sign, and `.githooks/post-commit` re-verifies `HEAD` and prints the repair command.
+- Commits pushed by `autorelease.yml`, `build.yml`, and the pin-sync workflow are signed in CI with the dedicated key in the `GPG_PRIVATE_KEY` secret; their public half is registered on the maintainer's GitHub account so GitHub marks them `Verified`.
 
 ## Gotchas
 
