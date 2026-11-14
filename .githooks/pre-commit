@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+# Refuse any commit that git would not GPG-sign.
+set -eu
+
+if [ "$(git config --bool --get commit.gpgsign 2>/dev/null || echo false)" != "true" ]; then
+    echo "pre-commit: commit signing is disabled (commit.gpgsign is not true)." >&2
+    echo "pre-commit: run 'git config commit.gpgsign true' (and tag.gpgsign, merge.gpgsign) and commit again." >&2
+    exit 1
+fi
+
+key=$(git config --get user.signingkey 2>/dev/null || true)
+if [ -z "$key" ]; then
+    echo "pre-commit: user.signingkey is not set." >&2
+    echo "pre-commit: run 'git config user.signingkey <fingerprint>' and commit again." >&2
+    exit 1
+fi
+
+if ! command -v gpg >/dev/null 2>&1; then
+    echo "pre-commit: gpg is not installed, so the commit cannot be signed." >&2
+    exit 1
+fi
+
+if ! gpg --batch --list-secret-keys "$key" >/dev/null 2>&1; then
+    echo "pre-commit: no secret key matches user.signingkey '$key'." >&2
+    echo "pre-commit: import the signing key or point user.signingkey at the right fingerprint." >&2
+    exit 1
+fi

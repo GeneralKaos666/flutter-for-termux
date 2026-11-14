@@ -545,6 +545,42 @@ def check_script_headers() -> None:
                 fail(f"{py_rel}: Python script contains CRLF line endings")
 
 
+def check_git_hooks() -> None:
+    """The signed-commit contract ships as checked-in git hooks."""
+    for hook_name in ("pre-commit", "post-commit"):
+        rel = f".githooks/{hook_name}"
+        hook = ROOT / rel
+        if not hook.is_file():
+            fail(f"missing required file: {rel}")
+            continue
+        text = hook.read_text(encoding="utf-8", errors="ignore")
+        if not text.startswith("#!"):
+            fail(f"{rel}: git hook missing shebang header")
+        if "\r\n" in text:
+            fail(f"{rel}: git hook contains CRLF line endings")
+        if not hook.stat().st_mode & 0o111:
+            fail(f"{rel}: git hook is not executable")
+
+    import os
+    import subprocess
+
+    if os.environ.get("CI"):
+        return
+    configured = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if configured != ".githooks":
+        print(
+            "warning: core.hooksPath is not .githooks; run "
+            "'git config core.hooksPath .githooks' to enforce signed commits locally.",
+            file=sys.stderr,
+        )
+
+
 def check_test_modules_and_ci_steps() -> None:
     required_test_modules = [
         "test_build.py",
@@ -609,6 +645,7 @@ def main() -> int:
     check_version_drift_contract()
     check_sysroot_lock_contract()
     check_script_headers()
+    check_git_hooks()
     check_test_modules_and_ci_steps()
     check_repository_hygiene()
 

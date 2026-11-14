@@ -307,6 +307,7 @@ The repository governance rules for the `main` branch are codified in `.github/r
 - **History & Integrity**: Linear git history is enforced; force pushes (`non_fast_forward`) and branch deletion are blocked.
 - **Commit Signatures**: `required_signatures` rejects any unsigned commit pushed to `main`. Human commits are signed with the maintainer's local GPG key; the autorelease and pin-sync commits are signed in CI with the dedicated CI signing key stored as the `GPG_PRIVATE_KEY` secret. Both workflows keep the bot as the commit author and set the signing identity (`GeneralKaos666 <xkiller1177@gmail.com>`) as the committer, because GitHub verifies against the committer identity. Repository admins bypass the ruleset so the automated PAT pushes still land; anything signed with an unregistered key is marked `Unverified` by GitHub instead of being rejected locally.
 - **Repository Hygiene**: Automated pre-merge checks prevent scratch artifacts, test caches, backups, and stage receipts from leaking into git tracking.
+- **Local Enforcement**: Checked-in hooks under `.githooks/` mirror the signature rule on the developer machine. Enable them once per clone with `git config core.hooksPath .githooks`; `pre-commit` refuses a commit that git would not sign, and `post-commit` re-verifies `HEAD` and prints `git commit --amend -S --no-edit` when the signature is missing or invalid. `check_repo.py` validates the hook files and warns (outside CI) when `core.hooksPath` is not set.
 
 ## Local equivalents
 

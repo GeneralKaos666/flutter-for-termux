@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# Re-verify the commit just created. Git ignores a failing post-commit hook,
+# so this prints the defect and the fix instead of silently accepting it.
+set -eu
+
+sig=$(git log -1 --format='%G?' HEAD 2>/dev/null || echo N)
+if [ "$sig" = "G" ]; then
+    exit 0
+fi
+
+echo "post-commit: HEAD is not a good GPG signature (status '$sig')." >&2
+echo "post-commit: this repository requires signed commits that verify as 'G'." >&2
+echo "post-commit: fix with 'git commit --amend -S --no-edit', then check 'git verify-commit HEAD'." >&2
+exit 1
