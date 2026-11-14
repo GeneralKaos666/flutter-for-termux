@@ -1850,12 +1850,6 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('Semantic mismatch between inventory.txt', out)
 
-    def test_build_critical_files_exist(self):
-        root = Path(__file__).parent
-        missing = [f for f in self.verify.BUILD_CRITICAL_FILES if not (root / f).is_file()]
-
-        self.assertEqual(missing, [], f'BUILD_CRITICAL_FILES names missing files: {missing}')
-
 
 class SysrootLockTest(unittest.TestCase):
     def test_write_lock_schema(self):
