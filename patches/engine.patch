@@ -382,3 +382,51 @@ diff --git a/engine/src/flutter/shell/platform/linux/fl_accessible_text_field.cc
  #if !PANGO_VERSION_CHECK(1, 49, 4)
  G_DEFINE_AUTOPTR_CLEANUP_FUNC(PangoLayout, g_object_unref)
  #endif
+diff --git a/packages/flutter_tools/lib/src/commands/channel.dart b/packages/flutter_tools/lib/src/commands/channel.dart
+index d5a6238..a65c3a5 100644
+--- a/packages/flutter_tools/lib/src/commands/channel.dart
++++ b/packages/flutter_tools/lib/src/commands/channel.dart
+@@ -71,4 +71,12 @@ class ChannelCommand extends FlutterCommand {
+   Future<FlutterCommandResult> runCommand() async {
+     final List<String> rest = argResults?.rest ?? <String>[];
++    // Termux: the SDK is pinned to stable by the package, so switching the
++    // channel would desynchronise the tree from the installed deb.
++    if (rest.isNotEmpty) {
++      throwToolExit(
++        'flutter channel is disabled on the Termux build (channel is fixed to '
++        'stable). Upgrade the package instead: pkg upgrade flutter.',
++      );
++    }
+     switch (rest.length) {
+       case 0:
+diff --git a/packages/flutter_tools/lib/src/commands/downgrade.dart b/packages/flutter_tools/lib/src/commands/downgrade.dart
+index 1581388..00f56f4 100644
+--- a/packages/flutter_tools/lib/src/commands/downgrade.dart
++++ b/packages/flutter_tools/lib/src/commands/downgrade.dart
+@@ -86,4 +86,10 @@ class DowngradeCommand extends FlutterCommand {
+   @override
+   Future<FlutterCommandResult> runCommand() async {
++    // Termux: see UpgradeCommand. Git history is not shipped, so there is
++    // nothing to downgrade to; the package manager owns SDK versions.
++    throwToolExit(
++      'flutter downgrade is disabled on the Termux build. '
++      'Upgrade the package instead: pkg upgrade flutter.',
++    );
+     if (argResults!.rest.isNotEmpty) {
+       throwToolExit(downgradePositionalArgumentErrorMessage(argResults!.rest), exitCode: 2);
+diff --git a/packages/flutter_tools/lib/src/commands/upgrade.dart b/packages/flutter_tools/lib/src/commands/upgrade.dart
+index e3ef35b..8699657 100644
+--- a/packages/flutter_tools/lib/src/commands/upgrade.dart
++++ b/packages/flutter_tools/lib/src/commands/upgrade.dart
+@@ -103,4 +103,11 @@ class UpgradeCommand extends FlutterCommand {
+   @override
+   Future<FlutterCommandResult> runCommand() {
++    // Termux: this SDK is cross-compiled and managed by the Termux package
++    // manager. `flutter upgrade` would overwrite the patched tree with an
++    // upstream checkout plus artifacts that cannot run on this host.
++    throwToolExit(
++      'flutter upgrade is disabled on the Termux build. '
++      'Upgrade the package instead: pkg upgrade flutter.',
++    );
+     final String? workingDirectory = stringArg('working-directory');
+     _commandRunner.workingDirectory = workingDirectory ?? Cache.flutterRoot!;

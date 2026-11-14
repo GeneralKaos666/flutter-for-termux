@@ -110,16 +110,26 @@ bash $PREFIX/share/flutter/post_install.sh
 Flutter lands in `$PREFIX/opt/flutter`. To remove it later, run
 `apt remove flutter`.
 
+> The package configures itself: its `postinst` runs
+> `$PREFIX/share/flutter/post_install.sh` during installation, so `flutter` is
+> usable right away. Re-run that script any time to finish steps it skipped
+> (it does not call `apt` while dpkg holds the lock) — the log is at
+> `$PREFIX/share/flutter/post_install.log`. The package ships no `.git`
+> (it was ~490 MB of framework history); `post_install.sh` creates the small
+> tag-correct repository the `flutter` launcher requires.
+
 ## Upgrading
 
-> **Never run stock `flutter upgrade` on this install.** It targets
-> upstream's git repository and artifact bucket — neither of which exists
-> for a Termux host — and it will break your SDK:
+> **Stock `flutter upgrade` is blocked on this install.** The SDK's
+> `flutter_tools` build rejects `flutter upgrade`, `flutter downgrade` and
+> `flutter channel <name>` with exit status 1 (`patches/engine.patch`). Those
+> commands target upstream's git repository and artifact bucket — neither of
+> which exists for a Termux host — and would break your SDK:
 >
-> - it checks out a fresh upstream `flutter/flutter` tree over the patched
+> - they check out a fresh upstream `flutter/flutter` tree over the patched
 >   SDK in `$PREFIX/opt/flutter`, wiping every Termux fix (arm64-only
 >   artifacts, NDK pinning, Android→Linux host mapping, shebangs, ...);
-> - it then tries to download `linux-arm64` engine artifacts from Google's
+> - they then try to download `linux-arm64` engine artifacts from Google's
 >   storage bucket, which are never published, leaving the SDK unusable;
 > - `dpkg` still believes the old package is installed, so the file tree
 >   and the package database no longer match.

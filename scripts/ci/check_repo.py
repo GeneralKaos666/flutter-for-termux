@@ -276,10 +276,47 @@ def check_post_install_contract() -> None:
         "Termux: map Android host to Linux artifacts",
         "Termux: prefer package-shipped aarch64 gen_snapshot",
         "Termux: allow linux build",
+        # dpkg postinst guards: apt/pkg must never run while dpkg holds its lock.
+        "TERMUX_POSTINST",
+        "apt install skipped (running from dpkg postinst; apt holds the dpkg lock)",
     ]
     for marker in required:
         if marker not in text:
             fail(f"post_install.sh missing marker: {marker}")
+
+
+def check_maintainer_scripts() -> None:
+    """The deb must configure itself: postinst runs post_install.sh, preinst
+    reclaims the payload older releases shipped (full .git, build-only trees)."""
+    package = yaml.safe_load((ROOT / "package.yaml").read_text(encoding="utf-8"))
+    scripts = package.get("scripts") if isinstance(package, dict) else None
+    if not isinstance(scripts, dict):
+        fail("package.yaml missing scripts mapping (preinst/postinst)")
+        return
+    for name in ("preinst", "postinst"):
+        path = scripts.get(name)
+        if not path:
+            fail(f"package.yaml missing scripts.{name}")
+            continue
+        require_file(str(path))
+
+    preinst = ROOT / "scripts" / "install" / "deb_preinst.sh"
+    postinst = ROOT / "scripts" / "install" / "deb_postinst.sh"
+    if preinst.is_file():
+        text = preinst.read_text(encoding="utf-8")
+        for marker in ("github.com/flutter/flutter", 'rm -rf "$ROOT/.git"', "engine dev docs examples"):
+            if marker not in text:
+                fail(f"deb_preinst.sh missing marker: {marker}")
+    if postinst.is_file():
+        text = postinst.read_text(encoding="utf-8")
+        for marker in (
+            "share/flutter/post_install.sh",
+            "TERMUX_POSTINST=true",
+            "TERMUX_SKIP_POSTINST",
+            "exit 0",
+        ):
+            if marker not in text:
+                fail(f"deb_postinst.sh missing marker: {marker}")
 
 
 def load_build_config() -> dict[str, object]:
@@ -566,6 +603,7 @@ def main() -> int:
     check_no_stale_release_commands()
     check_yaml_files()
     check_post_install_contract()
+    check_maintainer_scripts()
     check_ndk_helper_drift()
     check_ndk_constants_drift()
     check_version_drift_contract()

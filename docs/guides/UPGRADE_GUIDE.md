@@ -31,8 +31,10 @@ the previous payload is restored on disk — the two converge when the idempoten
 apt --fix-broken install
 ```
 
-Never run `flutter upgrade` on this install; it replaces the patched,
-cross-built tree with upstream's checkout and breaks the SDK.
+`flutter upgrade`, `flutter downgrade` and `flutter channel <name>` are blocked
+inside the shipped `flutter_tools` build (`patches/engine.patch`, exit status 1);
+they would replace the patched, cross-built tree with upstream's checkout and
+break the SDK.
 
 The source-rebuild checklist below is maintainer-facing — it produces a new
 package from a new upstream Flutter tag, and is not the end-user upgrade path.

@@ -50,7 +50,7 @@ The full engine build runs on the free GitHub-hosted `ubuntu-latest` runner
 ruff check build.py package.py sysroot.py utils.py test_build.py test_apt_repo.py scripts/ci/ scripts/release/
 python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py scripts/release/apt_repo.py
 pytest test_build.py test_apt_repo.py
-bash -n scripts/install/post_install.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
+bash -n scripts/install/post_install.sh scripts/install/deb_preinst.sh scripts/install/deb_postinst.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py
 python scripts/ci/check_version_drift.py
 git diff --check
@@ -269,10 +269,17 @@ short:
 ```bash
 dpkg -i flutter_3.50.0-3_aarch64.deb
 apt --fix-broken install -y
-bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh
 flutter doctor -v
+# optional: finish what the deb's postinst skipped (it cannot call apt)
+bash $PREFIX/share/flutter/post_install.sh
 ```
+
+The deb's `postinst` runs `post_install.sh` automatically during installation
+with `TERMUX_POSTINST=true`, which skips its `apt`/`pkg install` calls because
+dpkg owns those locks. Its `preinst` also removes payload that older releases
+shipped and current ones exclude (the ~490 MiB framework `.git` history and the
+build-only trees). Output goes to `$PREFIX/share/flutter/post_install.log`.
 
 `post_install.sh` handles most of the things that had to be done manually in
 older build versions: Android API 34/36, cmdline-tools, build-tools symlinks,

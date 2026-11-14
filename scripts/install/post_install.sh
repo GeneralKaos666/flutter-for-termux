@@ -1237,10 +1237,15 @@ fi
 # 3. Clean DT_RPATH from ELF binaries (fixes flutter run crash)
 echo "[3/17] Cleaning ELF binaries (fix flutter run)..."
 if ! command -v termux-elf-cleaner &>/dev/null; then
-	(
-		set +e
-		pkg install -y termux-elf-cleaner >/dev/null 2>&1
-	) || true
+	if [ "${TERMUX_POSTINST:-false}" = "true" ]; then
+		echo "  ℹ termux-elf-cleaner install skipped (dpkg postinst holds the apt lock)"
+		echo "    Re-run post_install.sh manually to install it."
+	else
+		(
+			set +e
+			pkg install -y termux-elf-cleaner >/dev/null 2>&1
+		) || true
+	fi
 fi
 
 # Clean dart binaries to remove DT_RPATH warnings that crash flutter run
@@ -1295,7 +1300,12 @@ fi
 # 5. Install required Termux build dependencies
 echo "[5/17] Checking and installing Termux build dependencies..."
 
-if ! command -v aapt2 &>/dev/null; then
+if [ "${TERMUX_POSTINST:-false}" = "true" ]; then
+	# dpkg is still running and owns the apt/dpkg locks. Installing anything
+	# here would deadlock the transaction; the user's next manual run does it.
+	echo "  ℹ apt install skipped (running from dpkg postinst; apt holds the dpkg lock)"
+	echo "    Missing build dependencies are installed by: bash $PREFIX/share/flutter/post_install.sh"
+elif ! command -v aapt2 &>/dev/null; then
 	echo "  ! Termux aapt2 not found. Installing build dependencies via apt..."
 	apt update >/dev/null 2>&1 || true
 	apt install -y aapt2 libc++ libexpat openssl >/dev/null 2>&1 || true
@@ -1303,18 +1313,20 @@ fi
 
 # Hold aapt2: it is ABI-sensitive and `apt upgrade` can silently swap in a build
 # that breaks APK linking. Opt out with TERMUX_NO_HOLD_AAPT2=1.
-if [ "${TERMUX_NO_HOLD_AAPT2:-false}" != "true" ] && command -v apt-mark &>/dev/null && command -v aapt2 &>/dev/null; then
+if [ "${TERMUX_POSTINST:-false}" != "true" ] && [ "${TERMUX_NO_HOLD_AAPT2:-false}" != "true" ] && command -v apt-mark &>/dev/null && command -v aapt2 &>/dev/null; then
 	apt-mark hold aapt2 >/dev/null 2>&1 || true
 	echo "  ✓ aapt2 held (release with: apt-mark unhold aapt2)"
 fi
 
 # Install d8/aidl/apksigner (required by AGP for build-tools validation)
-for tool in d8 dx aidl apksigner zipalign; do
-	if ! command -v $tool &>/dev/null; then
-		echo "  ! $tool not found, installing..."
-		apt install -y $tool >/dev/null 2>&1 || true
-	fi
-done
+if [ "${TERMUX_POSTINST:-false}" != "true" ]; then
+	for tool in d8 dx aidl apksigner zipalign; do
+		if ! command -v $tool &>/dev/null; then
+			echo "  ! $tool not found, installing..."
+			apt install -y $tool >/dev/null 2>&1 || true
+		fi
+	done
+fi
 
 # 6. Generate package_config.json for flutter_tools
 # The flutter CLI runs flutter_tools.dart in JIT mode (see shared.sh line ~200)

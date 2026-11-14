@@ -126,7 +126,14 @@ class Build:
         info = (f'{k}\t: {v}' for k, v in self.__dict__.items() if k != 'package')
         logger.info('\n'+'\n'.join(info))
 
-    def clone(self, *, url: str = None, tag: str = None, out: str = None, force: bool = False):
+    def clone(self, *, url: str = None, tag: str = None, out: str = None, force: bool = False, depth: int = 1):
+        """Clone the framework at ``tag``.
+
+        ``depth=1`` keeps only the tagged commit: the full history adds ~490 MiB
+        of ``.git`` to the packaged SDK. ``flutter`` only needs a git clone so
+        ``git rev-parse HEAD`` resolves (bin/internal/shared.sh), and the tag
+        itself, for ``git describe --tags``. Pass ``--depth=0`` for full history.
+        """
         url = url or self.repo
         out = out or self.root
         tag = tag or self.tag
@@ -147,7 +154,8 @@ class Build:
                 url=url,
                 to_path=out,
                 progress=progress,
-                branch=tag)
+                branch=tag,
+                **(dict(depth=depth, single_branch=True) if depth else {}))
         except git.exc.GitCommandError:
             raise RuntimeError('\n'.join(progress.error_lines))
 
