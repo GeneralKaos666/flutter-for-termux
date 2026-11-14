@@ -59,8 +59,7 @@ Key details:
 | `scripts/release/apt_repo.py` | Python Fire CLI: `stub` builds the control-only `flutter` stub deb (published through the unified termux-apt-repo), `repo` writes a signed apt site (indexes, `Release`, `InRelease`, `key.gpg`, `index.html`). Reads all versions from `build.toml` and the owned paths from `package.yaml`. |
 | `scripts/release/stub/` | The stub's three maintainer-script templates (`preinst`, `postinst`, `postrm`) rendered into the deb. |
 | `scripts/` | Build helpers, `install/post_install.sh`, device smoke, CI checks, e2e test |
-| `docs/BUILD.md` | Install, source build, and build-internals guide |
-| `docs/MAINTENANCE.md` | Upgrade, CI/CD + device-lab, and AAPT2 analysis guide |
+| `docs/CI_CD.md` | CI/CD, runner, and device-lab guide |
 
 ## Lightweight verification
 
@@ -91,7 +90,7 @@ git diff --check
 - `release-check.yml` — on PRs and `release` events: verifies release asset metadata via `scripts/ci/verify_release_asset.py`.
 - Flutter is published through the unified `termux-apt-repo` (a separate repository), not a self-hosted Pages site: `scripts/release/apt_repo.py stub` generates the `Architecture: all` stub, which is dropped into that repo's `debs/` and republished there. The former `.github/workflows/apt-repo.yml` was removed.
 
-`main` is protected by `.github/rulesets/main_protection_ruleset.json`: a required PR with resolved threads (no approvals required), strict status checks (`Repository sanity`, `Verify release metadata`), linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/MAINTENANCE.md`.
+`main` is protected by `.github/rulesets/main_protection_ruleset.json`: a required PR with resolved threads (no approvals required), strict status checks (`Repository sanity`, `Verify release metadata`), linear history, and no force-push/deletion. Full runner/device-lab detail lives in `docs/CI_CD.md`.
 
 ## Gotchas
 
@@ -103,7 +102,7 @@ git diff --check
 6. **Deb payload is trimmed, not the build tree.** `resource.flutter.exclude` prunes build-only trees (`engine/`, `dev/`, `docs/`, `examples/`, `packages/*/test*`, VCS/agent metadata) from the packaged SDK; `.git` is never packaged (`explore_git` drops it) and `post_install.sh` synthesises a tag-correct repo on device instead. `package.py::tar` emits hard links for identical files ≥1 MiB and compresses with xz preset 9 (`PACKAGE_XZ_PRESET` overrides). The package also ships maintainer scripts (`package.yaml` `scripts:` → `deb_preinst.sh`, `deb_postinst.sh`): `postinst` runs `post_install.sh` automatically with `TERMUX_POSTINST=true`, which makes the script skip every `apt`/`pkg install` call (dpkg holds those locks) and log to `$PREFIX/share/flutter/post_install.log`; the install never fails on it (`TERMUX_SKIP_POSTINST=true` opts out). `preinst` reclaims what older releases shipped but this one omits: the upstream `.git` history and the stale build-only trees. It preserves a user-owned or synthetic repository. Consequence: `flutter upgrade`/channel switching stay unavailable — `patches/engine.patch` makes `flutter_tools` reject `upgrade`, `downgrade` and `channel <name>` with exit 1 (applied by `sync`, baked in when post_install recompiles the tool snapshot).
 7. **`build()` ninja targets are contract**: `flutter`, `flutter/build/archives:artifacts`, `flutter/build/archives:dart_sdk_archive`, `flutter/build/archives:flutter_patched_sdk`, `flutter/shell/platform/linux:flutter_gtk`, `flutter/tools/font_subset`. Dropping `flutter_gtk` breaks `flutter build linux`; `test_build.py` asserts this list. `patches/dart.new.patch` is a symlink to `patches/dart.patch` — edit `dart.patch` only.
 8. **`sysroot/` is disposable** (gitignored). Rebuild with `python3 build.py sysroot --arch=arm64`; `sysroot.lock.json` records the pinned package set and is required by `check_repo.py`.
-9. **Repo hygiene is enforced** by `check_repo.py`. Root markdown allowlist is exactly `AGENTS.md`, `README.md`, `ORIGINAL_REQUEST.md`, `PROJECT.md` (new docs go under `docs/`), and `docs/README.md`, `docs/BUILD.md`, `docs/MAINTENANCE.md`, `docs/releases/*` must exist. Markdown needs balanced code fences, no control characters, and no broken relative `.md` links. Every `.sh` needs a `#!` shebang with LF-only endings (same for `build.py`/`package.py`/`sysroot.py` and the shebang-bearing ci scripts); never commit `scratch/`, `*.bak`, `*.receipt.json`, or test caches; keep the `post_install.sh` markers intact (`PLATFORM_ABI_LIST`, `Flutter Gradle plugin cache cleared`, `forceNdkDownload() patched to early return`, `Termux: map Android host to Linux artifacts`, `Termux: allow linux build`).
+9. **Repo hygiene is enforced** by `check_repo.py`. Root markdown allowlist is exactly `AGENTS.md`, `README.md`, `ORIGINAL_REQUEST.md`, `PROJECT.md` (new docs go under `docs/`), and `docs/README.md`, `docs/CI_CD.md`, `docs/guides/*`, `docs/releases/*` must exist. Markdown needs balanced code fences, no control characters, and no broken relative `.md` links. Every `.sh` needs a `#!` shebang with LF-only endings (same for `build.py`/`package.py`/`sysroot.py` and the shebang-bearing ci scripts); never commit `scratch/`, `*.bak`, `*.receipt.json`, or test caches; keep the `post_install.sh` markers intact (`PLATFORM_ABI_LIST`, `Flutter Gradle plugin cache cleared`, `forceNdkDownload() patched to early return`, `Termux: map Android host to Linux artifacts`, `Termux: allow linux build`).
 
 ## Termux runtime
 
