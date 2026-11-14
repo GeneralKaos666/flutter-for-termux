@@ -121,7 +121,7 @@ Device smoke on Samsung SM-X716B / Android 16 / ARM64 Termux:
 
 ### Technical Details
 
-- Linux build output directories: `linux_debug_arm64/`, `linux_release_arm64/`, `linux_profile_arm64/`.
+- Linux build output directories: `linux_debug_arm64/`, `linux_release_arm64/`. The profile GTK engine is no longer built, so `flutter build linux --profile` is unsupported.
 - Android `gen_snapshot` build output directories: `android_release_arm64/`, `android_profile_arm64/`. The binaries are packaged under `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`.
 - Deb package size is 635,877,268 bytes (~606 MiB).
 

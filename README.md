@@ -313,7 +313,9 @@ smoke gate (`device-smoke.yml`) handle manual runs, and the nightly
 
 - **ARM64 only.** `arm` and `x64` gen_snapshot builds fail (32-bit BoringSSL
   shift overflow / sysroot mismatch), so only the `aarch64` package ships.
-- **All three runtime modes ship.** The deb carries debug, release, and
-  profile GTK engine variants, so `flutter run -d linux` (debug, hot reload),
-  `--profile`, and `flutter build linux --release` all work. Building all three
-  is set by `build.toml [build] runtime`.
+- **Two runtime modes ship; profile does not.** The deb carries the debug GTK
+  engine (`linux-arm64`, the slot `flutter run -d linux` reads, hot reload) and
+  the release engine, set by `build.toml [build] runtime`. `flutter build linux
+  --profile` and `flutter run -d linux --profile` are not supported: the profile
+  engine is not built, and Flutter's upstream `linux-arm64-profile` artifact is
+  glibc and cannot run on Termux.

@@ -180,6 +180,28 @@ class BuildTest(unittest.TestCase):
             gn_args,
         )
 
+    @patch('build.subprocess.run')
+    def test_configure_drops_lto_for_debug_only(self, run):
+        """Debug mode is configured without ThinLTO; release and profile keep it.
+
+        The debug runtime mode only serves ``flutter run -d linux``, so LTO's
+        build cost there buys nothing, while the release and profile engines
+        ship to users.
+        """
+        self.instance.configure(arch='arm64', mode='debug')
+        debug = run.call_args.args[0]
+        self.assertIn('--no-lto', debug)
+        self.assertNotIn('--lto', debug)
+
+        for mode in ('release', 'profile'):
+            self.instance.configure(arch='arm64', mode=mode)
+            cmd = run.call_args.args[0]
+            self.assertIn('--lto', cmd)
+            self.assertNotIn('--no-lto', cmd)
+
+        self.instance.configure(arch='arm64', mode='debug', lto=True)
+        self.assertIn('--lto', run.call_args.args[0])
+
     def test_default_build_modes_cover_packaged_variants(self):
         with open(self.instance.conf, 'rb') as f:
             runtime = tomllib.load(f)['build'].get('runtime')

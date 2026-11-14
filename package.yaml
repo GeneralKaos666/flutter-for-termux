@@ -121,16 +121,6 @@ resource:
       file: $remote/linux-$arch-release/linux-$arch-flutter-gtk.zip
       path: $eng
 
-  flutter_linux_gtk_profile:
-    <<: *gtk
-    define:
-      eng: *eng
-      out: output.profile
-      fix: '"-profile"'
-    test:
-      file: $remote/linux-$arch-profile/linux-$arch-flutter-gtk.zip
-      path: $eng
-
   # Android-target gen_snapshot. The Linux desktop gen_snapshot produces AOT
   # snapshots the Android runtime rejects (target_os=linux, no compressed
   # pointers), so `flutter build apk --release/--profile` needs a gen_snapshot

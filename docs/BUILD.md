@@ -1116,15 +1116,19 @@ and the fix (**Fix**).
 
 #### Runtime modes
 
-`build.toml [build] runtime = ['release', 'debug', 'profile']`, so the deb
-carries all three GTK engine variants:
+`build.toml [build] runtime = ['release', 'debug']`, so the deb carries the
+debug and release GTK engine variants:
 
 | Slot | Built by | Used by |
 | --- | --- | --- |
 | `artifacts/engine/linux-arm64/` | debug | `flutter run -d linux` (JIT, hot reload), `flutter build linux --debug` |
 | `artifacts/engine/linux-arm64-release/` | release | `flutter build linux --release`, `flutter run -d linux --release` |
-| `artifacts/engine/linux-arm64-profile/` | profile | `flutter run -d linux --profile` |
 | `artifacts/engine/linux-arm64-android-{release,profile}/` | `--android`, both modes | `flutter build apk --release` / `--profile` AOT |
+
+The profile GTK engine (`linux-arm64-profile/`) is not built, so `flutter build
+linux --profile` and `flutter run -d linux --profile` have no Termux-patched
+engine to run; Flutter would fall back to the upstream `linux-arm64-profile`
+artifact, which is glibc and cannot run on Termux.
 
 Shared developer tools (`dart`, `dartaotruntime`,
 `frontend_server_aot.dart.snapshot`, `flutter_tester`, `gen_snapshot` for
@@ -1192,9 +1196,9 @@ After the build completes, verify with the following checklist.
    ls -la flutter/engine/src/out/android_profile_arm64/gen_snapshot
    ```
 
-   If you also built `--mode=debug` or `--mode=profile`, the matching
-   `linux_debug_arm64/` and `linux_profile_arm64/` directories hold those
-   variants.
+   If you also built `--mode=debug`, the matching `linux_debug_arm64/`
+   directory holds that variant. The profile engine is not built (see
+   [Runtime modes](#runtime-modes)).
 
 2. After deploying to Termux and running `post_install.sh`:
 
@@ -1333,7 +1337,7 @@ Each stage maps to a step in the [Build guide](#3-step-by-step-build):
 | 1. Sync source | `build.py clone` then `build.py sync` | ~30GB, several hours. The `.gclient` `custom_hooks` apply the patches automatically — no separate patch step |
 | 2. Patches | (automatic during `sync`) | Manual `build.py patch --file=...` only to re-test/rebase against a fresh checkout |
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
-| 4. Build Linux components | `build.py configure --arch=arm64 --mode=<m>` + `build.py build --arch=arm64 --mode=<m>` for each mode in `[build] runtime` (`release`, `debug`, `profile`) | Debug GTK powers `flutter run -d linux`; release/profile feed `build linux` and `run -d linux --release\|--profile`. The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
+| 4. Build Linux components | `build.py configure --arch=arm64 --mode=<m>` + `build.py build --arch=arm64 --mode=<m>` for each mode in `[build] runtime` (`release`, `debug`) | Debug GTK powers `flutter run -d linux` and is configured `--no-lto`; release feeds `build linux` and `run -d linux --release`. The profile engine is not built. The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
 | 5. Android gen_snapshot | `configure_android()` / `build_android()` (`--android --android-cpu arm64`, target `flutter/third_party/dart/runtime/bin:gen_snapshot`) | Shipped for release/profile as `linux-arm64-android-{release,profile}/gen_snapshot`; post-install resolves/provisions it for `flutter build apk`. |
 | 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.0-6_aarch64.deb` |
 
@@ -1493,10 +1497,11 @@ error: typedef redefinition with different types ('__mbstate_t' vs 'struct mbsta
 
 **Cause**: The sysroot contains both glibc and bionic headers
 
-**Current Status**: All three runtime modes are built and packaged —
-`build.toml [build] runtime = ['release', 'debug', 'profile']` — so the deb
-ships the debug GTK engine (`linux-arm64/`, used by `flutter run -d linux`),
-plus release and profile. The sysroot header conflict below only appears when
+**Current Status**: Two runtime modes are built and packaged —
+`build.toml [build] runtime = ['release', 'debug']` — so the deb
+ships the debug GTK engine (`linux-arm64/`, used by `flutter run -d linux`)
+plus release. The profile engine is not built; `flutter build linux --profile`
+has no Termux-patched engine. The sysroot header conflict below only appears when
 mixing modes against a dirty `sysroot/` tree; `python3 build.py sysroot
 --arch=arm64` rebuilds it.
 
