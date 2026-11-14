@@ -1007,13 +1007,13 @@ class DocsContractTest(unittest.TestCase):
         assert "curl -sL https://raw.githubusercontent.com" not in readme
 
     def test_guides_document_apt_flow(self):
-        install = Path("docs/BUILD.md").read_text()
+        install = Path("docs/guides/INSTALL_GUIDE.md").read_text()
         assert install.index("pkg install flutter") < install.index("Method 2")
-        upgrade = Path("docs/MAINTENANCE.md").read_text()
+        upgrade = Path("docs/guides/UPGRADE_GUIDE.md").read_text()
         assert "apt upgrade flutter" in upgrade
         assert "apt --fix-broken install" in upgrade
         agents = Path("AGENTS.md").read_text()
         assert "scripts/release/apt_repo.py" in agents
-        cicd = Path("docs/MAINTENANCE.md").read_text()
+        cicd = Path("docs/CI_CD.md").read_text()
         assert "termux-apt-repo" in cicd
         assert "fingerprint" in cicd.lower()  # the termux-apt-repo signing key

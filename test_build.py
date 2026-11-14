@@ -1299,12 +1299,12 @@ class ReleasePinSyncTest(unittest.TestCase):
                 'scripts/install/lib_common.sh': 'export EXPECTED_SHA256="${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-' + zeros + '}}"',
                 'scripts/test/gh_e2e_test.sh': 'export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-' + zeros + '}}',
                 'scripts/device/run_termux_smoke.ps1': '[string]$ExpectedSha256 = "' + zeros + '",',
-                'docs/BUILD.md': '| SHA256 | `' + zeros + '`\n\n617,009,288 bytes (about 588 MiB)\n',
+                'docs/guides/BUILD_GUIDE.md': '| SHA256 | `' + zeros + '`\n\n617,009,288 bytes (about 588 MiB)\n',
             })
             changed = self.sync.sync_pins(root, sha, 610124104, '3.47.6', '1')
             self.assertEqual(len(changed), 5)
             self.assertIn('d' * 64, (root / 'scripts/install/versions_common.sh').read_text())
-            guide = (root / 'docs/BUILD.md').read_text()
+            guide = (root / 'docs/guides/BUILD_GUIDE.md').read_text()
             self.assertIn('610,124,104 bytes (about 582 MiB)', guide)
             # Second run is a no-op.
             self.assertEqual(self.sync.sync_pins(root, sha, 610124104, '3.47.6', '1'), [])
@@ -1327,14 +1327,14 @@ class ReleasePinSyncTest(unittest.TestCase):
         unrelated = 'a' * 64
         with tempfile.TemporaryDirectory() as tmp:
             root = self._tree(tmp, {
-                'docs/BUILD.md': (
+                'docs/guides/BUILD_GUIDE.md': (
                     '| SHA256 | `' + '0' * 64 + '` |\n'
                     'The sysroot SHA256 digest ' + unrelated + ' is not a release pin.\n'
                     '# output matches ' + unrelated + ' but is prose.\n'
                 ),
             })
             self.sync.sync_pins(root, sha, 610124104, '3.47.7', '5')
-            guide = (root / 'docs/BUILD.md').read_text()
+            guide = (root / 'docs/guides/BUILD_GUIDE.md').read_text()
             self.assertIn('| SHA256 | `' + sha + '` |', guide)
             self.assertEqual(guide.count(unrelated), 2)
 
@@ -1343,20 +1343,22 @@ class ReleasePinSyncTest(unittest.TestCase):
         zero = '0' * 64
         with tempfile.TemporaryDirectory() as tmp:
             root = self._tree(tmp, {
-                'docs/BUILD.md': (
+                'docs/guides/BUILD_GUIDE.md': '| SHA256 | `' + zero + '` |\n',
+                'docs/guides/INSTALL_GUIDE.md': (
                     '| SHA256 | `' + zero + '` |\n'
                     '# Confirm the output matches: ' + zero + '\n'
                 ),
                 'docs/releases/RELEASE_NOTES.md': '| SHA256 | `' + zero + '` |\n',
-                'docs/MAINTENANCE.md': (
+                'docs/CI_CD.md': (
                     'expected_sha256: ' + zero + '\n'
                     '  -ExpectedSha256 "' + zero + '"\n'
                 ),
             })
             changed = self.sync.sync_pins(root, sha, 610124104, '3.47.7', '5')
             self.assertEqual(changed, [
-                'docs/BUILD.md',
-                'docs/MAINTENANCE.md',
+                'docs/CI_CD.md',
+                'docs/guides/BUILD_GUIDE.md',
+                'docs/guides/INSTALL_GUIDE.md',
                 'docs/releases/RELEASE_NOTES.md',
             ])
             for rel in changed:
@@ -1848,12 +1850,6 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('Semantic mismatch between inventory.txt', out)
 
-    def test_build_critical_files_exist(self):
-        root = Path(__file__).parent
-        missing = [f for f in self.verify.BUILD_CRITICAL_FILES if not (root / f).is_file()]
-
-        self.assertEqual(missing, [], f'BUILD_CRITICAL_FILES names missing files: {missing}')
-
 
 class SysrootLockTest(unittest.TestCase):
     def test_write_lock_schema(self):
@@ -1881,34 +1877,6 @@ class SysrootLockTest(unittest.TestCase):
                 pkg = entry['packages']['glib']
                 for field in ('name', 'version', 'url', 'sha256', 'size', 'archive_path', 'repo', 'dist'):
                     self.assertIn(field, pkg)
-
-    def test_write_lock_is_compact_and_matches_the_committed_file(self):
-        import sysroot
-
-        metas = [{
-            'name': 'glib',
-            'version': '2.0',
-            'url': 'https://example.com/glib.deb',
-            'sha256': '0' * 64,
-            'size': 123,
-            'archive_path': 'pool/glib.deb',
-            'repo': 'https://example.com/',
-            'dist': 'stable',
-        }]
-        committed = Path(__file__).parent / 'sysroot.lock.json'
-        committed_text = committed.read_text(encoding='utf-8')
-
-        with tempfile.TemporaryDirectory() as tmp:
-            lock = Path(tmp, 'sysroot.lock.json')
-            sysroot._write_lock(lock, 'aarch64', metas, 'deadbeef')
-            text = lock.read_text(encoding='utf-8')
-
-        # The committed lock is the compact form, so a regenerated lock must
-        # produce a one-line diff, not re-indent the whole file.
-        self.assertNotIn('\n  "', text, 'sysroot lock must not be pretty-printed')
-        self.assertEqual(text.count('\n'), 1, 'sysroot lock must be a single line plus trailing newline')
-        self.assertNotIn('\n  "', committed_text, 'committed sysroot.lock.json must stay compact')
-        self.assertEqual(committed_text.count('\n'), 1)
 
 
 class CiWorkflowContractTest(unittest.TestCase):

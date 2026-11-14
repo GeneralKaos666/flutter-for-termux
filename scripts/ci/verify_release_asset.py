@@ -33,6 +33,8 @@ BUILD_CRITICAL_FILES = (
     ".gclient",
     "sysroot.lock.json",
     ".github/workflows/build-deb.yml",
+    "install.sh",
+    "scripts/ci/check_toolchain.sh",
 )
 
 
