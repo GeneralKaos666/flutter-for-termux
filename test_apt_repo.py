@@ -1007,13 +1007,19 @@ class DocsContractTest(unittest.TestCase):
         assert "curl -sL https://raw.githubusercontent.com" not in readme
 
     def test_guides_document_apt_flow(self):
-        install = Path("docs/BUILD.md").read_text()
-        assert install.index("pkg install flutter") < install.index("Method 2")
-        upgrade = Path("docs/MAINTENANCE.md").read_text()
-        assert "apt upgrade flutter" in upgrade
-        assert "apt --fix-broken install" in upgrade
+        build = Path("docs/BUILD.md").read_text()
+        maintenance = Path("docs/MAINTENANCE.md").read_text()
+        # The end-user install flow lives on the build/install page.
+        assert build.index("pkg install flutter") < build.index("Method 2")
+        # The upgrade and CI/signing story lives on the maintenance page.
+        assert "apt upgrade flutter" in maintenance
+        assert "apt --fix-broken install" in maintenance
+        assert "termux-apt-repo" in maintenance
+        assert "fingerprint" in maintenance.lower()  # the termux-apt-repo signing key
+        assert "expected_sha256" in maintenance  # the pin-sync field the deb build writes
+        # Page-exclusive markers: a section landing in the wrong merged document
+        # must fail here instead of passing because both reads hit one file.
+        assert "Method 2" in build and "Method 2" not in maintenance
+        assert "InRelease" in maintenance and "InRelease" not in build
         agents = Path("AGENTS.md").read_text()
         assert "scripts/release/apt_repo.py" in agents
-        cicd = Path("docs/MAINTENANCE.md").read_text()
-        assert "termux-apt-repo" in cicd
-        assert "fingerprint" in cicd.lower()  # the termux-apt-repo signing key

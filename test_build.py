@@ -1850,6 +1850,26 @@ class ReleaseVerificationTest(unittest.TestCase):
 
     def test_build_critical_files_exist(self):
         root = Path(__file__).parent
+        expected = {
+            'build.py',
+            'package.py',
+            'sysroot.py',
+            'utils.py',
+            'package.yaml',
+            'build.toml',
+            'requirements.txt',
+            '.gclient',
+            'sysroot.lock.json',
+            '.github/workflows/build-deb.yml',
+        }
+        # Pinned in both directions: dropping an entry silently shrinks the set
+        # of files a release build refuses to have changed underneath it, and a
+        # test that only checks existence cannot see that.
+        self.assertEqual(set(self.verify.BUILD_CRITICAL_FILES), expected)
+        self.assertEqual(
+            set(self.verify.BUILD_CRITICAL_PREFIXES),
+            {'patches/', 'scripts/install/'},
+        )
         missing = [f for f in self.verify.BUILD_CRITICAL_FILES if not (root / f).is_file()]
 
         self.assertEqual(missing, [], f'BUILD_CRITICAL_FILES names missing files: {missing}')
@@ -1907,8 +1927,21 @@ class SysrootLockTest(unittest.TestCase):
         # produce a one-line diff, not re-indent the whole file.
         self.assertNotIn('\n  "', text, 'sysroot lock must not be pretty-printed')
         self.assertEqual(text.count('\n'), 1, 'sysroot lock must be a single line plus trailing newline')
-        self.assertNotIn('\n  "', committed_text, 'committed sysroot.lock.json must stay compact')
-        self.assertEqual(committed_text.count('\n'), 1)
+        # Byte-for-byte canonical: any writer change to separators or sort order
+        # makes the next `build.py sysroot` rewrite the whole committed file.
+        committed_data = json.loads(committed_text)
+        canonical = json.dumps(committed_data, separators=(',', ':'), sort_keys=True) + '\n'
+        self.assertEqual(
+            committed_text,
+            canonical,
+            'committed sysroot.lock.json must be the canonical compact form',
+        )
+        # Same schema on both sides, so the writer and the committed file agree
+        # on the arch entries and on each entry's fields.
+        written = json.loads(text)
+        self.assertEqual(set(written), set(committed_data))
+        for arch in ('aarch64', 'arm64'):
+            self.assertEqual(set(written[arch]), set(committed_data[arch]))
 
 
 class CiWorkflowContractTest(unittest.TestCase):
