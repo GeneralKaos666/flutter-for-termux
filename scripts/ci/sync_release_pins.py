@@ -38,10 +38,9 @@ SCRIPT_FILES = (
     "scripts/device/run_termux_smoke.ps1",
 )
 DOC_FILES = (
-    "docs/guides/BUILD_GUIDE.md",
-    "docs/guides/INSTALL_GUIDE.md",
+    "docs/BUILD.md",
+    "docs/MAINTENANCE.md",
     "docs/releases/RELEASE_NOTES.md",
-    "docs/CI_CD.md",
 )
 
 
@@ -123,7 +122,7 @@ _MD_TABLE_HASH = (
     r'(?m)(\|[ \t]*SHA256[ \t]*\|[ \t]*`)[0-9a-f]{64}(`[ \t]*\|[ \t]*)$',
     r"\g<1>{sha}\g<2>",
 )
-_INSTALL_GUIDE_CONFIRM_HASH = (
+_DOC_CONFIRM_HASH = (
     r'(?m)(^[ \t]*#[ \t]*Confirm the output matches:[ \t]*)[0-9a-f]{64}',
     r"\g<1>{sha}",
 )
@@ -136,10 +135,9 @@ _SMOKE_SCRIPT_PARAM = (
     r"\g<1>{sha}\g<2>",
 )
 DOC_HASH_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
-    "docs/guides/BUILD_GUIDE.md": (_MD_TABLE_HASH,),
-    "docs/guides/INSTALL_GUIDE.md": (_MD_TABLE_HASH, _INSTALL_GUIDE_CONFIRM_HASH),
+    "docs/BUILD.md": (_MD_TABLE_HASH, _DOC_CONFIRM_HASH),
     "docs/releases/RELEASE_NOTES.md": (_MD_TABLE_HASH,),
-    "docs/CI_CD.md": (_SMOKE_INPUT_FIELD, _SMOKE_SCRIPT_PARAM),
+    "docs/MAINTENANCE.md": (_SMOKE_INPUT_FIELD, _SMOKE_SCRIPT_PARAM),
 }
 
 
