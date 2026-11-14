@@ -39,11 +39,8 @@ ROOT_MARKDOWN_ALLOWLIST = {
 
 REQUIRED_DOCS = [
     "docs/README.md",
-    "docs/CI_CD.md",
-    "docs/guides/BUILD_GUIDE.md",
-    "docs/guides/BUILD_PROCESS.md",
-    "docs/guides/INSTALL_GUIDE.md",
-    "docs/guides/UPGRADE_GUIDE.md",
+    "docs/BUILD.md",
+    "docs/MAINTENANCE.md",
     "docs/releases/CHANGELOG.md",
     "docs/releases/RELEASE_NOTES.md",
 ]
@@ -195,9 +192,8 @@ def check_no_stale_release_commands() -> None:
     }
     checked = [
         "README.md",
-        "docs/guides/BUILD_GUIDE.md",
-        "docs/guides/INSTALL_GUIDE.md",
-        "docs/guides/UPGRADE_GUIDE.md",
+        "docs/BUILD.md",
+        "docs/MAINTENANCE.md",
         "docs/releases/CHANGELOG.md",
         "docs/releases/RELEASE_NOTES.md",
         "AGENTS.md",
