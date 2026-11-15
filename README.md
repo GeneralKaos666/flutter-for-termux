@@ -2,8 +2,8 @@
 
 > **Builds are temporarily down — fix in progress.** The full `.deb` build
 > currently takes almost 5 hours, so I am trimming the build time down. New
-> packages should be back up later today. The latest published release stays
-> installable in the meantime.
+> packages should be back up later today. The latest published package is
+> currently broken, so hold off installing it until the next release lands.
 
 Run the Flutter SDK right on your phone with
 [Termux](https://termux.dev). This project cross-compiles Flutter into a
