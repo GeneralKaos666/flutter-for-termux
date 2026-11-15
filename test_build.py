@@ -142,6 +142,10 @@ class BuildTest(unittest.TestCase):
         else:
             os.environ['ANDROID_NDK'] = self.android_ndk
 
+    def test_release_tag_is_the_package_version(self):
+        self.assertEqual(self.instance.release_tag, self.instance.package_version)
+        self.assertRegex(self.instance.release_tag, r'^\d+\.\d+\.\d+(-\d+)?$')
+
     @patch('build.require_tools')
     @patch('build.subprocess.run')
     def test_build_requests_packaged_targets(self, run, _require_tools):

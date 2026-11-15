@@ -171,3 +171,4 @@ dpkg_state.json
 /apt-repo-work/
 /repo/
 .deja
+.superpowers/
