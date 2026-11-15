@@ -1255,11 +1255,17 @@ class RecordDecoratorTest(unittest.TestCase):
             self.assertEqual(utils.engine_version(str(root)), 'b8800d0f')
 
 
+NOTES = (
+    '# Flutter 3.50.0 for Termux ARM64\n\nintro\n\n'
+    '## Fixed in 3.50.0-6\n\n- six\n\n'
+    '## Fixed in 3.50.0-60\n\n- sixty\n'
+)
+
+
 class ReleaseNotesTest(unittest.TestCase):
     def setUp(self):
         self.extract = _load_ci_script('extract_release_notes.py')
         self.upstream = _load_ci_script('import_upstream_notes.py')
-
     def test_prefers_exact_tag_section(self):
         text = (
             '# Changelog\n\n'
@@ -1279,6 +1285,43 @@ class ReleaseNotesTest(unittest.TestCase):
     def test_empty_when_nothing_applies(self):
         text = '## [3.44.9-termux] - 2026-07-04\n\n- old\n'
         self.assertEqual(self.extract.extract_notes('3.47.6', text), '')
+
+    def test_respin_section_is_exact(self):
+        notes = (
+            '# Flutter 3.50.0 for Termux ARM64\n\nintro\n\n'
+            '## Fixed in 3.50.0-6\n\n- six\n\n'
+            '## Fixed in 3.50.0-60\n\n- sixty\n'
+        )
+        self.assertEqual(self.extract.extract_respin_notes('3.50.0-6', notes), '- six')
+        self.assertEqual(self.extract.extract_respin_notes('3.50.0-600', notes), '')
+
+    def test_respin_section_wins_over_changelog(self):
+        body = self.extract.release_body(
+            tag='3.50.0', package_version='3.50.0-6', notes_text=NOTES,
+            changelog_text='## [Unreleased]\n\n- wip\n', flutter_cfg={},
+        )
+        self.assertIn('- six', body)
+        self.assertNotIn('- wip', body)
+        self.assertTrue(body.rstrip().endswith(self.extract.FOOTER))
+
+    def test_first_revision_uses_unreleased_history(self):
+        body = self.extract.release_body(
+            tag='3.51.0', package_version='3.51.0-1', notes_text=NOTES,
+            changelog_text='## [Unreleased]\n\n- wip\n', flutter_cfg={},
+        )
+        self.assertIn('- wip', body)
+
+    def test_missing_notes_fall_back_to_bump_summary(self):
+        cfg = {'dart_version': '3.14.0', 'framework_revision': 'abc123',
+               'framework_commit_date': '2026-11-09 09:50:21 -0700'}
+        body = self.extract.release_body(
+            tag='3.51.0', package_version='3.51.0-2', notes_text=NOTES,
+            changelog_text='## [Unreleased]\n\n- wip\n', flutter_cfg=cfg,
+        )
+        self.assertIn('Flutter 3.51.0', body)
+        self.assertIn('Dart 3.14.0', body)
+        self.assertIn('abc123', body)
+        self.assertNotIn('- wip', body)
 
     def test_upstream_pointer_keyed_by_series(self):
         text = '## [Unreleased]\n\n- wip\n'
