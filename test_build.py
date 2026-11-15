@@ -2114,6 +2114,17 @@ class CiWorkflowContractTest(unittest.TestCase):
         )
         self.assertEqual(release['with']['tag_name'], '${{ steps.parser.outputs.RELEASE_TAG }}')
 
+    def test_device_smoke_notes_come_from_the_extractor(self):
+        text = (
+            Path(__file__).parent / '.github' / 'workflows' / 'device-smoke.yml'
+        ).read_text(encoding='utf-8')
+        self.assertIn('extract_release_notes.py', text)
+        self.assertNotIn(
+            'docs/releases/RELEASE_NOTES.md',
+            text,
+            'the whole notes document must not be the release body',
+        )
+
     def test_autorelease_scopes_the_notes_sed(self):
         data = yaml.safe_load(
             (Path(__file__).parent / '.github' / 'workflows' / 'autorelease.yml').read_text(encoding='utf-8')

@@ -243,9 +243,15 @@ jobs:
           $existing = gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) { throw "Release $tag already exists. Cannot clobber existing published assets." }
 
-          $notesFile = "docs/releases/RELEASE_NOTES.md"
+          # The body describes the revision being promoted, not the whole
+          # notes document: resolve it the same way build.yml does.
+          $notesFile = Join-Path $env:RUNNER_TEMP "release_notes.md"
           $notesArg = @()
-          if (Test-Path $notesFile) { $notesArg = @("--notes-file", $notesFile) }
+          $notes = & python scripts/ci/extract_release_notes.py --package-version $tag
+          if ($LASTEXITCODE -eq 0 -and $notes) {
+              $notes | Set-Content -Path $notesFile -Encoding utf8
+              $notesArg = @("--notes-file", $notesFile)
+          }
 
           $sourceCommit = if ($env:ARTIFACT_SOURCE_COMMIT) { $env:ARTIFACT_SOURCE_COMMIT } else { $ev.artifact_source_commit }
           if (-not $sourceCommit) { throw "Error: source_commit is required" }
