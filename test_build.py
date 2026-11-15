@@ -1311,6 +1311,15 @@ class ReleaseNotesTest(unittest.TestCase):
         )
         self.assertIn('- wip', body)
 
+    def test_first_revision_uses_tag_section_before_unreleased(self):
+        body = self.extract.release_body(
+            tag='3.51.0', package_version='3.51.0-1', notes_text=NOTES,
+            changelog_text='## [Unreleased]\n\n- wip\n\n## [3.51.0] - 2026-11-12\n\n- line notes\n',
+            flutter_cfg={},
+        )
+        self.assertIn('- line notes', body)
+        self.assertNotIn('- wip', body)
+
     def test_missing_notes_fall_back_to_bump_summary(self):
         cfg = {'dart_version': '3.14.0', 'framework_revision': 'abc123',
                'framework_commit_date': '2026-11-09 09:50:21 -0700'}
@@ -1538,6 +1547,12 @@ class ReleaseVerificationTest(unittest.TestCase):
     def test_suffixed_tag_is_not_suffixed_twice(self):
         tag, version, asset = self.verify.resolve_expected_asset(
             {'release_tag': '3.50.0-7'}, {'pkg_rel': '7'}
+        )
+        self.assertEqual((tag, version, asset), ('3.50.0-7', '3.50.0-7', 'flutter_3.50.0-7_aarch64.deb'))
+
+    def test_bare_flutter_tag_resolves_to_the_release_tag(self):
+        tag, version, asset = self.verify.resolve_expected_asset(
+            {'tag': '3.50.0'}, {'pkg_rel': '7'}
         )
         self.assertEqual((tag, version, asset), ('3.50.0-7', '3.50.0-7', 'flutter_3.50.0-7_aarch64.deb'))
     INVENTORY_TEXT = '\n'.join(
@@ -2125,6 +2140,15 @@ class CiWorkflowContractTest(unittest.TestCase):
             'the whole notes document must not be the release body',
         )
 
+    def test_build_release_guard_uses_the_release_tag(self):
+        data = yaml.safe_load(
+            (Path(__file__).parent / '.github' / 'workflows' / 'build.yml').read_text(encoding='utf-8')
+        )
+        runs = [s.get('run', '') for j in data['jobs'].values() for s in j.get('steps', [])]
+        guard = next(r for r in runs if 'should_publish' in r)
+        self.assertIn('{release_tag}', guard)
+        self.assertNotIn('{tag}', guard)
+
     def test_autorelease_scopes_the_notes_sed(self):
         data = yaml.safe_load(
             (Path(__file__).parent / '.github' / 'workflows' / 'autorelease.yml').read_text(encoding='utf-8')
@@ -2271,6 +2295,21 @@ class VersionDriftCheckTest(unittest.TestCase):
         }
         new_text, _ = self.drift.rewrite_text(text, cfg)
         self.assertIn('releases/download/3.50.0-7/flutter_3.50.0-7_aarch64.deb', new_text)
+
+    def test_release_tag_default_suffix_is_checked(self):
+        self.drift.ERRORS.clear()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / 'scripts' / 'install' / 'lib_common.sh'
+            target.parent.mkdir(parents=True)
+            target.write_text('export RELEASE_TAG="${RELEASE_TAG:-3.50.0-5}"\n', encoding='utf-8')
+            self.drift.check_installer_scripts(
+                {'tag': '3.50.0', 'release_tag': '3.50.0-6'}, root
+            )
+        self.assertTrue(
+            any('RELEASE_TAG default mismatch' in error for error in self.drift.ERRORS),
+            self.drift.ERRORS,
+        )
 
     def test_autofix_rewrites_exported_release_tag(self):
         text = 'export RELEASE_TAG="3.50.0"\n'

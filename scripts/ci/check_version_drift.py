@@ -441,7 +441,7 @@ def check_installer_scripts(cfg: dict[str, str], root_path: Path | None = None) 
             found_tag = tag_match.group(1)
             if found_tag != release_tag and not found_tag.startswith("${"):
                 fail(f"{rel_path}: RELEASE_TAG mismatch: found '{found_tag}', expected '{release_tag}'")
-        tag_default_match = re.search(rf'\$\{{\s*RELEASE_TAG\s*:-\s*({SEMVER_PATTERN})\s*}}', text)
+        tag_default_match = re.search(rf'\$\{{\s*RELEASE_TAG\s*:-\s*({TAG_PATTERN})\s*}}', text)
         if tag_default_match:
             found_tag = tag_default_match.group(1)
             if found_tag != release_tag:

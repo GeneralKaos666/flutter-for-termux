@@ -755,7 +755,7 @@ class StubOverrideTest(unittest.TestCase):
             )
             postinst = (control / "postinst").read_text(encoding="utf-8")
             self.assertIn(f'VERSION="{fixture_tag}-{fixture_rel}"', postinst)
-            self.assertIn(f"releases/download/{fixture_tag}", postinst)
+            self.assertIn(f"releases/download/{fixture_tag}-{fixture_rel}", postinst)
             for name in ("preinst", "postinst", "postrm"):
                 self.assertIsNone(
                     re.search(r"@[A-Z_]+@", (control / name).read_text(encoding="utf-8")),

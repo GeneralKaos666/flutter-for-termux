@@ -10,7 +10,7 @@ export PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 export PATH=$PREFIX/bin:$PREFIX/opt/flutter/bin:$PATH
 export HOME=/data/data/com.termux/files/home
 export TMPDIR=$PREFIX/tmp
-export RELEASE_TAG=${RELEASE_TAG:-3.50.0-6}
+export RELEASE_TAG=${RELEASE_TAG:-3.50.0-7}
 export FLUTTER_VERSION=${FLUTTER_VERSION:-3.50.0}
 export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981}}
 
@@ -20,7 +20,7 @@ source "$(dirname "$0")/../install/lib_common.sh" || {
 	source ./lib_common.sh
 }
 
-export DEB_NAME=${DEB_NAME:-${FLUTTER_DEB_NAME:-"flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL:-6}_aarch64.deb"}}
+export DEB_NAME=${DEB_NAME:-${FLUTTER_DEB_NAME:-"flutter_${FLUTTER_VERSION}-${FLUTTER_PKG_REL:-7}_aarch64.deb"}}
 export DEB_URL=${DEB_URL:-"https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${RELEASE_TAG}/${DEB_NAME}"}
 
 FAILED=0

@@ -359,7 +359,7 @@ jobs:
           if should_publish:
               print(f"Release exists but primary asset '{deb_name}' is absent; publish is allowed.")
           else:
-              print(f"Primary asset '{deb_name}' already exists on release tag {tag}; skipping publish to preserve immutability.")
+              print(f"Primary asset '{deb_name}' already exists on release tag {release_tag}; skipping publish to preserve immutability.")
           PY
 
       - name: release

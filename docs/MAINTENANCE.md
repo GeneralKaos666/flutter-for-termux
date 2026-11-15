@@ -309,7 +309,7 @@ This will:
 3. Package everything into the deb
 
 > Output path: `release/flutter_<tag>-<pkg_rel>_aarch64.deb`
-> (for example `release/flutter_3.50.0-6_aarch64.deb`).
+> (for example `release/flutter_3.50.0-7_aarch64.deb`).
 
 ---
 
@@ -642,9 +642,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.50.0-6_aarch64.deb`
-- `flutter_3.50.0-6_aarch64.deb.sha256`
-- `flutter_3.50.0-6_aarch64.deb.size.txt`
+- `flutter_3.50.0-7_aarch64.deb`
+- `flutter_3.50.0-7_aarch64.deb.sha256`
+- `flutter_3.50.0-7_aarch64.deb.size.txt`
 - `inventory.txt`
 - `build_metadata.json`
 - `build_evidence.json`
@@ -678,10 +678,10 @@ The release flow:
    changed since the previous release, and it never relabels the respin
    sections it archives.
 
-   > Pin window: right after this scheme lands, the documented download URL
-   > names a release tag that does not exist until the first suffixed build
-   > publishes. `sync_release_pins.py` rewrites the pins and doc tables to the
-   > published asset immediately afterwards, so the window closes itself.
+   > Pin window: this change ships as `3.50.0-7`, so the documented download URL
+   > names a release tag that does not exist until that build publishes.
+   > `sync_release_pins.py` rewrites the pins and doc tables to the published
+   > asset immediately afterwards, so the window closes itself.
 4. After publishing, **Build** syncs the installer pins (`EXPECTED_SHA256`
    defaults, doc size/hash tables) to the published asset via
    `scripts/ci/sync_release_pins.py` and pushes a `chore(release)` commit,
@@ -877,7 +877,7 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebPath ".\candidate\flutter_3.50.0-6_aarch64.deb" `
+  -DebPath ".\candidate\flutter_3.50.0-7_aarch64.deb" `
   -ExpectedSha256 "8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981"
 ```
 

@@ -193,8 +193,9 @@ carries it; both refer to the same payload.
   increments for each respin of the same tag. It never resets to `0`: Debian
   treats a missing revision as `-0`, so `X.Y.Z-0` would tie a bare `X.Y.Z`
   package instead of outranking it.
-- The GitHub release tag is the bare Flutter version (`3.47.8`), with no `v`
-  prefix. Several `pkg_rel` assets can live under one release tag.
+- The GitHub release tag is the package version, `<flutter version>-<pkg_rel>`
+  (for example `3.50.0-7`), with no `v` prefix. Each `pkg_rel` is its own
+  release, so one release carries exactly one payload `.deb`.
 - Older releases used a `-termux` suffix (for example `3.44.9-termux`); the
   current scheme drops it in favour of `pkg_rel`.
 

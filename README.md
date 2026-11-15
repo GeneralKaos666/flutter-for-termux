@@ -2,7 +2,7 @@
 
 > **Builds are back up.** A full `.deb` build used to take almost 5 hours. The
 > profile GTK engine and LTO are gone, so a build fits the hosted-runner budget
-> again and `flutter_3.50.0-6_aarch64.deb` is published. Install it with the
+> again and `flutter_3.50.0-7_aarch64.deb` is published. Install it with the
 > steps below.
 
 Run the Flutter SDK right on your phone with
@@ -31,7 +31,7 @@ computer in sight.
 | Flutter   | 3.50.0 (stable) |
 | Dart      | 3.14.0 |
 | Architecture | aarch64 (ARM64) only |
-| Package   | `flutter_3.50.0-6_aarch64.deb` |
+| Package   | `flutter_3.50.0-7_aarch64.deb` |
 
 Every release ships with checksums and build evidence so you can verify
 exactly what you installed:
@@ -96,7 +96,7 @@ Prefer to see every step? Do it by hand.
 
 ```bash
 # The release tag is the package version: <flutter tag>-<pkg rel>
-TAG=3.50.0-6
+TAG=3.50.0-7
 DEB="flutter_${TAG}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 

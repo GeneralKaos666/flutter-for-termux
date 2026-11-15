@@ -73,8 +73,11 @@ def optional_aux_asset_names() -> tuple[str, ...]:
 
 def resolve_expected_asset(flutter_cfg: dict, package_cfg: dict) -> tuple[str | None, str | None, str | None]:
     """Resolve ``(expected_tag, expected_package_version, expected_asset)`` from build.toml sections."""
-    expected_tag = flutter_cfg.get("release_tag") or flutter_cfg.get("tag")
     pkg_rel = str(package_cfg.get("pkg_rel") or "").strip()
+    flutter_tag = str(flutter_cfg.get("tag") or "")
+    expected_tag = flutter_cfg.get("release_tag") or (
+        f"{flutter_tag}-{pkg_rel}" if pkg_rel and flutter_tag else flutter_tag
+    )
     expected_package_version = None
     default_asset = None
     if expected_tag:

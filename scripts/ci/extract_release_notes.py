@@ -87,7 +87,19 @@ def release_body(
     """Resolve the body for package_version, or "" when nothing applies."""
     body = extract_respin_notes(package_version, notes_text)
     if not body and package_version.endswith("-1"):
-        body = extract_notes(package_version, changelog_text)
+        # A hand-written section for the new line wins over the shared
+        # Unreleased bucket, which also carries the upstream pointer.
+        sections = _sections(SECTION_RE, changelog_text)
+        for name in (
+            f"{package_version}-termux",
+            package_version,
+            f"{tag}-termux",
+            tag,
+            "Unreleased",
+        ):
+            body = sections.get(name, "")
+            if body:
+                break
     if not body:
         body = build_bump_summary(
             tag=tag,
