@@ -1354,6 +1354,25 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertTrue(self.extract.extract_notes(tag, text))
 
 
+class CloseChangelogSectionTest(unittest.TestCase):
+    def setUp(self):
+        self.close = _load_ci_script('close_changelog_section.py')
+
+    def test_closes_unreleased_into_a_dated_section(self):
+        text = '## [Unreleased]\n\n- wip\n\n## [3.50.0-6] - 2026-11-12\n\n- old\n'
+        new_text, changed = self.close.close_unreleased(text, '3.50.0-6', '2026-11-15')
+        self.assertTrue(changed)
+        self.assertIn('## [Unreleased]', new_text)
+        self.assertIn('## [3.50.0-6] - 2026-11-15', new_text)
+        self.assertIn('- wip', new_text)
+        self.assertLess(new_text.index('- wip'), new_text.index('## [3.50.0-6] - 2026-11-12'))
+        self.assertEqual(self.close.close_unreleased(new_text, '3.50.0-6', '2026-11-15'), (new_text, False))
+
+    def test_empty_unreleased_is_a_no_op(self):
+        text = '## [Unreleased]\n\n## [3.50.0-6] - 2026-11-12\n\n- old\n'
+        self.assertEqual(self.close.close_unreleased(text, '3.50.0-6', '2026-11-15'), (text, False))
+
+
 class ReleasePinSyncTest(unittest.TestCase):
     def setUp(self):
         self.sync = _load_ci_script('sync_release_pins.py')
