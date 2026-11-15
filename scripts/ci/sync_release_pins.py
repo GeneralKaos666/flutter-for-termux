@@ -181,6 +181,11 @@ def sync_doc_deb_names(path: Path, deb: str) -> bool:
     return False
 
 
+def release_tag_of(tag: str, pkg_rel: str) -> str:
+    """Release identity for a Flutter tag: the package version."""
+    return f"{tag}-{pkg_rel}" if pkg_rel else tag
+
+
 def sync_pins(
     root: Path,
     sha256: str,
@@ -194,13 +199,14 @@ def sync_pins(
     if size_bytes <= 0:
         raise SystemExit(f"refusing to sync non-positive size: {size_bytes!r}")
     deb = asset_name(tag, pkg_rel)
+    release_tag = release_tag_of(tag, pkg_rel)
     changed: list[str] = []
     for rel in SCRIPT_FILES:
         path = root / rel
         if path.is_file() and sync_script(path, sha256):
             changed.append(rel)
     smoke = root / "scripts/device/run_termux_smoke.ps1"
-    if smoke.is_file() and sync_doc_url(smoke, tag, deb):
+    if smoke.is_file() and sync_doc_url(smoke, release_tag, deb):
         if "scripts/device/run_termux_smoke.ps1" not in changed:
             changed.append("scripts/device/run_termux_smoke.ps1")
     for rel in DOC_FILES:
@@ -208,7 +214,7 @@ def sync_pins(
         if not path.is_file():
             continue
         file_changed = False
-        file_changed |= sync_doc_url(path, tag, deb)
+        file_changed |= sync_doc_url(path, release_tag, deb)
         file_changed |= sync_doc_hashes(path, sha256, rel)
         file_changed |= sync_doc_sizes(path, size_bytes)
         file_changed |= sync_doc_deb_names(path, deb)

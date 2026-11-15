@@ -124,7 +124,7 @@ def render_scripts(
     control version and the script URL tag in agreement.
     """
     directory = _DEFAULT_TEMPLATE_DIR if template_dir is None else Path(template_dir)
-    tag = load_config(build_toml)["tag"]
+    tag = load_config(build_toml)["version"]
     rendered: dict[str, str] = {}
     for name in _TEMPLATE_NAMES:
         template = directory / name

@@ -78,7 +78,12 @@ def resolve_expected_asset(flutter_cfg: dict, package_cfg: dict) -> tuple[str | 
     expected_package_version = None
     default_asset = None
     if expected_tag:
-        expected_package_version = f"{expected_tag}-{pkg_rel}" if pkg_rel else str(expected_tag)
+        # A suffixed release tag already carries the packaging revision; only a
+        # bare Flutter tag needs it appended.
+        if pkg_rel and str(expected_tag).endswith(f"-{pkg_rel}"):
+            expected_package_version = str(expected_tag)
+        else:
+            expected_package_version = f"{expected_tag}-{pkg_rel}" if pkg_rel else str(expected_tag)
         default_asset = f"flutter_{expected_package_version}_aarch64.deb"
     expected_asset = flutter_cfg.get("asset_name") or default_asset
     return expected_tag, expected_package_version, expected_asset

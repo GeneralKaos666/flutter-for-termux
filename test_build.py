@@ -1376,6 +1376,40 @@ class CloseChangelogSectionTest(unittest.TestCase):
 class ReleasePinSyncTest(unittest.TestCase):
     def setUp(self):
         self.sync = _load_ci_script('sync_release_pins.py')
+        self.apt = self._load_release('apt_repo.py')
+
+    @staticmethod
+    def _load_release(name):
+        path = Path(__file__).parent / 'scripts' / 'release' / name
+        spec = importlib.util.spec_from_file_location(name.removesuffix('.py'), path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_doc_url_uses_the_release_tag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'docs').mkdir(parents=True)
+            (root / 'docs' / 'BUILD.md').write_text(
+                'https://github.com/x/releases/download/3.50.0/flutter_3.50.0-6_aarch64.deb\n',
+                encoding='utf-8',
+            )
+            self.sync.sync_pins(root, 'a' * 64, 123, '3.50.0', '7')
+            self.assertIn('releases/download/3.50.0-7/', (root / 'docs' / 'BUILD.md').read_text())
+
+    def test_stub_url_carries_the_release_tag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'build.toml').write_text(
+                "[flutter]\ntag = '3.50.0'\n\n[package]\npkg_rel = '7'\n", encoding='utf-8'
+            )
+            rendered = self.apt.render_scripts(
+                version='3.50.0-7',
+                owned_paths=['data'],
+                template_dir=Path('scripts/release/stub'),
+                build_toml=root / 'build.toml',
+            )
+            self.assertIn('releases/download/3.50.0-7', rendered['postinst'])
 
     def _tree(self, tmp, files):
         root = Path(tmp)
@@ -1500,6 +1534,12 @@ class ReleaseVerificationTest(unittest.TestCase):
     NAME = 'flutter_1.2.3-5_aarch64.deb'
     COMMIT = 'c' * 40
     TREE = 'd' * 40
+
+    def test_suffixed_tag_is_not_suffixed_twice(self):
+        tag, version, asset = self.verify.resolve_expected_asset(
+            {'release_tag': '3.50.0-7'}, {'pkg_rel': '7'}
+        )
+        self.assertEqual((tag, version, asset), ('3.50.0-7', '3.50.0-7', 'flutter_3.50.0-7_aarch64.deb'))
     INVENTORY_TEXT = '\n'.join(
         f'-rw-r--r-- root/root {1000 + i} 2026-01-01 00:00 ./usr/lib/libflutter{i:02d}.so'
         for i in range(12)
