@@ -43,9 +43,11 @@ def replacements(cfg: dict) -> list[tuple[str, str]]:
     android = cfg.get("android", {})
     installer = cfg.get("installer", {})
     tag = str(flutter.get("tag", ""))
+    pkg_rel = str(cfg.get("package", {}).get("pkg_rel") or "").strip()
+    release_tag = f"{tag}-{pkg_rel}" if pkg_rel else tag
     return [
         (r'^export FLUTTER_VERSION="[^"]*"', f'export FLUTTER_VERSION="{tag}"'),
-        (r'^export RELEASE_TAG="[^"]*"', f'export RELEASE_TAG="{tag}"'),
+        (r'^export RELEASE_TAG="[^"]*"', f'export RELEASE_TAG="{release_tag}"'),
         (r'^export NDK_VERSION="[^"]*"', f'export NDK_VERSION="{ndk.get("version", "")}"'),
         (
             r'^export COMPILE_SDK="\$\{TERMUX_COMPILE_SDK:-[^}]*\}"',

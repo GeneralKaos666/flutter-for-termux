@@ -2086,6 +2086,23 @@ class CiWorkflowContractTest(unittest.TestCase):
         return ' '.join(run.split())
 
 
+class GenerateVersionsTest(unittest.TestCase):
+    def setUp(self):
+        self.gen = _load_ci_script('generate_versions.py')
+
+    def test_generate_versions_writes_the_suffixed_release_tag(self):
+        subs = self.gen.replacements({
+            'flutter': {'tag': '3.50.0'},
+            'package': {'pkg_rel': '7'},
+            'ndk': {},
+            'android': {},
+            'installer': {},
+        })
+        release_sub = next(item for item in subs if 'RELEASE_TAG' in item[0])
+        rendered = self.gen.render('export RELEASE_TAG="3.50.0"\n', [release_sub])
+        self.assertIn('export RELEASE_TAG="3.50.0-7"', rendered)
+
+
 class VersionDriftCheckTest(unittest.TestCase):
     """Unit cases for scripts/ci/check_version_drift.py issue-template scanning.
 
