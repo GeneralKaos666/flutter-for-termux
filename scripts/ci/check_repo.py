@@ -278,6 +278,9 @@ def check_post_install_contract() -> None:
         # on pinentry and hang the install.
         "commit.gpgsign=false",
         "tag.gpgsign=false",
+        # flutter_tools needs an upstream URL on the synthetic repo, otherwise
+        # `flutter doctor` reports "Unknown upstream repository".
+        "remote get-url origin",
     ]
     for marker in required:
         if marker not in text:

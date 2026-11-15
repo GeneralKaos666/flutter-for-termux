@@ -1104,6 +1104,13 @@ if ! [ -d "$FLUTTER_ROOT/.git" ]; then
 	git_synth commit -q -m "Init framework" >/dev/null 2>&1 || true
 	git_synth branch -M stable >/dev/null 2>&1 || true
 	git_synth tag -f "$CANONICAL_FLUTTER_VER" HEAD >/dev/null 2>&1 || true
+	# flutter_tools resolves the SDK's "upstream repository" from the tracking
+	# remote, then falls back to `git remote get-url origin`. With no remote at
+	# all that lookup fails and `flutter doctor` prints "Unknown upstream
+	# repository", so point origin at the upstream URL. Nothing is fetched here:
+	# `ls-remote --get-url` only reads the configured URL.
+	git_synth remote remove origin >/dev/null 2>&1 || true
+	git_synth remote add origin "$CANONICAL_REPO_URL" >/dev/null 2>&1 || true
 	echo "{\"synthetic\":true,\"package\":\"termux-flutter-wsl\",\"version\":\"$CANONICAL_FLUTTER_VER\"}" >.git/termux_synthetic
 	rm -f .git/FETCH_HEAD
 	echo "  ✓ Synthetic tag $CANONICAL_FLUTTER_VER created on stable branch"
@@ -1126,6 +1133,12 @@ elif is_synthetic_repo "$FLUTTER_ROOT"; then
 	head_tag=$(git_synth tag --points-at HEAD 2>/dev/null || echo "")
 	if ! echo "$head_tag" | grep -qx "$CANONICAL_FLUTTER_VER"; then
 		git_synth tag -f "$CANONICAL_FLUTTER_VER" HEAD >/dev/null 2>&1 || true
+	fi
+	# Re-add origin in case an older package, a manual edit, or a fetch left the
+	# synthetic repo without one: `flutter doctor` needs it to name the upstream.
+	if [ "$(git_synth remote get-url origin 2>/dev/null || echo "")" != "$CANONICAL_REPO_URL" ]; then
+		git_synth remote remove origin >/dev/null 2>&1 || true
+		git_synth remote add origin "$CANONICAL_REPO_URL" >/dev/null 2>&1 || true
 	fi
 	rm -f .git/FETCH_HEAD
 	echo "{\"synthetic\":true,\"package\":\"termux-flutter-wsl\",\"version\":\"$CANONICAL_FLUTTER_VER\"}" >.git/termux_synthetic
@@ -1153,6 +1166,11 @@ if is_synthetic_repo "$FLUTTER_ROOT"; then
 	tag_count="$(git_synth tag -l 2>/dev/null | wc -l)"
 	if [ "$tag_count" -ne 1 ]; then
 		echo "Error: Synthetic repository tag count verification failed: expected 1 tag, found $tag_count" >&2
+		exit 1
+	fi
+	verified_remote="$(git_synth remote get-url origin 2>/dev/null || echo "")"
+	if [ "$verified_remote" != "$CANONICAL_REPO_URL" ]; then
+		echo "Error: Synthetic repository remote verification failed: expected '$CANONICAL_REPO_URL', got '$verified_remote'" >&2
 		exit 1
 	fi
 fi
