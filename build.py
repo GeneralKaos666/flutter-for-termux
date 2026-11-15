@@ -223,11 +223,16 @@ class Build:
         root: str = None,
         sysroot: str = None,
         toolchain: str = None,
+        lto: bool = None,
     ):
         root = root or self.root
         api = api or self.api
         sysroot = os.path.abspath(sysroot or self.sysroot.path)
         toolchain = os.path.abspath(toolchain or self.toolchain)
+        # ThinLTO in the debug runtime mode only buys build time: that engine
+        # serves `flutter run -d linux`, while release and profile ship to
+        # users. `build.py configure --lto=true` overrides the default.
+        lto = (mode != 'debug') if lto is None else lto
         cmd = [
             'vpython3',
             'engine/src/flutter/tools/gn',
@@ -237,7 +242,7 @@ class Build:
             '--no-goma',
             '--no-backtrace',
             '--clang',
-            '--lto',
+            '--lto' if lto else '--no-lto',
             '--no-enable-unittests',
             '--no-build-embedder-examples',
             '--no-prebuilt-dart-sdk',

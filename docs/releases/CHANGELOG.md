@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Build time
 
+- **The profile GTK engine is no longer built.** `build.toml [build] runtime` is now `['release', 'debug']`, so each build skips one full engine configuration — about 1h34m of a 5h03m build on a 4-core CI runner — and the deb carries two engine variants instead of three. The profile engine only served `flutter build linux --profile` / `flutter run -d linux --profile`, which had no Termux-patched engine to run: Flutter would fall back to the upstream `linux-arm64-profile` artifact, which is glibc and cannot run on Termux. `package.yaml`'s `flutter_linux_gtk_profile` resource and its `check_repo.py` requirement are removed with it. Android AOT is unaffected: `android_runtime` still builds the release and profile `gen_snapshot`, so `flutter build apk --profile` keeps working.
+- **The debug runtime mode is configured without ThinLTO.** `configure()` now defaults `lto` to off for the `debug` mode (whose engine only serves `flutter run -d linux`) and keeps it on for release and profile; `build.py configure --mode=debug --lto=true` restores it.
 
 ### Upstream Flutter 3.50
 - Stable release notes: https://docs.flutter.dev/release/release-notes/release-notes-3.50.0 (imported 2026-11-12; source verified).

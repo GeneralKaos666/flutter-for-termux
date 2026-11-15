@@ -254,13 +254,9 @@ The default pipeline runs only the modes in `build.toml [build] runtime` (curren
 python3 build.py configure --arch=arm64 --mode=release
 python3 build.py build --arch=arm64 --mode=release
 
-# Debug (for flutter run -d linux debug mode; only if produced)
+# Debug (for flutter run -d linux debug mode; configured --no-lto)
 python3 build.py configure --arch=arm64 --mode=debug
 python3 build.py build --arch=arm64 --mode=debug
-
-# Profile (Linux profile engine)
-python3 build.py configure --arch=arm64 --mode=profile
-python3 build.py build --arch=arm64 --mode=profile
 ```
 
 > ⏱ Each mode takes about 30-60 minutes (24 threads)
@@ -268,6 +264,10 @@ python3 build.py build --arch=arm64 --mode=profile
 > ⚠️ **Important**: the `__MODE__` tuple in `utils.py` is `('release', 'debug', 'profile')`,
 > with release in the first position. `Output.any` picks the first existing directory,
 > so the release (product mode) dart-sdk snapshots drive the Flutter CLI. Do not reorder modes arbitrarily.
+> `profile` stays in the tuple even though the profile GTK engine is no longer built
+> (`build.toml [build] runtime = ['release', 'debug']`): `Output.__init__` derives
+> `output.android_<mode>` from `__MODE__`, so removing it would break the
+> `android_gen_snapshot_profile` resource and `flutter build apk --profile`.
 
 Then build the Android-target `gen_snapshot` for each mode in
 `build.toml [build] android_runtime` (release and profile by default). This is

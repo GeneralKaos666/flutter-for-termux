@@ -15,7 +15,9 @@ version = '30.0.14206865' # r30 from HomuHomu833
 
 [build]
 arch = ['arm64']       # arm, arm64, x86, x64
-runtime = ['release', 'debug', 'profile']  # engine runtime modes packaged in the deb; debug powers `flutter run -d linux`
+runtime = ['release', 'debug']  # engine runtime modes packaged in the deb; debug powers `flutter run -d linux`
+# The profile GTK engine is not built: it only served `flutter build linux --profile`,
+# which has no Termux-patched engine (Flutter's upstream `linux-arm64-profile` is glibc).
 # Android-target gen_snapshot modes. `flutter build apk --release/--profile`
 # AOT-compiles Dart with an Android-configured gen_snapshot (compressed
 # pointers, target_os=android); the Linux desktop gen_snapshot cannot be reused

@@ -313,6 +313,18 @@ jobs:
           deb_name = os.environ["DEB_NAME"]
           token = os.environ.get("GITHUB_TOKEN", "")
           out_file = os.environ["GITHUB_OUTPUT"]
+
+          # Publishing and the pin-sync commit below both belong to main. A
+          # manual dispatch on a branch still builds the deb, but must not
+          # upload it or push: the pin-sync step pushes HEAD, which on a
+          # branch would land that branch on main.
+          ref = os.environ.get("GITHUB_REF", "")
+          if ref != "refs/heads/main":
+              with open(out_file, "a", encoding="utf-8") as f:
+                  f.write("should_publish=false\n")
+              print(f"Ref {ref} is not refs/heads/main; built without publishing.")
+              raise SystemExit(0)
+
           url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
           headers = {
               "Accept": "application/vnd.github+json",

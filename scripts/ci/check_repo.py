@@ -237,7 +237,6 @@ def check_yaml_files() -> None:
         "dart_sdk",
         "artifacts",
         "flutter_linux_gtk_release",
-        "flutter_linux_gtk_profile",
         "flutter_patched_sdk_product",
         "executable",
         "profile",
