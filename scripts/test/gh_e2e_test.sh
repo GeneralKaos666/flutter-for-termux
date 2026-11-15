@@ -10,7 +10,7 @@ export PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 export PATH=$PREFIX/bin:$PREFIX/opt/flutter/bin:$PATH
 export HOME=/data/data/com.termux/files/home
 export TMPDIR=$PREFIX/tmp
-export RELEASE_TAG=${RELEASE_TAG:-3.50.0}
+export RELEASE_TAG=${RELEASE_TAG:-3.50.0-6}
 export FLUTTER_VERSION=${FLUTTER_VERSION:-3.50.0}
 export EXPECTED_SHA256=${EXPECTED_SHA256:-${FLUTTER_DEB_SHA256:-8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981}}
 

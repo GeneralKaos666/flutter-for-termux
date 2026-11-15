@@ -2139,6 +2139,32 @@ class VersionDriftCheckTest(unittest.TestCase):
             template.write_text('body:\n' + body, encoding='utf-8')
         return root
 
+    def test_release_tag_defaults_to_package_version(self):
+        cfg = self.drift.load_build_config()
+        expected = f"{cfg['tag']}-{cfg['pkg_rel']}" if cfg['pkg_rel'] else cfg['tag']
+        self.assertEqual(cfg['release_tag'], expected)
+
+    def test_autofix_rewrites_suffixed_download_urls(self):
+        text = (
+            'https://github.com/GeneralKaos666/flutter-for-termux/releases/'
+            'download/3.50.0/flutter_3.50.0-6_aarch64.deb'
+        )
+        cfg = {
+            'tag': '3.50.0',
+            'release_tag': '3.50.0-7',
+            'asset_name': 'flutter_3.50.0-7_aarch64.deb',
+            'pkg_rel': '7',
+            'dart_version': '3.14.0',
+        }
+        new_text, _ = self.drift.rewrite_text(text, cfg)
+        self.assertIn('releases/download/3.50.0-7/flutter_3.50.0-7_aarch64.deb', new_text)
+
+    def test_autofix_rewrites_exported_release_tag(self):
+        text = 'export RELEASE_TAG="3.50.0"\n'
+        cfg = {'tag': '3.50.0', 'release_tag': '3.50.0-7', 'asset_name': '', 'pkg_rel': '7'}
+        new_text, _ = self.drift.rewrite_text(text, cfg)
+        self.assertIn('export RELEASE_TAG="3.50.0-7"', new_text)
+
     def test_stale_package_version_placeholder_is_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._tree(tmp, self._version_field('3.47.7-3'))

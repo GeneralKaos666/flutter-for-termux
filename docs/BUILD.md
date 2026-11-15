@@ -102,7 +102,7 @@ Run each step in order inside Termux.
 
    ```bash
    cd ~
-   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-6_aarch64.deb
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0-6/flutter_3.50.0-6_aarch64.deb
    # Confirm the output matches: 8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981
    sha256sum flutter_3.50.0-6_aarch64.deb
    ```

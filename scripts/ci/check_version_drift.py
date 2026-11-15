@@ -45,6 +45,9 @@ INSTALLER_SCRIPTS = [
     "scripts/test/gh_e2e_test.sh",
 ]
 SEMVER_PATTERN = r"\d+\.\d+\.\d+"
+# A release identity is the Flutter tag plus the packaging revision, so any
+# field that can hold one must accept the ``-N`` suffix.
+TAG_PATTERN = rf"{SEMVER_PATTERN}(?:-\d+)?"
 DEB_NAME_PATTERN = rf"flutter_{SEMVER_PATTERN}(?:-[^/\s`\"']+)?_aarch64\.deb"
 BARE_VERSION_RE = re.compile(rf"{SEMVER_PATTERN}(?:-\d+)?")
 ISSUE_TEMPLATE_DIR = ".github/ISSUE_TEMPLATE"
@@ -119,14 +122,14 @@ def _is_bare_version_placeholder(node: object) -> bool:
 
 def replace_line_value(text: str, key: str, value: str) -> tuple[str, int]:
     return re.subn(
-        rf'(?m)^(\s*{re.escape(key)}\s*=\s*["\']?){SEMVER_PATTERN}(["\']?)',
+        rf'(?m)^(\s*(?:export\s+)?{re.escape(key)}\s*=\s*["\']?){TAG_PATTERN}(["\']?)',
         rf'\g<1>{value}\g<2>',
         text,
     )
 
 
 def replace_default_var_value(text: str, key: str, value: str) -> tuple[str, int]:
-    return re.subn(rf'(\$\{{\s*{re.escape(key)}\s*:-){SEMVER_PATTERN}(}})', rf'\g<1>{value}\g<2>', text)
+    return re.subn(rf'(\$\{{\s*{re.escape(key)}\s*:-){TAG_PATTERN}(}})', rf'\g<1>{value}\g<2>', text)
 
 
 def replace_line_int_value(text: str, key: str, value: str) -> tuple[str, int]:
@@ -141,11 +144,41 @@ def replace_default_var_int_value(text: str, key: str, value: str) -> tuple[str,
     return re.subn(rf'(\$\{{\s*{re.escape(key)}\s*:-)\d+(}})', rf'\g<1>{value}\g<2>', text)
 
 
-def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) -> list[str]:
-    base_root = root_path or ROOT
+def rewrite_text(text: str, cfg: dict[str, str]) -> tuple[str, bool]:
+    """Apply every version reference in cfg to text.
+
+    Returns ``(text, changed)``. Shared by ``apply_version_autofix`` and the
+    tests, so a URL or pin format that stops matching is caught by a unit test
+    instead of by a silent no-op during a release.
+    """
     tag = cfg["tag"]
     release_tag = cfg["release_tag"]
     asset_name = cfg["asset_name"]
+    original = text
+    text = re.sub(
+        rf"(https://github\.com/GeneralKaos666/flutter-for-termux/releases/download/){TAG_PATTERN}(/)",
+        rf"\g<1>{release_tag}\g<2>",
+        text,
+    )
+    text = re.sub(DEB_NAME_PATTERN, asset_name, text)
+    text = re.sub(rf"patches/{SEMVER_PATTERN}/", f"patches/{tag}/", text)
+    text = re.sub(r"Target:\s*aarch64,\s*Flutter\s+[0-9.]+", f"Target: aarch64, Flutter {tag}", text)
+    text = re.sub(r"(?m)^(\|\s*Flutter tag\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{tag}\g<2>", text)
+    text = re.sub(r"(?m)^(\|\s*Package\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{asset_name}\g<2>", text)
+    text = replace_line_value(text, "FLUTTER_VERSION", tag)[0]
+    text = replace_line_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
+    text = replace_line_int_value(text, "PKG_REL", cfg.get("pkg_rel", ""))[0]
+    text = replace_line_value(text, "RELEASE_TAG", release_tag)[0]
+    text = replace_default_var_value(text, "FLUTTER_VERSION", tag)[0]
+    text = replace_default_var_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
+    text = replace_default_var_value(text, "RELEASE_TAG", release_tag)[0]
+    text = replace_line_value(text, "CANONICAL_FLUTTER_VER", tag)[0]
+    text = replace_line_value(text, "EXP_VER", tag)[0]
+    return text, text != original
+
+
+def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) -> list[str]:
+    base_root = root_path or ROOT
     pkg_version = expected_package_version(cfg)
     changed_files: list[str] = []
     file_list = sorted(set(MARKDOWN_DOCS + GUIDANCE_DOCS + GUIDE_DOCS + INSTALLER_SCRIPTS + [
@@ -158,30 +191,9 @@ def apply_version_autofix(cfg: dict[str, str], root_path: Path | None = None) ->
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
-        original = text
-
-        text = re.sub(
-            rf"(https://github\.com/GeneralKaos666/flutter-for-termux/releases/download/){SEMVER_PATTERN}(/)",
-            rf"\g<1>{release_tag}\g<2>",
-            text,
-        )
-        text = re.sub(DEB_NAME_PATTERN, asset_name, text)
-        text = re.sub(rf"patches/{SEMVER_PATTERN}/", f"patches/{tag}/", text)
-        text = re.sub(r"Target:\s*aarch64,\s*Flutter\s+[0-9.]+", f"Target: aarch64, Flutter {tag}", text)
-        text = re.sub(r"(?m)^(\|\s*Flutter tag\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{tag}\g<2>", text)
-        text = re.sub(r"(?m)^(\|\s*Package\s*\|\s*`)[^`]+(`\s*\|)$", rf"\g<1>{asset_name}\g<2>", text)
-        text = replace_line_value(text, "FLUTTER_VERSION", tag)[0]
-        text = replace_line_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
-        text = replace_line_int_value(text, "PKG_REL", cfg.get("pkg_rel", ""))[0]
-        text = replace_line_value(text, "RELEASE_TAG", release_tag)[0]
-        text = replace_default_var_value(text, "FLUTTER_VERSION", tag)[0]
-        text = replace_default_var_int_value(text, "FLUTTER_PKG_REL", cfg.get("pkg_rel", ""))[0]
-        text = replace_default_var_value(text, "RELEASE_TAG", release_tag)[0]
-        text = replace_line_value(text, "CANONICAL_FLUTTER_VER", tag)[0]
-        text = replace_line_value(text, "EXP_VER", tag)[0]
-
-        if text != original:
-            path.write_text(text, encoding="utf-8")
+        updated, changed = rewrite_text(text, cfg)
+        if changed:
+            path.write_text(updated, encoding="utf-8")
             changed_files.append(rel_path)
 
     # Issue-form templates are rewritten by node, not by line: only the field
@@ -212,7 +224,11 @@ def load_build_config(root_path: Path | None = None) -> dict[str, str]:
 
     flutter_cfg = data.get("flutter", {})
     tag = flutter_cfg.get("tag", "")
-    release_tag = flutter_cfg.get("release_tag", "") or str(tag)
+    package_cfg = data.get("package", {})
+    pkg_rel = str(package_cfg.get("pkg_rel", "") or "")
+    release_tag = flutter_cfg.get("release_tag", "") or (
+        f"{tag}-{pkg_rel}" if pkg_rel and tag else str(tag)
+    )
     dart_version = flutter_cfg.get("dart_version", "")
     engine_commit = flutter_cfg.get("engine_commit", "")
     framework_revision = flutter_cfg.get("framework_revision", "")
@@ -221,8 +237,6 @@ def load_build_config(root_path: Path | None = None) -> dict[str, str]:
     sha256 = flutter_cfg.get("sha256", "")
     size = flutter_cfg.get("size", "")
     asset_name = flutter_cfg.get("asset_name", "")
-    package_cfg = data.get("package", {})
-    pkg_rel = str(package_cfg.get("pkg_rel", "") or "")
 
     if not tag:
         fail("build.toml [flutter] missing 'tag'")

@@ -82,7 +82,7 @@ Fallback: download the payload from this release manually:
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0/flutter_3.50.0-6_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0-6/flutter_3.50.0-6_aarch64.deb
 dpkg -i flutter_3.50.0-6_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
