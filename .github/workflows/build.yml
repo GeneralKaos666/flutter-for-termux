@@ -56,14 +56,17 @@ jobs:
               cfg = tomllib.load(f)
           tag = str(cfg.get("flutter", {}).get("tag") or "")
           pkg_rel = str(cfg.get("package", {}).get("pkg_rel") or "").strip()
-          package_version = f"{tag}-{pkg_rel}" if pkg_rel else tag
-          deb_name = f"flutter_{package_version}_aarch64.deb"
+          # Release identity is the package version, so a pkg_rel bump is
+          # itself the trigger: the new revision has no release yet.
+          release_tag = f"{tag}-{pkg_rel}" if pkg_rel else tag
+          deb_name = f"flutter_{release_tag}_aarch64.deb"
           print(f"tag={tag}")
+          print(f"release_tag={release_tag}")
 
           def emit(build, reason):
               print(f"should_build={'true' if build else 'false'}")
               print(f"reason={reason}")
-              print(f"tag {tag}, deb {deb_name} -> {reason}", file=sys.stderr)
+              print(f"release {release_tag}, deb {deb_name} -> {reason}", file=sys.stderr)
 
           if not tag:
               emit(False, "no-tag-in-build-toml")
@@ -71,7 +74,7 @@ jobs:
 
           repo = os.environ.get("GITHUB_REPOSITORY", "")
           token = os.environ.get("GITHUB_TOKEN", "")
-          url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+          url = f"https://api.github.com/repos/{repo}/releases/tags/{release_tag}"
           headers = {
               "Accept": "application/vnd.github+json",
               "X-GitHub-Api-Version": "2022-11-28",
@@ -197,8 +200,10 @@ jobs:
         id: parser
         run: |
           TAG=$(NO_RECORD=1 python build.py tag)
+          RELEASE_TAG=$(NO_RECORD=1 python build.py release_tag)
           echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
-          echo "TITLE=Flutter $TAG" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "TITLE=Flutter $RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Collect artifact metadata
         id: artifact
@@ -274,10 +279,12 @@ jobs:
         id: notes
         run: |
           set -euo pipefail
-          # Release body follows the changelog: the section matching this
-          # tag (or whatever history is current under Unreleased), falling
-          # back to the last commit message when the changelog has nothing.
-          NOTES="$(python scripts/ci/extract_release_notes.py --tag '${{ steps.parser.outputs.TAG }}' || true)"
+          # The body describes exactly the revision being published: its
+          # RELEASE_NOTES section, else (for -1) the changelog history, else a
+          # generated bump summary. The last commit message is only a safety net.
+          NOTES="$(python scripts/ci/extract_release_notes.py \
+            --tag '${{ steps.parser.outputs.TAG }}' \
+            --package-version '${{ steps.parser.outputs.RELEASE_TAG }}' || true)"
           if [ -z "$NOTES" ]; then
             NOTES="$(git log -1 --format=%B)"
           fi
@@ -299,7 +306,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          export TAG="${{ steps.parser.outputs.TAG }}"
+          export RELEASE_TAG="${{ steps.parser.outputs.RELEASE_TAG }}"
           export REPOSITORY="${{ github.repository }}"
           export DEB_NAME="$(basename '${{ steps.artifact.outputs.deb }}')"
           python - <<'PY'
@@ -309,7 +316,7 @@ jobs:
           import urllib.request
 
           repo = os.environ["REPOSITORY"]
-          tag = os.environ["TAG"]
+          release_tag = os.environ["RELEASE_TAG"]
           deb_name = os.environ["DEB_NAME"]
           token = os.environ.get("GITHUB_TOKEN", "")
           out_file = os.environ["GITHUB_OUTPUT"]
@@ -325,7 +332,7 @@ jobs:
               print(f"Ref {ref} is not refs/heads/main; built without publishing.")
               raise SystemExit(0)
 
-          url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+          url = f"https://api.github.com/repos/{repo}/releases/tags/{release_tag}"
           headers = {
               "Accept": "application/vnd.github+json",
               "X-GitHub-Api-Version": "2022-11-28",
@@ -341,7 +348,7 @@ jobs:
               if e.code == 404:
                   with open(out_file, "a", encoding="utf-8") as f:
                       f.write("should_publish=true\n")
-                  print("No existing release found for tag; publish is allowed.")
+                  print(f"No existing release for {release_tag}; publish is allowed.")
                   raise SystemExit(0)
               raise
 
@@ -359,7 +366,7 @@ jobs:
         if: steps.release_guard.outputs.should_publish == 'true'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
-          tag_name: ${{ steps.parser.outputs.TAG }}
+          tag_name: ${{ steps.parser.outputs.RELEASE_TAG }}
           name: ${{ steps.parser.outputs.TITLE }}
           body: ${{ steps.notes.outputs.BODY }}
           files: |

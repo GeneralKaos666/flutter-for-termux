@@ -2095,6 +2095,25 @@ class CiWorkflowContractTest(unittest.TestCase):
             'ci.yml has no generate_versions.py --check step',
         )
 
+    def test_build_workflow_keys_on_the_release_tag(self):
+        data = yaml.safe_load(
+            (Path(__file__).parent / '.github' / 'workflows' / 'build.yml').read_text(encoding='utf-8')
+        )
+        runs = [s.get('run', '') for j in data['jobs'].values() for s in j.get('steps', [])]
+        self.assertTrue(
+            any('release_tag' in r and 'releases/tags/' in r for r in runs),
+            'gate must query the release tag',
+        )
+        self.assertTrue(
+            any('--package-version' in r for r in runs),
+            'release notes must be resolved per package version',
+        )
+        release = next(
+            s for j in data['jobs'].values() for s in j.get('steps', [])
+            if s.get('uses', '').startswith('softprops/action-gh-release')
+        )
+        self.assertEqual(release['with']['tag_name'], '${{ steps.parser.outputs.RELEASE_TAG }}')
+
     def test_autorelease_resets_pkg_rel_with_the_new_tag(self):
         """A new upstream tag must start a fresh package revision.
 
