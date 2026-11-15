@@ -1,9 +1,9 @@
 # Flutter Termux
 
-> **Builds are temporarily down — fix in progress.** The full `.deb` build
-> currently takes almost 5 hours, so I am trimming the build time down. New
-> packages should be back up later today. The latest published package is
-> currently broken, so hold off installing it until the next release lands.
+> **Builds are back up.** A full `.deb` build used to take almost 5 hours. The
+> profile GTK engine and LTO are gone, so a build fits the hosted-runner budget
+> again and `flutter_3.50.0-6_aarch64.deb` is published. Install it with the
+> steps below.
 
 Run the Flutter SDK right on your phone with
 [Termux](https://termux.dev). This project cross-compiles Flutter into a
@@ -58,7 +58,7 @@ pkg install x11-repo
 
 The package is published through the unified
 [termux-apt-repo](https://github.com/GeneralKaos666/termux-apt-repo): a small
-`Architecture: all` stub package lives there, while the ~640 MB Flutter archive
+`Architecture: all` stub package lives there, while the ~120 MB Flutter archive
 stays a GitHub release asset that the stub downloads, verifies, and unpacks for
 you.
 
