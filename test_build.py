@@ -2114,6 +2114,32 @@ class CiWorkflowContractTest(unittest.TestCase):
         )
         self.assertEqual(release['with']['tag_name'], '${{ steps.parser.outputs.RELEASE_TAG }}')
 
+    def test_autorelease_scopes_the_notes_sed(self):
+        data = yaml.safe_load(
+            (Path(__file__).parent / '.github' / 'workflows' / 'autorelease.yml').read_text(encoding='utf-8')
+        )
+        bump = next(
+            s.get('run', '')
+            for j in data['jobs'].values()
+            for s in j.get('steps', [])
+            if 'for f in "${FILES[@]}"' in s.get('run', '')
+        )
+        normalized = self._normalized(bump)
+        self.assertIn('docs/releases/RELEASE_NOTES.md', normalized)
+        self.assertIn(
+            '/^## Fixed in /,\\$!',
+            normalized,
+            'the tag sed must not rewrite respin headings',
+        )
+
+    def test_autorelease_closes_the_previous_section(self):
+        data = yaml.safe_load(
+            (Path(__file__).parent / '.github' / 'workflows' / 'autorelease.yml').read_text(encoding='utf-8')
+        )
+        runs = [s.get('run', '') for j in data['jobs'].values() for s in j.get('steps', [])]
+        self.assertTrue(any('close_changelog_section.py' in r for r in runs))
+        self.assertTrue(any('OLD_RELEASE_TAG' in r for r in runs))
+
     def test_autorelease_resets_pkg_rel_with_the_new_tag(self):
         """A new upstream tag must start a fresh package revision.
 

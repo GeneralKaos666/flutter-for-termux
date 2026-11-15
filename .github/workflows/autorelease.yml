@@ -47,11 +47,14 @@ jobs:
           with open('build.toml', 'rb') as f:
               cfg = tomllib.load(f)
           flutter = cfg['flutter']
+          pkg_rel = str(cfg.get('package', {}).get('pkg_rel') or '').strip()
           for key in ('tag', 'dart_version', 'framework_revision', 'framework_commit_date', 'devtools_version'):
               if key == 'tag':
                   tag = flutter.get('tag', '')
+                  release_tag = f'{tag}-{pkg_rel}' if pkg_rel else tag
                   print(f'TAG={tag}')
                   print(f'OLD_TAG={tag}')
+                  print(f'OLD_RELEASE_TAG={release_tag}')
               else:
                   print(f"OLD_{key.upper()}={flutter.get(key, '')}")
           PY
@@ -66,9 +69,12 @@ jobs:
             echo "build.toml already at latest (${{ steps.detect.outputs.TAG }}), nothing to do."
             exit 0
           fi
-          if gh api "repos/${{ github.repository }}/git/refs/tags/${{ steps.detect.outputs.TAG }}" >/dev/null 2>&1; then
+          # The release tag carries the packaging revision; a new Flutter tag
+          # starts at revision 1, so that is the tag this bump would publish.
+          NEW_RELEASE_TAG="${{ steps.detect.outputs.TAG }}-1"
+          if gh api "repos/${{ github.repository }}/git/refs/tags/${NEW_RELEASE_TAG}" >/dev/null 2>&1; then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "tag ${{ steps.detect.outputs.TAG }} already released, nothing to do."
+            echo "release ${NEW_RELEASE_TAG} already published, nothing to do."
             exit 0
           fi
           echo "should_release=true" >> "$GITHUB_OUTPUT"
@@ -122,6 +128,17 @@ jobs:
           sed -i "s|^pkg_rel = .*|pkg_rel = '1'  # Debian packaging revision: resets to 1 for each new upstream tag, increments for respins of the same tag|" build.toml
           git diff -- build.toml
 
+      - name: Close previous release section
+        if: steps.check.outputs.should_release == 'true'
+        env:
+          OLD_RELEASE_TAG: ${{ steps.current.outputs.OLD_RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          # Fold the outgoing line's history under the version it shipped as,
+          # so the new line's first release describes only its own changes.
+          python3 scripts/ci/close_changelog_section.py --previous-version "$OLD_RELEASE_TAG"
+          git diff --check
+
       - name: Sync version references across all files
         if: steps.check.outputs.should_release == 'true'
         env:
@@ -157,7 +174,17 @@ jobs:
             local old_esc
             old_esc=$(printf '%s' "$old" | sed -e 's/[][\/.^$*+?{}()|]/\\&/g')
             for f in "${FILES[@]}"; do
-              [ -f "$f" ] && sed -i "s/${old_esc}/${new}/g" "$f"
+              if [ ! -f "$f" ]; then
+                continue
+              fi
+              if [ "$f" = "docs/releases/RELEASE_NOTES.md" ]; then
+                # Respin sections are history keyed by the release tag they
+                # shipped as; rewrite only the header and prose above the
+                # first one so 3.50.0-6 never becomes 3.51.0-6.
+                sed -i "/^## Fixed in /,\$!s/${old_esc}/${new}/g" "$f"
+              else
+                sed -i "s/${old_esc}/${new}/g" "$f"
+              fi
             done
             [ -n "$field" ] && sed -i "s/^${field} = .*/${field} = '${new}'/" build.toml
           }
