@@ -2440,6 +2440,46 @@ class VersionDriftCheckTest(unittest.TestCase):
         self.assertEqual([e for e in self.drift.run_checks(root) if 'ISSUE_TEMPLATE' in e], [])
 
 
+class ReleaseNotesContractTest(unittest.TestCase):
+    def setUp(self):
+        self.check_repo = _load_ci_script('check_repo.py')
+
+    def test_respin_without_notes_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'docs' / 'releases').mkdir(parents=True)
+            (root / 'docs' / 'releases' / 'RELEASE_NOTES.md').write_text(
+                '## Fixed in 3.50.0-5\n', encoding='utf-8'
+            )
+            errors = self.check_repo.run_release_notes_check(
+                {'tag': '3.50.0', 'pkg_rel': '6'}, root
+            )
+        self.assertTrue(any('3.50.0-6' in error for error in errors))
+
+    def test_first_revision_needs_no_section(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'docs' / 'releases').mkdir(parents=True)
+            (root / 'docs' / 'releases' / 'RELEASE_NOTES.md').write_text('', encoding='utf-8')
+            self.assertEqual(
+                self.check_repo.run_release_notes_check({'tag': '3.51.0', 'pkg_rel': '1'}, root),
+                [],
+            )
+
+    def test_current_repository_satisfies_its_own_contract(self):
+        with open(Path(__file__).parent / 'build.toml', 'rb') as handle:
+            cfg = tomllib.load(handle)
+        self.assertEqual(
+            self.check_repo.run_release_notes_check(
+                {
+                    'tag': cfg['flutter']['tag'],
+                    'pkg_rel': str(cfg['package'].get('pkg_rel') or ''),
+                }
+            ),
+            [],
+        )
+
+
 class CheckRepoNdkHelperDriftTest(unittest.TestCase):
     """Guard the NDK backup/restore helper contract (review finding 35).
 

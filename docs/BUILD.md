@@ -555,7 +555,7 @@ The full engine build runs on the free GitHub-hosted `ubuntu-latest` runner
 
 ```bash
 ruff check build.py package.py sysroot.py utils.py test_build.py test_apt_repo.py scripts/ci/ scripts/release/
-python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py scripts/release/apt_repo.py
+python -m py_compile build.py package.py sysroot.py utils.py scripts/ci/check_repo.py scripts/ci/check_version_drift.py scripts/ci/verify_release_asset.py scripts/ci/extract_release_notes.py scripts/ci/close_changelog_section.py scripts/ci/import_upstream_notes.py scripts/ci/sync_release_pins.py scripts/release/apt_repo.py
 pytest test_build.py test_apt_repo.py
 bash -n scripts/install/post_install.sh scripts/install/deb_preinst.sh scripts/install/deb_postinst.sh scripts/test/gh_e2e_test.sh scripts/device/termux_smoke.sh
 python scripts/ci/check_repo.py

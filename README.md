@@ -95,9 +95,9 @@ Full walkthrough and troubleshooting live in the
 Prefer to see every step? Do it by hand.
 
 ```bash
-TAG=3.50.0
-PKG_REL=6
-DEB="flutter_${TAG}-${PKG_REL}_aarch64.deb"
+# The release tag is the package version: <flutter tag>-<pkg rel>
+TAG=3.50.0-6
+DEB="flutter_${TAG}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
 curl -fSL -o "$DEB" "${BASE_URL}${DEB}"

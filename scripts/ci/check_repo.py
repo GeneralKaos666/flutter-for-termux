@@ -321,6 +321,45 @@ def check_maintainer_scripts() -> None:
                 fail(f"deb_postinst.sh missing marker: {marker}")
 
 
+RESPIN_HEADING_RE = re.compile(r"(?m)^## Fixed in (?P<name>[^\s]+)\s*$")
+
+
+def run_release_notes_check(cfg: dict[str, object], root: Path | None = None) -> list[str]:
+    """Return one error per missing per-revision notes section.
+
+    ``main`` is PR-protected, so a ``pkg_rel`` bump that forgets its
+    ``## Fixed in <release tag>`` section is caught on the pull request instead
+    of publishing a body that describes an older revision. The first revision of
+    a Flutter line is exempt: its body is the changelog history plus the
+    generated bump summary.
+    """
+    base_root = ROOT if root is None else root
+    tag = str(cfg.get("tag") or "")
+    pkg_rel = str(cfg.get("pkg_rel") or "")
+    if not tag or not pkg_rel or pkg_rel == "1":
+        return []
+    release_tag = f"{tag}-{pkg_rel}"
+    rel_path = Path("docs") / "releases" / "RELEASE_NOTES.md"
+    path = base_root / rel_path
+    if not path.is_file():
+        return [f"{rel_path}: missing notes for {release_tag}"]
+    text = path.read_text(encoding="utf-8")
+    if any(match.group("name") == release_tag for match in RESPIN_HEADING_RE.finditer(text)):
+        return []
+    return [
+        f"{rel_path}: no '## Fixed in {release_tag}' section; "
+        "a respin must describe the revision it publishes"
+    ]
+
+
+def check_release_notes_for_respin() -> None:
+    cfg = load_build_config()
+    if not cfg:
+        return
+    for error in run_release_notes_check(cfg):
+        fail(error)
+
+
 def load_build_config() -> dict[str, object]:
     """Single source of truth: read all enforced values from build.toml.
 
@@ -342,6 +381,7 @@ def load_build_config() -> dict[str, object]:
     ndk = data.get("ndk", {})
     android = data.get("android", {})
     out["tag"] = flutter.get("tag")
+    out["pkg_rel"] = str((data.get("package") or {}).get("pkg_rel") or "")
     out["ndk_version"] = ndk.get("version")
     out["compile_sdk"] = android.get("compile_sdk")
     out["target_sdk"] = android.get("target_sdk")
@@ -645,6 +685,7 @@ def main() -> int:
     check_ndk_helper_drift()
     check_ndk_constants_drift()
     check_version_drift_contract()
+    check_release_notes_for_respin()
     check_sysroot_lock_contract()
     check_script_headers()
     check_git_hooks()

@@ -366,11 +366,15 @@ If the new Flutter version changes any of these locations, they need to be updat
 # Update version
 $VER = "3.XX.Y"
 $REL = "1"
+$TAG = "$VER-$REL"   # release tag = package version
 
-# Create the release (tag is the Flutter version, no "v" prefix)
-gh release create "$VER" `
-  --title "Flutter $VER for Termux ARM64" `
-  --notes-file docs/releases/RELEASE_NOTES.md `
+# The body is the notes written for this revision, not the whole document.
+python scripts/ci/extract_release_notes.py --package-version $TAG | Out-File -Encoding utf8 notes.md
+
+# Create the release (tag is the package version, no "v" prefix)
+gh release create "$TAG" `
+  --title "Flutter $TAG for Termux ARM64" `
+  --notes-file notes.md `
   "release/flutter_${VER}-${REL}_aarch64.deb"
 ```
 
@@ -536,7 +540,7 @@ References:
 |----------|------|--------|---------|---------|
 | CI | `.github/workflows/ci.yml` | `ubuntu-latest` | PR, push to `main`, manual | Python/shell/PowerShell syntax, pytest, ruff, shellcheck, actionlint, version drift, package/docs/workflow sanity, whitespace checks |
 | Validate | `.github/workflows/validate.yml` | `ubuntu-latest` | PR/push touching patches, `build.py`, `build.toml`, `test_build.py`, `utils.py`, `stubs/`, `requirements.txt` | Runs the Python unit tests and checks that `engine.patch` applies to the configured Flutter tag |
-| Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` + `gate` (builds only when the `build.toml` tag has no published release yet) | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
+| Build | `.github/workflows/build.yml` | `ubuntu-latest` | `workflow_dispatch`, or `CI` success on `main` + `gate` (builds only when no release exists for `build.toml`'s `release_tag`, i.e. `<tag>-<pkg_rel>`) | Full `build.py` pipeline on GitHub-hosted runner, `.deb` packaging, auto-publish release |
 | Build deb (self-hosted) | `.github/workflows/build-deb.yml` | self-hosted Linux/WSL | manual | Full `build.py` pipeline, `.deb` packaging, optional release publishing (fallback) |
 | Device smoke | `.github/workflows/device-smoke.yml` | self-hosted Windows + ADB tablet | manual | Install deb in Termux, run `post_install.sh`, `flutter doctor`, create/build APK/Linux smoke |
 | Release check | `.github/workflows/release-check.yml` | `ubuntu-latest` | PR, release publish/edit, manual | Verify release asset name, size, and SHA256 digest (lightweight structural check on PRs) |
@@ -659,15 +663,25 @@ The release flow:
 
 1. Merge only after PR CI passes.
 2. **Build** runs on `CI` success, but its `gate` job skips everything
-   unless the `build.toml` tag is unreleased — i.e. only version bumps
-   (or a manual `workflow_dispatch` on the chosen commit/tag) trigger a
-   real build.
-3. The release description is taken from `docs/releases/CHANGELOG.md`:
-   the section matching the tag (or whatever history is current under
-   `Unreleased`), falling back to the last commit message. Each
-   `autorelease` bump also records a pointer to the upstream Flutter
-   stable notes for that series under `Unreleased`, so this changelog
-   follows upstream.
+   unless no release exists for the package version (`release_tag =
+   <tag>-<pkg_rel>`). A Flutter bump publishes `<new tag>-1` and every
+   `pkg_rel` respin publishes its own release, each with one full build and
+   one asset. Note that a `pkg_rel` bump now always rebuilds the engine: that
+   is the point of a respin, and it costs one full CI build.
+3. The release description is the `## Fixed in <package version>` section of
+   `docs/releases/RELEASE_NOTES.md` (`scripts/ci/extract_release_notes.py`).
+   For the first revision of a line (`-1`) it falls back to the
+   `CHANGELOG.md` history, then to a generated bump summary. Write the
+   section in the same change that bumps `pkg_rel`: `check_repo.py` fails a
+   respin that ships without one. `autorelease` closes `[Unreleased]` into
+   `## [<previous release tag>]` at each bump, so a `-1` body lists only what
+   changed since the previous release, and it never relabels the respin
+   sections it archives.
+
+   > Pin window: right after this scheme lands, the documented download URL
+   > names a release tag that does not exist until the first suffixed build
+   > publishes. `sync_release_pins.py` rewrites the pins and doc tables to the
+   > published asset immediately afterwards, so the window closes itself.
 4. After publishing, **Build** syncs the installer pins (`EXPECTED_SHA256`
    defaults, doc size/hash tables) to the published asset via
    `scripts/ci/sync_release_pins.py` and pushes a `chore(release)` commit,
