@@ -1,8 +1,8 @@
-# Flutter 3.50.0 for Termux ARM64
+# Flutter 3.50.1 for Termux ARM64
 
-**Flutter 3.50.0 / Dart 3.14.0 for Android-bionic ARM64 hosts.**
+**Flutter 3.50.1 / Dart 3.14.0 for Android-bionic ARM64 hosts.**
 
-This release updates the Termux Flutter SDK package to Flutter 3.50.0. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
+This release updates the Termux Flutter SDK package to Flutter 3.50.1. It incorporates all post-v3.44.2 installer hardening, dynamic JAVA_HOME auto-detection, robust PREFIX quoting under `set -euo pipefail`, and refreshed Termux toolchain sysroot packages.
 
 ## Fixed in 3.50.0-7
 
@@ -51,7 +51,7 @@ Release APKs built with `3.50.0-5` could install and then white-screen. Android 
 
 | Item | Value |
 |------|-------|
-| Package | `flutter_3.50.0-7_aarch64.deb` |
+| Package | `flutter_3.50.1-1_aarch64.deb` |
 | Size | 635,877,268 bytes (~606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Flutter | 3.50.0 |
@@ -90,8 +90,8 @@ Fallback: download the payload from this release manually:
 ```bash
 pkg update -y
 pkg install -y x11-repo wget openjdk-21 7zip
-wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0-7/flutter_3.50.0-7_aarch64.deb
-dpkg -i flutter_3.50.0-7_aarch64.deb
+wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.1-1/flutter_3.50.1-1_aarch64.deb
+dpkg -i flutter_3.50.1-1_aarch64.deb
 apt --fix-broken install -y
 bash $PREFIX/share/flutter/post_install.sh
 source $PREFIX/etc/profile.d/flutter.sh

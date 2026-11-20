@@ -6,7 +6,7 @@ build works internally. Replaces `docs/guides/INSTALL_GUIDE.md`,
 
 ## Install on device
 
-This guide walks you through installing `flutter_3.50.0-7_aarch64.deb` on an
+This guide walks you through installing `flutter_3.50.1-1_aarch64.deb` on an
 ARM64 Termux device, verifying it, and building your first app. After
 installing you will have:
 
@@ -20,7 +20,7 @@ installing you will have:
 
 | Item | Value |
 |------|-------|
-| Flutter | 3.50.0 |
+| Flutter | 3.50.1 |
 | Flutter Tools Dart | 3.14.0 |
 | Dart VM (`dartvm`) | Dart 3.14.0 (`linux_arm64`) |
 | Test device | Samsung SM-X716B / Android 16 / ARM64 |
@@ -102,21 +102,21 @@ Run each step in order inside Termux.
 
    ```bash
    cd ~
-   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.0-7/flutter_3.50.0-7_aarch64.deb
+   wget https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.50.1-1/flutter_3.50.1-1_aarch64.deb
    # Confirm the output matches: 8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981
-   sha256sum flutter_3.50.0-7_aarch64.deb
+   sha256sum flutter_3.50.1-1_aarch64.deb
    ```
 
    Expected output — the hash must match exactly:
 
    ```text
-   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.50.0-7_aarch64.deb
+   eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474  flutter_3.50.1-1_aarch64.deb
    ```
 
 3. Install the package and repair any missing dependencies:
 
    ```bash
-   dpkg -i flutter_3.50.0-7_aarch64.deb
+   dpkg -i flutter_3.50.1-1_aarch64.deb
    apt --fix-broken install -y
    ```
 
@@ -180,7 +180,7 @@ flutter doctor -v
 
 Expected highlights:
 
-- `flutter --version` shows Flutter 3.50.0.
+- `flutter --version` shows Flutter 3.50.1.
 - `dart --version` shows Dart 3.14.0 on `linux_arm64` (the SDK's own Dart).
 - The SDK's `dartvm` shows Dart 3.14.0 on `linux_arm64` (the engine VM). It is
   not on `PATH`; use the full path above.
@@ -314,7 +314,7 @@ Each entry below shows the exact error (**Symptom**), why it happens
 - **Symptom:** a Kotlin unresolved-reference error for `PLATFORM_ABI_LIST`
   while building an APK.
 - **Cause:** the post-install Flutter Gradle plugin template or the Gradle
-  cache is stale — common after updating to the 3.50.0 deb.
+  cache is stale — common after updating to the 3.50.1 deb.
 - **Fix:** re-run post-install and clear the Gradle caches, then rebuild:
 
   ```bash
@@ -421,9 +421,9 @@ Each entry below shows the exact error (**Symptom**), why it happens
   kernel or unhandled snapshot format.
 - **Cause:** Android AOT snapshots must be produced by a `gen_snapshot` built
   for Android (`target_os=android`, compressed pointers). The Linux desktop
-  `gen_snapshot` shipped in packages up to `3.50.0-5` produces snapshots the
+  `gen_snapshot` shipped in packages up to `3.50.1-5` produces snapshots the
   Android VM rejects ([issue #41](https://github.com/GeneralKaos666/flutter-for-termux/issues/41)).
-- **Fix (`3.50.0-6` and newer):** upgrade, re-run post-install, and rebuild:
+- **Fix (`3.50.1-6` and newer):** upgrade, re-run post-install, and rebuild:
 
   ```bash
   apt upgrade flutter
@@ -432,7 +432,7 @@ Each entry below shows the exact error (**Symptom**), why it happens
   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
   ```
 
-  `3.50.0-6` ships the Android-target binary at
+  `3.50.1-6` ships the Android-target binary at
   `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`,
   and post-install patches `flutter_tools` to resolve it directly (marker
   `Termux: prefer package-shipped aarch64 gen_snapshot`). Confirm it is
@@ -456,15 +456,15 @@ Each entry below shows the exact error (**Symptom**), why it happens
   `android-arm64-*` directories and drops the `linux-arm64` symlink that
   post-install creates (step 15). Upstream only puts an x86-64 binary there,
   which cannot run on ARM64 Termux.
-- **Fix (`3.50.0-6` and newer):** nothing to do for this failure. Post-install
+- **Fix (`3.50.1-6` and newer):** nothing to do for this failure. Post-install
   resolves `gen_snapshot` to the package-shipped ARM64 binary, in a directory
   Flutter never writes, so the first build completes. The step-15 symlinks
   remain only as a fallback.
-- **Heads-up (`3.50.0-5` only):** that package shipped the *Linux* ARM64
+- **Heads-up (`3.50.1-5` only):** that package shipped the *Linux* ARM64
   `gen_snapshot` for this path, so the build succeeded but the release APK
-  white-screened. `3.50.0-6` ships the Android-target binary — see
+  white-screened. `3.50.1-6` ships the Android-target binary — see
   [Release APK builds but shows a blank screen](#release-apk-builds-but-shows-a-blank-screen).
-- **Fix (`3.50.0-5` and older):** upgrade to the current package, or re-run
+- **Fix (`3.50.1-5` and older):** upgrade to the current package, or re-run
   post-install to recreate the symlink, then build again:
 
   ```bash
@@ -519,18 +519,18 @@ Related guides:
   [Build process](#build-internals)
 - CI workflows and the device lab: [CI/CD](MAINTENANCE.md)
 
-### Current Version Status (3.50.0)
+### Current Version Status (3.50.1)
 
 | Item | Value |
 |------|----|
-| Flutter tag | `3.50.0` |
+| Flutter tag | `3.50.1` |
 | Engine revision | `cf636b1dfb818dd6a3ff16e390e93b1a036969c8` |
-| Package | `flutter_3.50.0-7_aarch64.deb` |
+| Package | `flutter_3.50.1-1_aarch64.deb` |
 | Package size | 635,877,268 bytes (about 606 MiB) |
 | SHA256 | `8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981` |
 | Device smoke | Samsung SM-X716B / Android 16 / Termux |
 
-3.50.0 introduces three new points that require special attention:
+3.50.1 introduces three new points that require special attention:
 
 1. **Dart VM/tool split**: The Flutter CLI uses the Termux JIT `dart`, but
    engine snapshots still need the accompanying `dartvm` / `dartaotruntime`,
@@ -721,7 +721,7 @@ python3 build.py debuild --arch=arm64
 After the build completes, the deb package is located at:
 
 ```text
-release/flutter_3.50.0-7_aarch64.deb
+release/flutter_3.50.1-1_aarch64.deb
 ```
 
 ---
@@ -774,7 +774,7 @@ follow [Install guide](#install-on-device) (the manual deb method), or in
 short:
 
 ```bash
-dpkg -i flutter_3.50.0-7_aarch64.deb
+dpkg -i flutter_3.50.1-1_aarch64.deb
 apt --fix-broken install -y
 source $PREFIX/etc/profile.d/flutter.sh
 flutter doctor -v
@@ -1217,11 +1217,11 @@ After the build completes, verify with the following checklist.
 
 ---
 
-### 10. Feature Test Results (3.50.0)
+### 10. Feature Test Results (3.50.1)
 
 | Feature | Status | Description |
 |------|------|------|
-| `flutter --version` | ✅ OK | Flutter 3.50.0 / Tools Dart 3.14.0 |
+| `flutter --version` | ✅ OK | Flutter 3.50.1 / Tools Dart 3.14.0 |
 | `dart --version` | ✅ OK | Dart 3.14.0 (`linux_arm64`) |
 | `$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dartvm --version` | ✅ OK | Dart 3.14.0 (`linux_arm64`) |
 | `flutter doctor -v` | ✅ OK | unknown channel / no device are expected warnings |
@@ -1339,7 +1339,7 @@ Each stage maps to a step in the [Build guide](#3-step-by-step-build):
 | 3. Sysroot | `build.py sysroot --arch=arm64` | Downloads Termux runtime libraries from the official Termux apt repo |
 | 4. Build Linux components | `build.py configure --arch=arm64 --mode=<m>` + `build.py build --arch=arm64 --mode=<m>` for each mode in `[build] runtime` (`release`, `debug`) | Debug GTK powers `flutter run -d linux` and is configured `--no-lto`; release feeds `build linux` and `run -d linux --release`. The profile engine is not built. The `build()` ninja invocation includes `flutter/build/archives:dart_sdk_archive`, so the dart binary is produced as part of the standard build (no separate build step) |
 | 5. Android gen_snapshot | `configure_android()` / `build_android()` (`--android --android-cpu arm64`, target `flutter/third_party/dart/runtime/bin:gen_snapshot`) | Shipped for release/profile as `linux-arm64-android-{release,profile}/gen_snapshot`; post-install resolves/provisions it for `flutter build apk`. |
-| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.0-7_aarch64.deb` |
+| 6. Package the deb | `build.py debuild --arch=arm64` | Output: `release/flutter_3.50.1-1_aarch64.deb` |
 
 ---
 
@@ -1547,11 +1547,11 @@ Flag dedup_instructions is false in snapshot, but dedup_instructions is always t
 ```bash
 # 1. Transfer the deb to the device
 # Use PowerShell (Git Bash will corrupt the path)
-adb push flutter_3.50.0-7_aarch64.deb /sdcard/Download/
+adb push flutter_3.50.1-1_aarch64.deb /sdcard/Download/
 
 # 2. Install it in Termux
 pkg install x11-repo
-dpkg -i /sdcard/Download/flutter_3.50.0-7_aarch64.deb
+dpkg -i /sdcard/Download/flutter_3.50.1-1_aarch64.deb
 bash $PREFIX/share/flutter/post_install.sh
 apt-get install -f
 
@@ -1600,13 +1600,13 @@ Confirm that the version numbers in the following files are consistent:
 
 ```bash
 # Final artifact location
-release/flutter_3.50.0-7_aarch64.deb
+release/flutter_3.50.1-1_aarch64.deb
 ```
 
 #### 3. Upload to GitHub Releases
 
-1. Create a new Release: `3.50.0`
-2. Upload the deb file: `flutter_3.50.0-7_aarch64.deb`
+1. Create a new Release: `3.50.1`
+2. Upload the deb file: `flutter_3.50.1-1_aarch64.deb`
 3. Fill in the Release Notes
 
 #### 4. Verify the Release

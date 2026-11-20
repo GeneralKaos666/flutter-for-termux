@@ -7,9 +7,9 @@ and read the AAPT2 release-build analysis. Replaces `docs/CI_CD.md`,
 
 ## Upgrading Flutter
 
-This document explains how to upgrade Termux Flutter from the current 3.50.0
+This document explains how to upgrade Termux Flutter from the current 3.50.1
 to a new version, and lists the risk points in Dart / Flutter Tools / Gradle
-plugins that must be re-checked after 3.50.0.
+plugins that must be re-checked after 3.50.1.
 
 Build commands and their expected behavior are explained in the
 [Build guide](BUILD.md); build internals (patches, GN configs,
@@ -67,7 +67,7 @@ Each checklist item maps to one step below:
 □ Step 12: Publish the apt repository
 ```
 
-### Must-Check Items After 3.50.0
+### Must-Check Items After 3.50.1
 
 | Item | Why it matters | How to check |
 |------|------------|----------|
@@ -309,7 +309,7 @@ This will:
 3. Package everything into the deb
 
 > Output path: `release/flutter_<tag>-<pkg_rel>_aarch64.deb`
-> (for example `release/flutter_3.50.0-7_aarch64.deb`).
+> (for example `release/flutter_3.50.1-1_aarch64.deb`).
 
 ---
 
@@ -601,7 +601,7 @@ git diff --check
 - workflow YAML parses, and self-hosted workflows are not triggered by `pull_request`
 - `package.yaml` still ships the required runtime resources, including `post_install`
 - `post_install.sh` still contains the Flutter 3.44 `PLATFORM_ABI_LIST`, Android-host, and Android `gen_snapshot` patches
-- installer defaults remain on Flutter 3.50.0 and NDK r30 for Termux installs
+- installer defaults remain on Flutter 3.50.1 and NDK r30 for Termux installs
 - release/download docs do not regress to stale 3.41.5 commands
 
 ### Full deb build
@@ -642,9 +642,9 @@ back to **Build deb (self-hosted)** (`.github/workflows/build-deb.yml`):
 That self-hosted workflow bootstraps `depot_tools` if `gclient` is missing,
 then runs the same patched pipeline (see above) before uploading:
 
-- `flutter_3.50.0-7_aarch64.deb`
-- `flutter_3.50.0-7_aarch64.deb.sha256`
-- `flutter_3.50.0-7_aarch64.deb.size.txt`
+- `flutter_3.50.1-1_aarch64.deb`
+- `flutter_3.50.1-1_aarch64.deb.sha256`
+- `flutter_3.50.1-1_aarch64.deb.size.txt`
 - `inventory.txt`
 - `build_metadata.json`
 - `build_evidence.json`
@@ -678,7 +678,7 @@ The release flow:
    changed since the previous release, and it never relabels the respin
    sections it archives.
 
-   > Pin window: this change ships as `3.50.0-7`, so the documented download URL
+   > Pin window: this change ships as `3.50.1-7`, so the documented download URL
    > names a release tag that does not exist until that build publishes.
    > `sync_release_pins.py` rewrites the pins and doc tables to the published
    > asset immediately afterwards, so the window closes itself.
@@ -877,7 +877,7 @@ Manual Windows-to-tablet smoke:
 ```powershell
 scripts/device/run_termux_smoke.ps1 `
   -AdbPath "C:\Users\aa223\AppData\Local\Android\Sdk\platform-tools\adb.exe" `
-  -DebPath ".\candidate\flutter_3.50.0-7_aarch64.deb" `
+  -DebPath ".\candidate\flutter_3.50.1-1_aarch64.deb" `
   -ExpectedSha256 "8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981"
 ```
 

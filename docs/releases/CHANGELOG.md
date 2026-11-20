@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [3.50.0-7] - 2026-11-20
+
 ### Build time
 
 - **The profile GTK engine is no longer built.** `build.toml [build] runtime` is now `['release', 'debug']`, so each build skips one full engine configuration — about 1h34m of a 5h03m build on a 4-core CI runner — and the deb carries two engine variants instead of three. The profile engine only served `flutter build linux --profile` / `flutter run -d linux --profile`, which had no Termux-patched engine to run: Flutter would fall back to the upstream `linux-arm64-profile` artifact, which is glibc and cannot run on Termux. `package.yaml`'s `flutter_linux_gtk_profile` resource and its `check_repo.py` requirement are removed with it. Android AOT is unaffected: `android_runtime` still builds the release and profile `gen_snapshot`, so `flutter build apk --profile` keeps working.
@@ -58,7 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Non-interactive installs blocked on the continuation prompt.** `install_flutter_complete.sh` now honours `--yes`/`--non-interactive` and a non-TTY stdin, skipping the prompt so piped and scripted installs run to completion.
 - **`flutter_project_config.sh` was not shipped in the deb.** `package.yaml` now declares the `flutter_project_config` resource, installing the script at `$PREFIX/share/flutter/flutter_project_config.sh` instead of leaving the on-device per-project configuration missing.
 - **Documented engine output directories were incomplete.** Earlier notes described only the three `linux_{debug,release,profile}_arm64/` directories under `flutter/engine/src/out/`, because the Linux `gen_snapshot` was reused for Android. The build now also produces `android_release_arm64/` and `android_profile_arm64/` for the Android-target `gen_snapshot`, and the build guides list all five.
-
 ## [3.44.9-termux] - 2026-07-04
 
 ### Added
