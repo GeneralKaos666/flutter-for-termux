@@ -143,6 +143,7 @@ jobs:
         if: steps.check.outputs.should_release == 'true'
         env:
           OLD_TAG: ${{ steps.current.outputs.OLD_TAG }}
+          OLD_RELEASE_TAG: ${{ steps.current.outputs.OLD_RELEASE_TAG }}
           NEW_TAG: ${{ steps.detect.outputs.TAG }}
           OLD_DART: ${{ steps.current.outputs.OLD_DART_VERSION }}
           NEW_DART: ${{ steps.meta.outputs.NEW_DART }}
@@ -173,6 +174,15 @@ jobs:
             # Escape sed regex chars in $old (dots in versions, etc.)
             local old_esc
             old_esc=$(printf '%s' "$old" | sed -e 's/[][\/.^$*+?{}()|]/\\&/g')
+            # A version mention may carry a package revision (<tag>-<n>).
+            # Only the revision that just shipped becomes the new line's -1;
+            # older revisions are history and must keep the tag they shipped
+            # as (3.50.0-6 must never become 3.51.0-6).
+            local old_rel_esc=""
+            if [ "$field" = "tag" ] && [ -n "${OLD_RELEASE_TAG:-}" ]; then
+              old_rel_esc=$(printf '%s' "$OLD_RELEASE_TAG" | sed -e 's/[][\/.^$*+?{}()|]/\\&/g')
+            fi
+            local notes_range='/^## Fixed in /,$!'
             for f in "${FILES[@]}"; do
               if [ ! -f "$f" ]; then
                 continue
@@ -181,9 +191,21 @@ jobs:
                 # Respin sections are history keyed by the release tag they
                 # shipped as; rewrite only the header and prose above the
                 # first one so 3.50.0-6 never becomes 3.51.0-6.
-                sed -i "/^## Fixed in /,\$!s/${old_esc}/${new}/g" "$f"
-              else
-                sed -i "s/${old_esc}/${new}/g" "$f"
+                if [ -n "$old_rel_esc" ]; then
+                  sed -i "${notes_range}s/${old_rel_esc}/${new}-1/g" "$f"
+                fi
+                sed -i "${notes_range}s/${old_esc}/${new}/g" "$f"
+                continue
+              fi
+              if [ -n "$old_rel_esc" ]; then
+                sed -i "s/${old_rel_esc}/${new}-1/g" "$f"
+                # Shield the remaining <old tag>-<n> history from the bare
+                # tag rewrite below, then restore them unchanged.
+                sed -i -E "s/${old_esc}(-[0-9]+)/@@RELTAG@@\1/g" "$f"
+              fi
+              sed -i "s/${old_esc}/${new}/g" "$f"
+              if [ -n "$old_rel_esc" ]; then
+                sed -i "s/@@RELTAG@@/${old}/g" "$f"
               fi
             done
             [ -n "$field" ] && sed -i "s/^${field} = .*/${field} = '${new}'/" build.toml

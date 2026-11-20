@@ -2176,10 +2176,40 @@ class CiWorkflowContractTest(unittest.TestCase):
         normalized = self._normalized(bump)
         self.assertIn('docs/releases/RELEASE_NOTES.md', normalized)
         self.assertIn(
-            '/^## Fixed in /,\\$!',
+            '/^## Fixed in /,$!',
             normalized,
             'the tag sed must not rewrite respin headings',
         )
+
+    def test_autorelease_keeps_historical_respin_tags(self):
+        """Only the outgoing revision moves; older respins are history.
+
+        A bare-tag sed turned ``3.50.0-5`` into ``3.50.1-5`` on the 3.50.1
+        bump, rewriting the Version Status history. The sync step must map the
+        published ``<tag>-<n>`` to the new line's ``-1`` and shield the rest.
+        """
+        data = yaml.safe_load(
+            (Path(__file__).parent / '.github' / 'workflows' / 'autorelease.yml').read_text(encoding='utf-8')
+        )
+        step = next(
+            s
+            for j in data['jobs'].values()
+            for s in j.get('steps', [])
+            if 'for f in "${FILES[@]}"' in s.get('run', '')
+        )
+        self.assertEqual(
+            step['env']['OLD_RELEASE_TAG'],
+            '${{ steps.current.outputs.OLD_RELEASE_TAG }}',
+            'the sync step needs the outgoing release tag to scope revisions',
+        )
+        normalized = self._normalized(step['run'])
+        self.assertIn(
+            '${old_rel_esc}/${new}-1/g',
+            normalized,
+            'the outgoing release tag must become the new line\'s first revision',
+        )
+        self.assertIn('@@RELTAG@@', normalized, 'older respin tags must be shielded')
+        self.assertIn('s/@@RELTAG@@/${old}/g', normalized, 'shielded respin tags must be restored')
 
     def test_autorelease_closes_the_previous_section(self):
         data = yaml.safe_load(

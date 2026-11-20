@@ -421,9 +421,9 @@ Each entry below shows the exact error (**Symptom**), why it happens
   kernel or unhandled snapshot format.
 - **Cause:** Android AOT snapshots must be produced by a `gen_snapshot` built
   for Android (`target_os=android`, compressed pointers). The Linux desktop
-  `gen_snapshot` shipped in packages up to `3.50.1-5` produces snapshots the
+  `gen_snapshot` shipped in packages up to `3.50.0-5` produces snapshots the
   Android VM rejects ([issue #41](https://github.com/GeneralKaos666/flutter-for-termux/issues/41)).
-- **Fix (`3.50.1-6` and newer):** upgrade, re-run post-install, and rebuild:
+- **Fix (`3.50.0-6` and newer):** upgrade, re-run post-install, and rebuild:
 
   ```bash
   apt upgrade flutter
@@ -432,7 +432,7 @@ Each entry below shows the exact error (**Symptom**), why it happens
   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons
   ```
 
-  `3.50.1-6` ships the Android-target binary at
+  `3.50.0-6` ships the Android-target binary at
   `bin/cache/artifacts/engine/linux-arm64-android-{release,profile}/gen_snapshot`,
   and post-install patches `flutter_tools` to resolve it directly (marker
   `Termux: prefer package-shipped aarch64 gen_snapshot`). Confirm it is
@@ -456,15 +456,15 @@ Each entry below shows the exact error (**Symptom**), why it happens
   `android-arm64-*` directories and drops the `linux-arm64` symlink that
   post-install creates (step 15). Upstream only puts an x86-64 binary there,
   which cannot run on ARM64 Termux.
-- **Fix (`3.50.1-6` and newer):** nothing to do for this failure. Post-install
+- **Fix (`3.50.0-6` and newer):** nothing to do for this failure. Post-install
   resolves `gen_snapshot` to the package-shipped ARM64 binary, in a directory
   Flutter never writes, so the first build completes. The step-15 symlinks
   remain only as a fallback.
-- **Heads-up (`3.50.1-5` only):** that package shipped the *Linux* ARM64
+- **Heads-up (`3.50.0-5` only):** that package shipped the *Linux* ARM64
   `gen_snapshot` for this path, so the build succeeded but the release APK
-  white-screened. `3.50.1-6` ships the Android-target binary — see
+  white-screened. `3.50.0-6` ships the Android-target binary — see
   [Release APK builds but shows a blank screen](#release-apk-builds-but-shows-a-blank-screen).
-- **Fix (`3.50.1-5` and older):** upgrade to the current package, or re-run
+- **Fix (`3.50.0-5` and older):** upgrade to the current package, or re-run
   post-install to recreate the symlink, then build again:
 
   ```bash
