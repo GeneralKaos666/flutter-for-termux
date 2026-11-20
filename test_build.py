@@ -1354,13 +1354,27 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertEqual(outcome, 'added')
         self.assertIn('page not yet published', new_text)
 
-    def test_real_changelog_resolves_current_tag(self):
-        changelog = Path(__file__).parent / 'docs' / 'releases' / 'CHANGELOG.md'
+    def test_real_changelog_resolves_current_release(self):
+        root = Path(__file__).parent
+        changelog = root / 'docs' / 'releases' / 'CHANGELOG.md'
+        release_notes = root / 'docs' / 'releases' / 'RELEASE_NOTES.md'
         text = changelog.read_text(encoding='utf-8')
-        with open(Path(__file__).parent / 'build.toml', 'rb') as f:
-            tag = tomllib.load(f)['flutter']['tag']
-        # Whatever history is current must yield something usable as a body.
-        self.assertTrue(self.extract.extract_notes(tag, text))
+        with open(root / 'build.toml', 'rb') as f:
+            data = tomllib.load(f)
+        tag = data['flutter']['tag']
+        package_version = f"{tag}-{data['package']['pkg_rel']}"
+        # A fresh version bump leaves [Unreleased] empty and the new line has no
+        # section yet, so the contract is the publisher's resolver, not the
+        # bare changelog lookup: whatever history is current must yield a body.
+        self.assertTrue(
+            self.extract.release_body(
+                tag=tag,
+                package_version=package_version,
+                notes_text=release_notes.read_text(encoding='utf-8'),
+                changelog_text=text,
+                flutter_cfg=data['flutter'],
+            )
+        )
 
 
 class CloseChangelogSectionTest(unittest.TestCase):
