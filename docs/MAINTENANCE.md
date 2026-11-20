@@ -678,7 +678,7 @@ The release flow:
    changed since the previous release, and it never relabels the respin
    sections it archives.
 
-   > Pin window: this change ships as `3.50.1-7`, so the documented download URL
+   > Pin window: this change ships as `3.50.1-1`, so the documented download URL
    > names a release tag that does not exist until that build publishes.
    > `sync_release_pins.py` rewrites the pins and doc tables to the published
    > asset immediately afterwards, so the window closes itself.

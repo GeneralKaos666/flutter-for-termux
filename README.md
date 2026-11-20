@@ -96,7 +96,7 @@ Prefer to see every step? Do it by hand.
 
 ```bash
 # The release tag is the package version: <flutter tag>-<pkg rel>
-TAG=3.50.1-7
+TAG=3.50.1-1
 DEB="flutter_${TAG}_aarch64.deb"
 BASE_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${TAG}/"
 
